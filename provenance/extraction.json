@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "repository": "michaelrolphone-cmyk/RiscRTE-T-Watch-S3",
+  "commit": "851b8998e804c57b2c9f42d9f8fd0a69e79f2b41",
+  "paths": [
+    "apps/clock",
+    "apps/runtime_features",
+    "sdk/app",
+    "sdk/driver",
+    "include/twatch_caps.h",
+    "include/twatch_power.h",
+    "include/twatch_calendar.h",
+    "include/twatch_util.h",
+    "include/PortableMotionTap.h",
+    "include/PortablePowerStatus.h",
+    "include/PortableTapSettings.h"
+  ],
+  "original_entrypoint": "apps/clock/crown.c",
+  "product": "default.elf",
+  "hardware_drivers_imported": false
+}
