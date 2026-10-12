@@ -1,0 +1,30 @@
+name: Apply generic power source migration
+on:
+  push:
+    branches: [feat/universal-watch]
+    paths: ['.github/workflows/import-generic-power.yml']
+permissions:
+  contents: write
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/universal-watch
+      - name: Apply and test readable source changes
+        run: |
+          python3 provenance/migrate_generic_power.py
+          python3 scripts/check_capability_boundaries.py
+          python3 scripts/test_capabilities.py
+          python3 scripts/test_capabilities.py --sanitize
+          python3 scripts/test_viewport.py
+          python3 scripts/test_viewport.py --sanitize
+      - name: Commit final source and retire import workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/import-generic-power.yml
+          git add apps include scripts sdk provenance .github/workflows/universal-watch.yml
+          git commit -m 'Separate Home battery, key, sleep and display power capability clients'
+          git push origin HEAD:feat/universal-watch
