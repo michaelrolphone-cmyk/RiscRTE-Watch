@@ -31,8 +31,9 @@ subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Wextra','-Werror'
 records={'schema':1,'compiler':compiler,'dependency_lock':json.loads((ROOT/'dependencies.lock.json').read_text()),'build_variant':'shared-no-board-defines','hardware_verified':False,'artifacts':{}}
 for role in ['default','clock'] if a.role=='both' else [a.role]:
  target=out/(role+'.elf');mapping=out/(role+'.map');mapping.write_text('{ global: app_main; local: *; };\n')
- flags=FLAGS+(['-DWATCH_CLOCK_RETURN'] if role=='clock' else [])
- command=[a.cc,'-std=c11',*common,'-nostdlib','-nostartfiles','-shared','-Wl,--gc-sections','-Wl,--no-relax','-Wl,--hash-style=sysv','-Wl,--version-script='+str(mapping),*flags,*incs,*map(str,sources),'-lgcc','-o',str(target)]
+ flags=FLAGS if role=='default' else []
+ role_sources=sources if role=='default' else [ROOT/'apps/clock/return_to_default.c']
+ command=[a.cc,'-std=c11',*common,'-nostdlib','-nostartfiles','-shared','-Wl,--gc-sections','-Wl,--no-relax','-Wl,--hash-style=sysv','-Wl,--version-script='+str(mapping),*flags,*incs,*map(str,role_sources),'-lgcc','-o',str(target)]
  subprocess.run(command,check=True);normalize(target)
  proof=compact(target,a.cc,debug_path=out/'debug'/(role+'.elf'))
  subprocess.run([str(validator),str(target)],check=True)
@@ -43,7 +44,8 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  if not imports<=allowed or exports!={'app_main'}:raise RuntimeError(f'Unexpected application ABI: {imports=}, {exports=}')
  raw=target.read_bytes()
  if raw[:7]!=b'\x7fELF\x01\x01\x01' or raw[16:20]!=b'\x03\x00\x5e\x00':raise RuntimeError('Not an ESP32-S3 shared ELF')
+ if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  shutil.copy2(ROOT/'apps/clock'/(role+'.json'),out/(role+'.json'))
- records['artifacts'][role]={'file_name':target.name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'imports':sorted(imports),'exports':sorted(exports),'compaction':proof,'defines':flags}
+ records['artifacts'][role]={'role':'home' if role=='default' else 'return-to-default','file_name':target.name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'imports':sorted(imports),'exports':sorted(exports),'compaction':proof,'defines':flags}
  print(role+': target build and Runtime ELF validation PASS',flush=True)
 (out/'build.json').write_text(json.dumps(records,indent=2)+'\n')

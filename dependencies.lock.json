@@ -3,6 +3,6 @@
   "extraction": {"repository": "michaelrolphone-cmyk/RiscRTE-T-Watch-S3", "commit": "851b8998e804c57b2c9f42d9f8fd0a69e79f2b41"},
   "system": {"repository": "michaelrolphone-cmyk/RiscRTE-System-Apps", "commit": "14762601b3fa7bbeeac5ed565a6825534bf74dca"},
   "utilities": {"repository": "michaelrolphone-cmyk/RiscRTE-Utilities", "commit": "fc0bdbbbc600ce891e60c44d091fce0586ade7d8"},
-  "generic_power_providers": {"repository": "michaelrolphone-cmyk/RiscRTE-Drivers", "commit": "5d94cf2789b34a1b3d4afeb5be5f443510465661", "version": "0.1.0"},
+  "generic_power_providers": {"repository": "michaelrolphone-cmyk/RiscRTE-Drivers", "commit": "422e1e81a498fb6bdab9abf086325afc05a532dc", "version": "0.1.0"},
   "compiler": "xtensa-esp32s3-elf-gcc 8.4.0 esp-2021r2-patch5"
 }
