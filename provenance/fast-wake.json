@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "source_repository": "michaelrolphone-cmyk/RiscRTE-T-Watch-S3",
+  "source_commit": "fb01359770f457e410efe8cf7c7e0de5f3a43ebf",
+  "extraction_ancestor": "851b8998e804c57b2c9f42d9f8fd0a69e79f2b41",
+  "version": "0.14.0",
+  "generic_interfaces_preserved": true,
+  "hardware_verified": false
+}
