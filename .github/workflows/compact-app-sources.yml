@@ -1,0 +1,33 @@
+name: Compact app source dependencies
+on:
+  push:
+    branches: [feat/universal-watch]
+    paths: ['.github/workflows/compact-app-sources.yml']
+permissions:
+  contents: read
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Productivity
+          ref: 0b8667d64e76a6b4bbd325a1c963405f3af57404
+          path: productivity
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: 377d471d284cf18e13927481362d011bc981dfee
+          path: keyboard
+      - name: Archive exact source trees
+        run: |
+          mkdir -p bundle
+          for name in productivity keyboard; do
+            git -C "$name" rev-parse HEAD > "bundle/$name.sha"
+            git -C "$name" archive HEAD | gzip > "bundle/$name.tar.gz"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compact-app-sources
+          path: bundle
+          retention-days: 14
