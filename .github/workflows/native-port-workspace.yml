@@ -1,0 +1,26 @@
+name: Native port build workspace
+on:
+  push:
+    branches: [feat/universal-watch]
+    paths: ['.github/workflows/native-port-workspace.yml']
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE
+          ref: 3b90cd11cf0ff4e8116bb54d2d9eb9c7c67a148b
+          path: runtime
+      - name: Prepare pinned Python support and source archive
+        run: |
+          python3 -m pip install --target python pyelftools==0.32
+          git -C runtime rev-parse HEAD > RUNTIME_SOURCE.txt
+          tar --exclude='.git' -czf native-port-workspace.tar.gz runtime python RUNTIME_SOURCE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-port-workspace
+          path: native-port-workspace.tar.gz
+          retention-days: 7
