@@ -1,27 +1,38 @@
 # RiscRTE Watch
 
-Canonical shared Home application for ESP32-S3 watches. Device repositories supply their own hardware providers, board configuration, provisioning and complete firmware assembly.
+Canonical shared Home application for ESP32-S3 watches. Device repositories supply their hardware providers, board configuration, provisioning and firmware assembly.
 
-`apps/clock/crown.c` is the maintained application entry point. The source and all original faces, effects and Points integration were extracted from RiscRTE-T-Watch-S3 commit `851b8998e804c57b2c9f42d9f8fd0a69e79f2b41` (Watch 1.1.10 integration). The older `main.c` and portable/legacy variants are retained historical references, not the current product.
+`apps/clock/crown.c` is the maintained entry point, extracted with faces, effects and Points integration from T-Watch source `851b8998e804c57b2c9f42d9f8fd0a69e79f2b41`. Old `main.c` and portable variants are retained historical references, not active products.
 
-## Build once, deploy the same bytes
+## One build, independent capabilities
 
-Install `scripts/requirements.txt`, use the compiler in `dependencies.lock.json`, and check out the pinned System-Apps and Utilities dependencies:
+Home 0.13.0 builds `default.elf` and its `clock.elf` return-to-Home companion without board or resolution defines. These are roles, not board variants. Each board consumes the same bytes for each role.
+
+Capabilities describe functions, never device models. Battery (`board.battery`), power key (`input.power-key`), system sleep (`power.sleep`), frame output (`display.output`) and display sleep (`display.power`) have independent interfaces. Home no longer casts a battery to a private T-Watch PMU table or a framebuffer to panel-specific power methods. Generic contracts and their compatibility adapters are pinned from RiscRTE-Drivers; the adapters, not the application, interpret legacy combined driver tables.
+
+Absent optional services do not fabricate hardware support: no battery gives unknown telemetry, no key gives no key events, and missing sleep/display-power keeps Home awake. An acquired invalid API remains an error. Supported services resolve through capability selection, not fixed physical instance IDs. Existing application IDs and saved settings namespaces remain compatible.
+
+See `docs/CAPABILITY_BOUNDARIES.md` for API and provisioning details.
+
+## Display and input
+
+The app queries physical dimensions and applies matching drawing/touch transforms. The native 240x240 path directly uses its surface. At 410x502, existing faces occupy a centered 410x410 area with 46-pixel gesture gutters. This preserves circular geometry; full-height rectangular reflow is not implemented yet.
+
+## Build and test
+
+Use the compiler and System-Apps/Utilities source revisions in `dependencies.lock.json`:
 
 ```sh
-python3 scripts/build.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities --cc /path/to/xtensa-esp32s3-elf-gcc
+python3 -m pip install -r scripts/requirements.txt
+python3 scripts/test_capabilities.py
+python3 scripts/test_capabilities.py --sanitize
 python3 scripts/test_viewport.py
-python3 scripts/test_viewport.py --sanitize
+python3 scripts/check_capability_boundaries.py
+python3 scripts/build.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities --cc /path/to/xtensa-esp32s3-elf-gcc
 ```
 
-The output is `dist/default.elf` plus the companion `clock.elf` used for return-to-Home. These are application roles, not board variants. No board or resolution define is passed to either compilation. `build.json` records their byte identities and loader validation. Both device packages consume identical bytes for each role; device-specific manifests bind capabilities and retain their existing app IDs/settings namespaces.
+CI checks public header parity, all 16 independent service-presence combinations, base-only battery tables, generic sleep restoration, arbitrary motion profiles, malformed APIs and grant cleanup. It also exercises the viewport and compatibility providers with ASan/UBSan, then builds both app roles and all three adapters against the actual ELF loader validator. Builds do not modify repository sources.
 
-## Resolution and hardware behavior
+## Integration status
 
-The shared app queries the actual display dimensions and uses one matching rendering/touch transform. The 240x240 LilyGO path uses its native surface directly. On Waveshare's 410x502 display, the preserved square faces occupy a centered 410x410 area, with 46-pixel top and bottom gesture gutters. This preserves circles and existing controls; it is not yet a redesigned full-height rectangular layout.
-
-Panel brightness and power, RTC, battery, touch, motion and radios are capability clients. Hardware selection does not depend on T-Watch instance IDs. Legacy `twatch_*` type names remain ABI-compatible aliases, not board-pin dependencies. Optional motion/BLE/context providers may be absent without stopping the clock. Admitted providers that fail still follow the existing cleanup paths.
-
-## Status
-
-Development integration, not a hardware-qualified release. Host tests exercise every physical pixel and inverse touch coordinate on both display sizes, landscape, padded stride, retained frames and failure cleanup. The target build checks ESP32-S3 ELF architecture, imports/exports and the deployed Runtime loader validator. Physical bring-up and complete Waveshare peripheral/application parity remain separate device-integration work. Do not replace files inside an already sealed paired firmware image; stage the shared application before the device assembler generates its paired metadata.
+This is component source/build integration, not a complete device firmware release. Both device packages must stage the app, supported capability subset, providers and grants before rebuilding paired metadata; replacing an ELF inside a sealed image is not sufficient. The new compatibility providers also need native provider capacity. Full Waveshare peripheral parity, complete device provisioning, firmware assembly and physical qualification remain unfinished. Existing device firmware/release selections have not been switched.

@@ -2,23 +2,17 @@ name: Universal watch application
 on:
   push:
     branches: [feat/universal-watch, main]
-    paths: ['apps/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', 'provenance/apply_shared_port.py', '.github/workflows/universal-watch.yml', 'dependencies.lock.json']
+    paths: ['apps/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', '.github/workflows/universal-watch.yml', 'dependencies.lock.json']
   pull_request:
 permissions:
-  contents: write
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
-      - uses: actions/checkout@v4
-        with:
-          repository: michaelrolphone-cmyk/RiscRTE-T-Watch-S3
-          ref: 851b8998e804c57b2c9f42d9f8fd0a69e79f2b41
-          path: .source/twatch
-          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/checkout@v4
         with:
           repository: michaelrolphone-cmyk/RiscRTE-System-Apps
@@ -33,24 +27,20 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          repository: michaelrolphone-cmyk/RiscRTE
-          ref: 2d906c5c0f412b2d0957b91ff153a1a293128a8c
-          path: .source/runtime
+          repository: michaelrolphone-cmyk/RiscRTE-Drivers
+          ref: 5d94cf2789b34a1b3d4afeb5be5f443510465661
+          path: .source/drivers
           persist-credentials: false
-      - name: Complete extraction migration
+      - name: Generic contracts, independent services and display classes
         run: |
-          python3 provenance/apply_shared_port.py
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add apps sdk include scripts provenance
-          if ! git diff --cached --quiet; then
-            git commit -m 'Connect shared viewport and capability-discovered hardware clients'
-            git push origin HEAD:${{ github.head_ref || github.ref_name }}
-          fi
-      - name: Test both display classes
-        run: |
+          for f in RiscPowerSleepV1.h RiscPowerKeyV1.h RiscDisplayPowerV1.h; do cmp "sdk/driver/$f" ".source/drivers/sdk/driver/$f"; done
+          python3 scripts/check_capability_boundaries.py
+          python3 scripts/test_capabilities.py
+          python3 scripts/test_capabilities.py --sanitize
           python3 scripts/test_viewport.py
           python3 scripts/test_viewport.py --sanitize
+          python3 .source/drivers/scripts/test_legacy_power_bridge.py --sdk "$PWD/sdk/driver"
+          python3 .source/drivers/scripts/test_legacy_power_bridge.py --sdk "$PWD/sdk/driver" --sanitize
       - name: Prepare pinned compiler
         run: |
           mkdir -p .source/toolchain
@@ -61,6 +51,7 @@ jobs:
       - name: Build and validate shared ELFs
         run: |
           python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp32s3-elf/bin/xtensa-esp32s3-elf-gcc"
+          python3 .source/drivers/scripts/build_legacy_power_bridge.py --watch-sdk "$PWD" --cc "$PWD/.source/toolchain/xtensa-esp32s3-elf/bin/xtensa-esp32s3-elf-gcc" --validator dist/validate-elf --output dist/generic-power
           git rev-parse HEAD > dist/COMMIT.txt
           git archive HEAD | gzip > dist/source.tar.gz
       - uses: actions/upload-artifact@v4
@@ -71,6 +62,9 @@ jobs:
             dist/default.json
             dist/clock.elf
             dist/clock.json
+            dist/generic-power/**/driver.elf
+            dist/generic-power/**/manifest.json
+            dist/generic-power/build.json
             dist/build.json
             dist/COMMIT.txt
             dist/source.tar.gz
