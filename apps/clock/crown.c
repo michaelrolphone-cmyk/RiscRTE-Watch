@@ -108,6 +108,7 @@ static bool clock_background_pause(void) {
 #error Alarm Clock requires its normal touch launcher deployment
 #endif
 static bool clock_alarm_modal,clock_display_settled;
+static bool clock_alarm_attempted;
 #ifdef WATCH_FAST_WAKE
 static bool clock_alarm_input_cancelled;
 #endif
@@ -799,7 +800,7 @@ __attribute__((visibility("default"))) void app_main(void) {
     (void)watch_runtime_promote;
 #endif
 #ifdef WATCH_CLOCK_ALARMS
-    clock_alarm=(portable_alarm_client){0};clock_display_settled=true;
+    clock_alarm=(portable_alarm_client){0};clock_display_settled=true;clock_alarm_attempted=false;
     clock_alarm_modal=clock_alarm_failed_cleaned=clock_alarm_error_seen=false;
 #ifdef WATCH_FAST_WAKE
     clock_alarm_input_cancelled=false;
@@ -938,7 +939,7 @@ __attribute__((visibility("default"))) void app_main(void) {
     if(!launcher_touch_open(&touch))goto done;
     CLOCK_WAKE_MARK("touch-end");
 #else
-    if(!portable_alarm_open(&clock_alarm,rt) || !launcher_touch_open(&touch) || !clock_alarm_foreground())goto done;
+    if(!clock_alarm_open_optional() || !launcher_touch_open(&touch) || !clock_alarm_foreground())goto done;
 #endif
 #endif
     uint32_t discarded,now,armed_at=0,last_activity=0;
@@ -1036,12 +1037,12 @@ __attribute__((visibility("default"))) void app_main(void) {
         if(clock_contexts_uncertain)break;
 #endif
 #if defined(WATCH_FAST_WAKE) && defined(WATCH_CLOCK_ALARMS)
-        if(!clock_alarm.api) {
+        if(!clock_alarm_attempted) {
             /* First Clock and one real input poll precede synchronous alarm,
              * haptic and speaker activation. Due/expired occurrences retain
              * the service's normal reconciliation and failure handling. */
             CLOCK_WAKE_MARK("alarm-begin");
-            if(!portable_alarm_open(&clock_alarm,rt))break;
+            if(!clock_alarm_open_optional())break;
             CLOCK_WAKE_MARK("alarm-end");
             clock_alarm_input_cancelled=false;
             CLOCK_WAKE_MARK("reconcile-begin");

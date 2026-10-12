@@ -114,7 +114,14 @@ static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *r
  if(c->cause>=RISC_BOOT_DEEP_TIMER && sample.validity==RISC_REALTIME_VALID)return true;
  twatch_rtc_time_v1 date={0};int64_t epoch=0;
  if(!rtc || !rtc->read)return true; /* Explicit TIME UNSET remains visible. */
- if(!rtc->read(rtc->context,&date))return false;
+ if(!rtc->read(rtc->context,&date)) {
+  /* Fresh battery-backed RTCs can have an oscillator-stop flag or invalid
+   * calendar. Keep TIME UNSET explicit; never invent compile time or gate the
+   * first display frame on a clock the user has not set yet. */
+  if(sample.validity!=RISC_REALTIME_UNSET)return false;
+  c->runtime->diagnostic("WATCH_CLOCK rtc=unreadable-or-unset time=unset");
+  return true;
+ }
  if(!watch_runtime_epoch(&date,&epoch)) {
   /* Runtime v1 has a signed-32-bit epoch. Preserve the accepted Watch's
    * wider 2000..2099 civil domain through its original RTC outside that range. */

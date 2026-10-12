@@ -22,6 +22,7 @@ static uint32_t first_frames,soft_frames,wake_began,soft_latency,input_at,input_
 static uint32_t fake_service_cost,transfer_cost,fail_service,stage_calls;
 static uint32_t wake_count,requested_wakes,alarm_frames,seed_calls;
 static bool ended,early_launch,first_seen,fail_display,fail_release;
+static bool unreadable_rtc;
 static bool fail_context_pause,confirmed_early,unset_time;
 static bool retained_fence,swipe_during_frame,swipe_latched,low_on_wake;
 static bool broadcast_live,contexts_live,contexts_enabled,alarm_on_wake;
@@ -146,7 +147,7 @@ static bool fast_key(void*c,uint32_t*out){check_io();(void)c;*out=0;
  return true;}
 static int32_t fast_sleep(void*c,risc_light_sleep_result_v1*out){check_io();(void)c;(void)out;assert(!touch.subscription&&!ble_state&&!pending&&!owned);assert(!broadcast_live&&!contexts_live);sleeps++;wake_count++;clock_ms+=500;native_time.epoch_seconds+=3600;if(low_on_wake){low_percent=5;clock_low_battery_sampled=false;}if(alarm_on_wake){alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;}return RISC_LIGHT_SLEEP_OK;}
 static int32_t fast_sleep_timed(void*c,uint32_t ms,risc_light_sleep_result_v1*out){(void)ms;return fast_sleep(c,out);}
-static bool fast_rtc(void*c,twatch_rtc_time_v1*out){if(unset_time){memset(out,0,sizeof(*out));return true;}return rtc_read(c,out);}
+static bool fast_rtc(void*c,twatch_rtc_time_v1*out){if(unreadable_rtc)return false;if(unset_time){memset(out,0,sizeof(*out));return true;}return rtc_read(c,out);}
 static int32_t alarm_status(void*c,alarm_status_v1*out){check_io();(void)c;*out=alarm_view;return 0;}
 static int32_t alarm_step(void*c){check_io();(void)c;return 0;}
 static int32_t alarm_refresh(void*c){check_io();(void)c;return 0;}
@@ -252,7 +253,7 @@ static void reset_case(void){
  boot_cause=RISC_BOOT_RESET;checkpoint_result=RISC_RETAINED_WAKE_ABSENT;retains=confirmations=promotions=0;
  service_acquires=first_at=service_input_polls=last_service_polls=first_frames=soft_frames=wake_began=soft_latency=input_at=input_stages=0;
  fake_service_cost=700;transfer_cost=95;fail_service=stage_calls=0;wake_count=requested_wakes=alarm_frames=seed_calls=0;
- ended=early_launch=first_seen=fail_display=fail_release=fail_context_pause=confirmed_early=unset_time=false;
+ ended=early_launch=first_seen=fail_display=fail_release=fail_context_pause=confirmed_early=unset_time=false;unreadable_rtc=false;
  retained_fence=swipe_during_frame=swipe_latched=low_on_wake=false;
  broadcast_live=contexts_live=contexts_enabled=alarm_on_wake=false;
  fail_broadcast_restart=fail_ble_enable=early_sleep=false;
@@ -331,14 +332,19 @@ int main(void){
  assert(wake_stage_times[stage_index("alarm-end")]-wake_stage_times[stage_index("alarm-begin")]==700);
  reset_case();fail_marker_sample=true;app_main();check_clean();
  assert(first_seen&&first_at==95&&confirmations==1&&stage_count("display-begin")==1&&!stage_count("display-end"));
- static const char *const failed_caps[]={RISC_REALTIME_CONTROL_CAPABILITY,"display.output",ALARM_SERVICE_CAPABILITY,"input.touch.raw"};
- static const char *const failed_stages[]={"runtime-grants","display","alarm","touch"};
+ static const char *const failed_caps[]={RISC_REALTIME_CONTROL_CAPABILITY,"display.output","input.touch.raw"};
+ static const char *const failed_stages[]={"runtime-grants","display","touch"};
  for(unsigned i=0;i<sizeof(failed_caps)/sizeof(*failed_caps);i++) {
   reset_case();fail_capability=failed_caps[i];app_main();check_clean();
   char begin[32],end[32];snprintf(begin,sizeof(begin),"%s-begin",failed_stages[i]);snprintf(end,sizeof(end),"%s-end",failed_stages[i]);
   assert(stage_count(begin)==1&&!stage_count(end)&&!service_acquires&&!confirmations);
   assert(first_seen==!strcmp(failed_caps[i],ALARM_SERVICE_CAPABILITY));
  }
+ reset_case();fail_capability=ALARM_SERVICE_CAPABILITY;app_main();check_clean();
+ assert(first_seen&&confirmations==1&&stage_count("alarm-begin")==1&&stage_count("alarm-end")==1&&!alarm_frames);
+ reset_case();unreadable_rtc=true;native_time.validity=RISC_REALTIME_UNSET;native_time.epoch_seconds=0;
+ app_main();check_clean();assert(first_seen&&!face.time_valid&&!seed_calls&&confirmations==1);
+ reset_case();unreadable_rtc=true;app_main();check_clean();assert(!first_seen&&!confirmations);
  reset_case();fail_capability="board.battery";app_main();check_clean();assert(first_seen&&!face.battery_valid&&confirmations==1);
  reset_case();fail_frame_acquire=true;app_main();check_clean();
  assert(stage_count("render-begin")==1&&!stage_count("render-end")&&!stage_count("transfer-begin")&&!first_seen);

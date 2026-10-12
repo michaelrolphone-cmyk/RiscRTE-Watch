@@ -4,6 +4,16 @@
 #include "PortableTouch.h"
 #include "watch_alarm_sleep.h"
 static portable_alarm_client clock_alarm;
+/* An offline bring-up profile can omit alarm.service. Do not turn the missing
+ * optional function into a default-app exit or retry it on every frame. An
+ * acquired malformed interface is still an error and retains normal cleanup. */
+static bool clock_alarm_open_optional(void) {
+    clock_alarm_attempted=true;
+    if(portable_alarm_open(&clock_alarm,rt))return true;
+    if(clock_alarm.grant.api)return false;
+    rt->diagnostic("WATCH_CLOCK alarm-service=unavailable alarms=disabled");
+    return true;
+}
 static bool clock_alarm_failed_cleaned,clock_alarm_error_seen;
 static int32_t clock_alarm_seen_error;
 static uint32_t clock_alarm_seen_snapshot;
@@ -55,6 +65,7 @@ static bool clock_alarm_pump_checked(void) {
 #define clock_alarm_pump_checked() portable_alarm_pump(&clock_alarm)
 #endif
 static bool clock_alarm_foreground(void) {
+    if(!clock_alarm.api)return true;
     (void)portable_touch_open;(void)portable_touch_close;
     if(!clock_display_settled || held)return clock_alarm_failure();
 #ifdef WATCH_BLE_BROADCAST
