@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "source": "851b8998e804c57b2c9f42d9f8fd0a69e79f2b41",
+  "entrypoint": "apps/clock/crown.c",
+  "display_layout": "uniform-fit240",
+  "physical_verification": false
+}

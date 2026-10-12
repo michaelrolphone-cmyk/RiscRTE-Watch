@@ -40,6 +40,7 @@ static bool clock_contexts_failure(void) {
     return false;
 }
 static bool clock_contexts_recover_export(void) {
+    if(!clock_contexts.api)return true;
     contexts_status_v1 s={.struct_size=sizeof(s)};
     if(!clock_contexts.api->status(clock_contexts.api->context,&s))return clock_contexts_failure();
     /* Successful owners clear active before return. Failed owner launch/init
@@ -69,6 +70,7 @@ static void clock_contexts_project(const contexts_status_v1 *s) {
     face.contexts=v;
 }
 static bool clock_contexts_tick(void) {
+    if(!clock_contexts.api)return true;
     if(clock_contexts_uncertain||held||!clock_display_settled)return false;
     if(clock_alarm_modal||picker.open||pqa_visible(&clock_quick.ui)||pqa_capture(&clock_quick.ui)) {
         if(!clock_contexts_pause())return false;

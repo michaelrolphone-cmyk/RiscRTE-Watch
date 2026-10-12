@@ -2,6 +2,8 @@
 #include "runtime_boot_confirm.h"
 #endif
 #include "RiscRuntimeV1.h"
+#include "WatchViewport.h"
+static watch_viewport clock_viewport;
 #include "nova/nova.h"
 #include "display_time.h"
 #include "effects/effects.h"
@@ -644,10 +646,11 @@ __attribute__((visibility("default"))) void app_main(void) {
         ))goto done;
 #endif
 #ifdef WATCH_BLE_BROADCAST
-    if(!portable_broadcast_open(&clock_broadcast,rt))goto done;
+    if(!portable_broadcast_open(&clock_broadcast,rt) && clock_broadcast.grant.api)goto done;
 #endif
 #ifdef WATCH_CONTEXTS_CLIENT
-    if(!portable_contexts_open(&clock_contexts,rt)||!clock_contexts_pause())goto done;
+    if(!portable_contexts_open(&clock_contexts,rt) && clock_contexts.grant.api)goto done;
+    if(!clock_contexts_pause())goto done;
 #endif
     have_d=rt->acquire("display.output",1,0,&dg);
     if (!have_d) goto done;
@@ -657,6 +660,10 @@ __attribute__((visibility("default"))) void app_main(void) {
         !display->present_status || !display->set_brightness) goto done;
     panel=dg.api;
     if (!panel->prepare_sleep || !panel->resume) goto done;
+    if (!watch_viewport_open(&clock_viewport,display)) {
+        rt->diagnostic("WATCH_CLOCK error=display-viewport");goto done;
+    }
+    display=&clock_viewport.display;
 #ifndef WATCH_CLOCK_RETURN
     if (!display->set_brightness(display->context,0,100)) goto done;
 #endif
@@ -941,5 +948,6 @@ done:
     if (held && display && display->release) display->release(display->context,held);
     if (have_r) rt->release(&rg);
     if (have_p) rt->release(&pg);
+    watch_viewport_close(&clock_viewport);
     if (have_d) rt->release(&dg);
 }

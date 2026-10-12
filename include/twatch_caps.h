@@ -34,8 +34,8 @@ typedef struct {
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* Board-local capabilities. Runtime treats the id as opaque. These are not
- * upstream RiscRTE capabilities until a later ABI promotion. */
+/* Shared watch capability contracts. Historical twatch_* C names preserve the
+ * deployed ABI; neither these interfaces nor app callers contain board pins. */
 #include "PortableMotionTap.h"
 
 #define TWATCH_RTC_API_V1 2u
@@ -117,7 +117,7 @@ typedef struct {
     void *context;
     /* Clocked PCM rate, channels 1 or 2; false means no open stream. */
     bool (*open)(void *context, uint32_t rate_hz, uint8_t channels);
-    /* frames are s16le. Mono is written to both MAX98357A slots. */
+    /* Frames are signed16 PCM; providers handle their physical slot mapping. */
     bool (*write)(void *context, const int16_t *pcm, size_t frames);
     bool (*set_gain)(void *context, uint16_t level, uint16_t maximum);
     bool (*silence)(void *context);

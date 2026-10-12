@@ -54,7 +54,10 @@ typedef struct {
     bool (*end)(void *, uint64_t token);
     bool (*idle_clocks)(void *, uint64_t token, uint32_t hz, uint16_t clocks);
     bool (*release)(void *, uint64_t token);
+    /* Append-only shared data pin mode; no change to legacy SPI prefix. */
+    bool (*claim_three_wire)(void *, uint8_t sclk, uint8_t mosi, uint8_t cs, uint64_t *token);
 } garden_spi_v1;
+#define GARDEN_SPI_THREE_WIRE_V1_SIZE (offsetof(garden_spi_v1, claim_three_wire) + sizeof(((garden_spi_v1*)0)->claim_three_wire))
 /* CPU-port radio service. Station and AP may coexist. Strings copied on join; completion is queried
  * with state, never inferred from join acceptance. Credentials max 63 bytes.
  * Exclusive token arbitrates the radio; leave drains operations within 100ms. */

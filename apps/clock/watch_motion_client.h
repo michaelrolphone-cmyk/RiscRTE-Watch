@@ -19,14 +19,24 @@ static int watch_motion_sleep(const risc_runtime_api_v1 *rt,const twatch_panel_p
         watch_alarm_sleep_prepared(panel,pmu,mode,alarms,rt->diagnostic):
         watch_sleep_prepared(panel,pmu,mode,rt->diagnostic);
     risc_runtime_capability_v1 grant={.struct_size=sizeof(grant)};
-    if(!rt->acquire || !rt->release || !rt->acquire(TWATCH_MOTION_CAPABILITY,1,7,&grant))return WATCH_SLEEP_REFUSED;
+    if(!rt->acquire(TWATCH_MOTION_CAPABILITY,1,0,&grant))return alarms?
+        watch_alarm_sleep_prepared(panel,pmu,mode,alarms,rt->diagnostic):
+        watch_sleep_prepared(panel,pmu,mode,rt->diagnostic);
     const twatch_motion_api_v1 *motion=grant.api;
     if(!motion || !watch_motion_ready(motion) || pmu->base.struct_size<TWATCH_PMU_WAKE_SET_SIZE ||
        !pmu->light_sleep_set || !pmu->deep_sleep_set){
-        watch_sleep_stage=8;return rt->release(&grant)?WATCH_SLEEP_REFUSED:WATCH_SLEEP_RETAINED;
+        watch_sleep_stage=8;
+        if(!rt->release(&grant))return WATCH_SLEEP_RETAINED;
+        return alarms?watch_alarm_sleep_prepared(panel,pmu,mode,alarms,rt->diagnostic):
+            watch_sleep_prepared(panel,pmu,mode,rt->diagnostic);
     }
     twatch_tap_info_v1 info={.struct_size=sizeof(info)};
-    if(!portable_motion_tap_valid(motion) || !motion->tap_info(motion->context,&info) || info.struct_size<sizeof(info) ||
+    if(!portable_motion_tap_valid(motion)) {
+        if(!rt->release(&grant))return WATCH_SLEEP_RETAINED;
+        return alarms?watch_alarm_sleep_prepared(panel,pmu,mode,alarms,rt->diagnostic):
+            watch_sleep_prepared(panel,pmu,mode,rt->diagnostic);
+    }
+    if(!motion->tap_info(motion->context,&info) || info.struct_size<sizeof(info) ||
        (info.profile!=TWATCH_TAP_BMA423 && info.profile!=TWATCH_TAP_BMA456H) ||
        !motion->tap_configure(motion->context,portable_tap_value(&preference,info.profile))){
         watch_sleep_stage=8;return rt->release(&grant)?WATCH_SLEEP_REFUSED:WATCH_SLEEP_RETAINED;

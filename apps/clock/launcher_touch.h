@@ -5,6 +5,7 @@
 typedef struct {
     risc_runtime_capability_v1 grant;
     const risc_touch_api_v1 *api;
+    watch_viewport_touch viewport;
     uint64_t subscription;
     bool neutral, down;
     uint8_t id;
@@ -22,6 +23,8 @@ static bool launcher_touch_open(watch_launcher_touch *t) {
     t->api=t->grant.api;
     if (!t->api || t->api->api_version!=1 || t->api->struct_size<sizeof(*t->api) ||
         !t->api->subscribe || !t->api->unsubscribe || !t->api->poll || !t->api->next || !t->api->snapshot) return false;
+    if (!watch_viewport_touch_open(&t->viewport,&clock_viewport,t->api)) return false;
+    t->api=&t->viewport.api;
     t->subscription=t->api->subscribe(t->api->context);
     risc_touch_snapshot_v1 s={0};
     if (!t->subscription || !t->api->snapshot(t->api->context,&s)) return false;
