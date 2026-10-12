@@ -5,7 +5,7 @@ static bool clock_context_rules(void){
  uint32_t now=face.animation_ms;if(clock_context_checked&&(uint32_t)(now-clock_context_checked)<500u)return true;clock_context_checked=now;
  contexts_evaluate_v1 q={.struct_size=sizeof(q)};q.observation.enabled=clock_contexts.settings_valid&&clock_contexts.policy.enabled;
  q.observation.time_valid=face.time_valid;q.observation.hour=face.time.hour;
- risc_battery_sample_v1 battery={0};if(pmu&&pmu->base.read&&pmu->base.read(pmu->base.context,&battery)&&battery.percent<=100&&!(battery.flags&RISC_BATTERY_PROFILE_MISSING)){q.observation.battery_valid=true;q.observation.battery=battery.percent;q.observation.charging=!!(battery.flags&RISC_BATTERY_CHARGING);}
+ risc_battery_sample_v1 battery={0};if(battery_api&&battery_api->read&&battery_api->read(battery_api->context,&battery)&&battery.percent<=100&&!(battery.flags&RISC_BATTERY_PROFILE_MISSING)){q.observation.battery_valid=true;q.observation.battery=battery.percent;q.observation.charging=!!(battery.flags&RISC_BATTERY_CHARGING);}
  if(!fp->fingerprint(fp->base.context,CONTEXTS_FP_EVALUATE,&q))return false;
  if(q.result.changed){
   if(!clock_background_pause())return false;

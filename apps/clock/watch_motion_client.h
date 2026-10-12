@@ -3,9 +3,9 @@
  * Historical custody lanes keep their original single-source behavior. */
 #include "RiscRuntimeV1.h"
 #include "watch_alarm_sleep.h"
-#include "PortableTapSettings.h"
-static int watch_motion_sleep(const risc_runtime_api_v1 *rt,const twatch_panel_power_v1 *panel,
-        const twatch_pmu_api_v1 *pmu,unsigned mode,const alarm_service_v1 *alarms){
+#include "WatchTapPolicy.h"
+static int watch_motion_sleep(const risc_runtime_api_v1 *rt,const risc_display_power_api_v1 *panel,
+        const risc_power_sleep_api_v1 *pmu,unsigned mode,const alarm_service_v1 *alarms){
     watch_sleep_stage=7;watch_sleep_detail=0;
     portable_tap_settings preference;
     risc_runtime_capability_v1 storage={.struct_size=sizeof(storage)};
@@ -23,7 +23,7 @@ static int watch_motion_sleep(const risc_runtime_api_v1 *rt,const twatch_panel_p
         watch_alarm_sleep_prepared(panel,pmu,mode,alarms,rt->diagnostic):
         watch_sleep_prepared(panel,pmu,mode,rt->diagnostic);
     const twatch_motion_api_v1 *motion=grant.api;
-    if(!motion || !watch_motion_ready(motion) || pmu->base.struct_size<TWATCH_PMU_WAKE_SET_SIZE ||
+    if(!motion || !watch_motion_ready(motion) || pmu->struct_size<RISC_POWER_WAKE_SET_SIZE ||
        !pmu->light_sleep_set || !pmu->deep_sleep_set){
         watch_sleep_stage=8;
         if(!rt->release(&grant))return WATCH_SLEEP_RETAINED;
@@ -36,9 +36,9 @@ static int watch_motion_sleep(const risc_runtime_api_v1 *rt,const twatch_panel_p
         return alarms?watch_alarm_sleep_prepared(panel,pmu,mode,alarms,rt->diagnostic):
             watch_sleep_prepared(panel,pmu,mode,rt->diagnostic);
     }
-    if(!motion->tap_info(motion->context,&info) || info.struct_size<sizeof(info) ||
-       (info.profile!=TWATCH_TAP_BMA423 && info.profile!=TWATCH_TAP_BMA456H) ||
-       !motion->tap_configure(motion->context,portable_tap_value(&preference,info.profile))){
+    uint16_t value=0;
+    if(!motion->tap_info(motion->context,&info) || !watch_tap_select(&preference,&info,&value) ||
+       !motion->tap_configure(motion->context,value)){
         watch_sleep_stage=8;return rt->release(&grant)?WATCH_SLEEP_REFUSED:WATCH_SLEEP_RETAINED;
     }
     int result=alarms?watch_alarm_sleep_motion_prepared(panel,pmu,motion,mode,alarms,rt->diagnostic):

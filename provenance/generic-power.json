@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "version": "0.13.0",
+  "capabilities": [
+    "board.battery",
+    "input.power-key",
+    "power.sleep",
+    "display.output",
+    "display.power"
+  ],
+  "legacy_suffixes_in_home": false
+}

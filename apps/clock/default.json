@@ -1,7 +1,7 @@
 {
   "type": "application",
   "id": "twatch-clock",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "architecture": "xtensa-esp32s3",
   "file_name": "default.elf",
   "entry": "app_main",
@@ -60,6 +60,18 @@
     },
     {
       "capability": "contexts.service",
+      "api": 1
+    },
+    {
+      "capability": "power.sleep",
+      "api": 1
+    },
+    {
+      "capability": "input.power-key",
+      "api": 1
+    },
+    {
+      "capability": "display.power",
       "api": 1
     }
   ]

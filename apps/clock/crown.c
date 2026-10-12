@@ -7,7 +7,7 @@ static watch_viewport clock_viewport;
 #include "nova/nova.h"
 #include "display_time.h"
 #include "effects/effects.h"
-#include "twatch_power.h"
+#include "WatchCapabilityClients.h"
 #include "twatch_caps.h"
 #include "watch_sleep.h"
 #include "transitions/PortableTransition.h"
@@ -143,8 +143,10 @@ static void sample_launcher_touch(uint32_t now, bool force) {
 #endif
 static const risc_display_output_api_v1 *display;
 static const twatch_rtc_api_v1 *rtc;
-static const twatch_pmu_api_v1 *pmu;
-static const twatch_panel_power_v1 *panel;
+static watch_capability_clients device_clients;
+static const risc_battery_gauge_api_v1 *battery_api;
+static const risc_power_sleep_api_v1 *pmu;
+static const risc_display_power_api_v1 *panel;
 static risc_display_frame_v1 held;
 static nova_watch_state face;
 #ifdef WATCH_CLOCK_POINTS
@@ -306,7 +308,7 @@ static bool draw_clock(uint32_t now,risc_display_surface_v1 *surface) {
     }
     if (!sampled_battery || (uint32_t)(now-battery_sampled_at)>=5000u) {
         risc_battery_sample_v1 sample={0};
-        face.battery_valid=pmu->base.read && pmu->base.read(pmu->base.context,&sample) &&
+        face.battery_valid=battery_api && battery_api->read && battery_api->read(battery_api->context,&sample) &&
             sample.percent<=100 && !(sample.flags&RISC_BATTERY_PROFILE_MISSING);
         face.battery_percent=sample.percent;
         battery_sampled_at=now; sampled_battery=true;
@@ -470,7 +472,7 @@ static bool clock_low_battery_poll(uint32_t now) {
     if(clock_low_battery_sampled&&(uint32_t)(now-clock_low_battery_at)<5000u)return true;
     clock_low_battery_sampled=true;clock_low_battery_at=now;
     risc_battery_sample_v1 sample={0,255,RISC_BATTERY_PROFILE_MISSING};
-    if(!pmu->base.read||!pmu->base.read(pmu->base.context,&sample))return true;
+    if(!battery_api || !battery_api->read||!battery_api->read(battery_api->context,&sample))return true;
 #if defined(WATCH_BLE_BROADCAST) || defined(WATCH_CONTEXTS_CLIENT)
     if(portable_low_battery_sample_valid(&sample) && sample.percent<PORTABLE_LOW_BATTERY_THRESHOLD &&
        (!clock_low_battery.observed || !clock_low_battery.low) && !clock_background_pause())return false;
@@ -525,6 +527,7 @@ static bool resume_from_deep(void) {
 }
 #endif
 static int sleep_cycle(void) {
+    if(!watch_capabilities_can_sleep(&device_clients))return WATCH_SLEEP_REFUSED;
     sleep_status[0]=0;
 #if defined(WATCH_BLE_BROADCAST) || defined(WATCH_CONTEXTS_CLIENT)
     if(!clock_background_pause())return WATCH_SLEEP_RETAINED;
@@ -566,6 +569,8 @@ static int sleep_cycle(void) {
 #endif
     if(rc==WATCH_SLEEP_RETAINED)return WATCH_SLEEP_RETAINED;
     if(rc<0)return false;
+    uint32_t cleared=0;
+    if(!watch_capabilities_key_events(&device_clients,&cleared))return false;
 #ifdef WATCH_QUICK_RADIOS
     if(!pqa_radios_resume(&clock_radios,&clock_quick.ui,rt))return false;
 #endif
@@ -599,7 +604,7 @@ static int sleep_cycle(void) {
             !frame(&fresh) || !draw_clock(now,&fresh) || !present() ||
             !display->set_brightness(display->context,(uint16_t)clock_brightness(),100)) return false;
     }
-    return pmu->key_events(pmu->base.context,&discard);
+    return watch_capabilities_key_events(&device_clients,&discard);
 }
 __attribute__((visibility("default"))) void app_main(void) {
     rt=risc_runtime_get_api(1);
@@ -624,7 +629,8 @@ __attribute__((visibility("default"))) void app_main(void) {
     picker_open_pending=picker_select_pending=picker_save_failed=false;
     picker_selection_pending=0;
 #endif
-    held=0;rtc=NULL;display=NULL;pmu=NULL;panel=NULL;
+    held=0;rtc=NULL;display=NULL;pmu=NULL;panel=NULL;battery_api=NULL;
+    device_clients=(watch_capability_clients){0};
 #ifdef WATCH_BLE_BROADCAST
     clock_broadcast=(portable_broadcast_client){0};clock_broadcast_uncertain=clock_handoff=false;
 #endif
@@ -634,8 +640,8 @@ __attribute__((visibility("default"))) void app_main(void) {
     reset_telemetry();
     if (!rt || rt->api_version!=1 || rt->struct_size<RISC_RUNTIME_CAPABILITIES_V1_SIZE ||
         !rt->health || !rt->yield_ms || !rt->diagnostic || !rt->acquire || !rt->release) return;
-    risc_runtime_capability_v1 dg={.struct_size=sizeof(dg)},rg={.struct_size=sizeof(rg)},pg={.struct_size=sizeof(pg)};
-    bool have_d=false,have_r=false,have_p=false;
+    risc_runtime_capability_v1 dg={.struct_size=sizeof(dg)},rg={.struct_size=sizeof(rg)};
+    bool have_d=false,have_r=false;
 #ifdef WATCH_RUNTIME_FEATURES
     if(!watch_runtime_open(&native_clock,rt,
 #ifdef WATCH_CLOCK_RETURN
@@ -655,11 +661,9 @@ __attribute__((visibility("default"))) void app_main(void) {
     have_d=rt->acquire("display.output",1,0,&dg);
     if (!have_d) goto done;
     display=dg.api;
-    if (!display || display->api_version!=1 || display->struct_size<TWATCH_PANEL_LIGHT_SLEEP_SIZE ||
+    if (!display || display->api_version!=1 || display->struct_size<sizeof(*display) ||
         !display->get_info || !display->acquire || !display->release || !display->submit ||
         !display->present_status || !display->set_brightness) goto done;
-    panel=dg.api;
-    if (!panel->prepare_sleep || !panel->resume) goto done;
     if (!watch_viewport_open(&clock_viewport,display)) {
         rt->diagnostic("WATCH_CLOCK error=display-viewport");goto done;
     }
@@ -667,11 +671,8 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifndef WATCH_CLOCK_RETURN
     if (!display->set_brightness(display->context,0,100)) goto done;
 #endif
-    have_p=rt->acquire("board.battery",1,0,&pg);
-    if (!have_p) goto done;
-    pmu=pg.api;
-    if (!pmu || pmu->base.api_version!=1 || pmu->base.struct_size<TWATCH_PMU_LIGHT_SLEEP_SIZE ||
-        !pmu->key_events || !pmu->prepare_sleep || !pmu->resume || !pmu->light_sleep) goto done;
+    if(!watch_capabilities_open(&device_clients,rt))goto done;
+    battery_api=device_clients.battery;pmu=device_clients.sleep;panel=device_clients.display_power;
     have_r=rt->acquire("rtc.clock",2,0,&rg);
     if (have_r) {
         rtc=rg.api;
@@ -707,7 +708,7 @@ __attribute__((visibility("default"))) void app_main(void) {
     if(!portable_alarm_open(&clock_alarm,rt) || !launcher_touch_open(&touch) || !clock_alarm_foreground())goto done;
 #endif
     uint32_t discarded,now,armed_at=0,last_activity=0;
-    if (!pmu->key_events(pmu->base.context,&discarded) ||
+    if (!watch_capabilities_key_events(&device_clients,&discarded) ||
 #ifdef WATCH_CLOCK_RETURN
         !return_to_clock() ||
 #else
@@ -717,7 +718,7 @@ __attribute__((visibility("default"))) void app_main(void) {
         !startup() ||
 #endif
 #endif
-        !pmu->key_events(pmu->base.context,&discarded) || !alive(&armed_at)) goto done;
+        !watch_capabilities_key_events(&device_clients,&discarded) || !alive(&armed_at)) goto done;
 #ifdef WATCH_CLOCK_LAUNCHER
 #ifdef WATCH_CLOCK_ALARMS
     if(!rt->request_launch)goto done;
@@ -773,7 +774,7 @@ __attribute__((visibility("default"))) void app_main(void) {
         if(clock_contexts_handoff)break;
 #endif
         uint32_t events=0;
-        if (!pmu->key_events(pmu->base.context,&events)) break;
+        if (!watch_capabilities_key_events(&device_clients,&events)) break;
         /* The clock closure currently exposes only PMU short/long key events.
          * Do not invent touch activity. Short press is reported on release. */
         if (events&3u) last_activity=now;
@@ -872,7 +873,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef PORTABLE_LOW_BATTERY
         idle=idle&&clock_quick.idle_ms!=0;
 #endif
-        if (manual || idle) {
+        if ((manual || idle) && watch_capabilities_can_sleep(&device_clients)) {
 #ifdef WATCH_CLOCK_LAUNCHER
 #ifdef WATCH_QUICK_ACTIONS
             pqa_cancel(&clock_quick.ui);(void)pqa_take_action(&clock_quick.ui);
@@ -947,7 +948,12 @@ done:
 #endif
     if (held && display && display->release) display->release(display->context,held);
     if (have_r) rt->release(&rg);
-    if (have_p) rt->release(&pg);
+    if(!watch_capabilities_close(&device_clients)) {
+#ifdef WATCH_RUNTIME_FEATURES
+        watch_runtime_retain(rt);
+#endif
+        return;
+    }
     watch_viewport_close(&clock_viewport);
     if (have_d) rt->release(&dg);
 }

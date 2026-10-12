@@ -25,7 +25,7 @@ incs=['-I'+str(x) for x in includes]
 common=['-Os','-fPIC','-mtext-section-literals','-mlongcalls','-fvisibility=hidden','-ffreestanding','-fno-builtin','-Wall','-Wextra','-Werror','-ffunction-sections','-fdata-sections']
 effect=out/'boot-effect.o'
 subprocess.run([a.cc.removesuffix('gcc')+'g++','-std=c++11',*common,'-fno-exceptions','-fno-rtti','-fno-threadsafe-statics',*incs,'-c',str(ROOT/'apps/clock/effects/boot.cpp'),'-o',str(effect)],check=True)
-sources=[ROOT/'apps/clock/crown.c',ROOT/'apps/clock/viewport.c',ROOT/'apps/clock/quick_radios.c',ROOT/'apps/clock/nova/nova.c',ROOT/'apps/clock/points_projection.c',ROOT/'apps/clock/effects/divdi3.c',*[S/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')],effect]
+sources=[ROOT/'apps/clock/crown.c',ROOT/'apps/clock/viewport.c',ROOT/'apps/clock/capability_clients.c',ROOT/'apps/clock/quick_radios.c',ROOT/'apps/clock/nova/nova.c',ROOT/'apps/clock/points_projection.c',ROOT/'apps/clock/effects/divdi3.c',*[S/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')],effect]
 validator=out/'validate-elf'
 subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Wextra','-Werror','-I'+str(S/'test/native_apps/stubs'),'-I'+str(S/'lib/elf_loader/include'),str(S/'lib/elf_loader/src/esp_elf_validate.c'),str(S/'test/native_apps/validate_test.c'),'-o',str(validator)],check=True)
 records={'schema':1,'compiler':compiler,'dependency_lock':json.loads((ROOT/'dependencies.lock.json').read_text()),'build_variant':'shared-no-board-defines','hardware_verified':False,'artifacts':{}}
