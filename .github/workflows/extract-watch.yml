@@ -1,0 +1,69 @@
+name: Extract watch application
+on:
+  push:
+    branches: [feat/universal-watch]
+    paths: ['.github/workflows/extract-watch.yml']
+permissions:
+  contents: write
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/universal-watch
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-T-Watch-S3
+          ref: 851b8998e804c57b2c9f42d9f8fd0a69e79f2b41
+          path: .source/watch
+          persist-credentials: false
+      - name: Import application, semantic interfaces and SDK snapshot
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil,json
+          root=Path('.source/watch')
+          paths=['apps/clock','apps/runtime_features','sdk/app','sdk/driver']
+          headers=['twatch_caps.h','twatch_power.h','twatch_calendar.h','twatch_util.h','PortableMotionTap.h','PortablePowerStatus.h','PortableTapSettings.h']
+          for path in paths:
+              if not Path(path).exists(): shutil.copytree(root/path,path)
+          Path('include').mkdir(exist_ok=True)
+          for name in headers:
+              target=Path('include')/name
+              if not target.exists():shutil.copy2(root/'include'/name,target)
+          Path('provenance').mkdir(exist_ok=True)
+          Path('provenance/extraction.json').write_text(json.dumps({'schema':1,'repository':'michaelrolphone-cmyk/RiscRTE-T-Watch-S3','commit':'851b8998e804c57b2c9f42d9f8fd0a69e79f2b41','paths':paths+['include/'+n for n in headers],'original_entrypoint':'apps/clock/crown.c','product':'default.elf','hardware_drivers_imported':False},indent=2)+'\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps sdk include provenance
+          if ! git diff --cached --quiet; then
+            git commit -m 'Extract complete watch Home app and preserved assets from Watch 1.1.10 lineage'
+            git push origin HEAD:feat/universal-watch
+          fi
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: 14762601b3fa7bbeeac5ed565a6825534bf74dca
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: fc0bdbbbc600ce891e60c44d091fce0586ade7d8
+          path: .source/utilities
+          persist-credentials: false
+      - name: Download pinned Xtensa compiler and record dependency identities
+        run: |
+          mkdir -p .source/toolchain
+          curl --fail --location --retry 2 --max-time 180 https://github.com/espressif/crosstool-NG/releases/download/esp-2021r2-patch5/xtensa-esp32s3-elf-gcc8_4_0-esp-2021r2-patch5-linux-amd64.tar.gz -o "$RUNNER_TEMP/toolchain.tar.gz"
+          echo "8aa17a6adf01efa5b1628c8ac578063a44d26ae9581d39486b92223a41ef262f  $RUNNER_TEMP/toolchain.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/toolchain.tar.gz" -C .source/toolchain
+          for d in .source/system .source/utilities; do printf '%s ' "$d"; git -C "$d" rev-parse HEAD; done > .source/SOURCES.txt
+          tar --exclude='.git' -czf watch-build-dependencies.tar.gz -C .source system utilities toolchain SOURCES.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: watch-build-dependencies
+          path: watch-build-dependencies.tar.gz
+          retention-days: 7
