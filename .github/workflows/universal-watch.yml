@@ -1,0 +1,77 @@
+name: Universal watch application
+on:
+  push:
+    branches: [feat/universal-watch, main]
+    paths: ['apps/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', 'provenance/apply_shared_port.py', '.github/workflows/universal-watch.yml', 'dependencies.lock.json']
+  pull_request:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-T-Watch-S3
+          ref: 851b8998e804c57b2c9f42d9f8fd0a69e79f2b41
+          path: .source/twatch
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: 14762601b3fa7bbeeac5ed565a6825534bf74dca
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: fc0bdbbbc600ce891e60c44d091fce0586ade7d8
+          path: .source/utilities
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE
+          ref: 2d906c5c0f412b2d0957b91ff153a1a293128a8c
+          path: .source/runtime
+          persist-credentials: false
+      - name: Complete extraction migration
+        run: |
+          python3 provenance/apply_shared_port.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps sdk include scripts provenance
+          if ! git diff --cached --quiet; then
+            git commit -m 'Connect shared viewport and capability-discovered hardware clients'
+            git push origin HEAD:${{ github.head_ref || github.ref_name }}
+          fi
+      - name: Test both display classes
+        run: |
+          python3 scripts/test_viewport.py
+          python3 scripts/test_viewport.py --sanitize
+      - name: Prepare pinned compiler
+        run: |
+          mkdir -p .source/toolchain
+          curl --fail --location --retry 2 --max-time 180 https://github.com/espressif/crosstool-NG/releases/download/esp-2021r2-patch5/xtensa-esp32s3-elf-gcc8_4_0-esp-2021r2-patch5-linux-amd64.tar.gz -o "$RUNNER_TEMP/toolchain.tar.gz"
+          echo "8aa17a6adf01efa5b1628c8ac578063a44d26ae9581d39486b92223a41ef262f  $RUNNER_TEMP/toolchain.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/toolchain.tar.gz" -C .source/toolchain
+          python3 -m pip install -r scripts/requirements.txt
+      - name: Build and validate shared ELFs
+        run: |
+          python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp32s3-elf/bin/xtensa-esp32s3-elf-gcc"
+          git rev-parse HEAD > dist/COMMIT.txt
+          git archive HEAD | gzip > dist/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: universal-watch-app
+          path: |
+            dist/default.elf
+            dist/default.json
+            dist/clock.elf
+            dist/clock.json
+            dist/build.json
+            dist/COMMIT.txt
+            dist/source.tar.gz
+          retention-days: 30

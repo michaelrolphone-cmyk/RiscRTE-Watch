@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "extraction": {"repository": "michaelrolphone-cmyk/RiscRTE-T-Watch-S3", "commit": "851b8998e804c57b2c9f42d9f8fd0a69e79f2b41"},
+  "system": {"repository": "michaelrolphone-cmyk/RiscRTE-System-Apps", "commit": "14762601b3fa7bbeeac5ed565a6825534bf74dca"},
+  "utilities": {"repository": "michaelrolphone-cmyk/RiscRTE-Utilities", "commit": "fc0bdbbbc600ce891e60c44d091fce0586ade7d8"},
+  "compiler": "xtensa-esp32s3-elf-gcc 8.4.0 esp-2021r2-patch5"
+}
