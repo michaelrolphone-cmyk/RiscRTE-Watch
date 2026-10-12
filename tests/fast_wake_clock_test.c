@@ -340,6 +340,7 @@ int main(void){
   assert(stage_count(begin)==1&&!stage_count(end)&&!service_acquires&&!confirmations);
   assert(first_seen==!strcmp(failed_caps[i],ALARM_SERVICE_CAPABILITY));
  }
+ reset_case();fail_capability=RISC_RETAINED_WAKE_CAPABILITY;app_main();check_clean();assert(first_seen&&confirmations==1&&!native_clock.resume);
  reset_case();fail_capability=ALARM_SERVICE_CAPABILITY;app_main();check_clean();
  assert(first_seen&&confirmations==1&&stage_count("alarm-begin")==1&&stage_count("alarm-end")==1&&!alarm_frames);
  reset_case();unreadable_rtc=true;native_time.validity=RISC_REALTIME_UNSET;native_time.epoch_seconds=0;

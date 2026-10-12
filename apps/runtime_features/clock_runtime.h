@@ -91,7 +91,12 @@ static bool watch_runtime_open(watch_clock_runtime *c,const risc_runtime_api_v1 
     !c->time->read || !c->time->seed)return false;
  if(!is_default)return true;
  c->wake_grant=(risc_runtime_capability_v1){.struct_size=sizeof(c->wake_grant)};
- if(!rt->acquire(RISC_RETAINED_WAKE_CAPABILITY,1,0,&c->wake_grant))return false;
+ if(!rt->acquire(RISC_RETAINED_WAKE_CAPABILITY,1,0,&c->wake_grant)) {
+  /* A standalone boot-test or other non-retained deployment can omit this
+   * service. Start cold; never claim a restored checkpoint without a grant. */
+  rt->diagnostic("WATCH_CLOCK retained-wake=unavailable resume=cold");
+  return true;
+ }
  c->wake_live=true;c->wake=c->wake_grant.api;
  if(!c->wake || c->wake->api_version!=1 || c->wake->struct_size<sizeof(*c->wake) ||
     !c->wake->read || !c->wake->stage || !c->wake->clear)return false;
