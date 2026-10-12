@@ -24,19 +24,23 @@ jobs:
           ref: fc0bdbbbc600ce891e60c44d091fce0586ade7d8
           path: .source/utilities
           persist-credentials: false
-      - name: Apply source migration and exercise real Home entry point
+      - name: Exercise real Home and diagnostic entry points
         run: |
-          python3 provenance/apply_first_boot_0141.py
+          python3 provenance/apply_standalone_0142.py
           python3 scripts/test_fast_wake_clock.py --system-apps .source/system --utilities .source/utilities
           python3 scripts/test_capabilities.py --sanitize
           python3 scripts/test_viewport.py --sanitize
           python3 scripts/check_capability_boundaries.py
+          for flags in '' '-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -no-pie'; do
+            cc -std=c11 -Wall -Wextra -Werror -Wno-misleading-indentation $flags -Iinclude -Isdk/app -Isdk/driver tests/bringup_test.c apps/clock/viewport.c -o /tmp/bringup-test
+            /tmp/bringup-test
+          done
       - name: Commit validated source
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add apps tests
           if ! git diff --cached --quiet; then
-            git commit -m 'Keep shared Home running with unset RTC and absent alarm service'
+            git commit -m 'Allow shared Home cold boot without retained-wake provisioning'
             git push origin HEAD:feat/universal-watch
           fi
