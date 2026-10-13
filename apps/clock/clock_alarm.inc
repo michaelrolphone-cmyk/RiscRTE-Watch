@@ -98,7 +98,7 @@ static bool clock_alarm_foreground(void) {
     clock_alarm_cancel_input();clock_alarm_modal=true;
     portable_touch alert_touch={.api=touch.api,.subscription=touch.subscription};
     uint32_t discarded;
-    if(!watch_capabilities_key_events(&device_clients,&discarded))return clock_alarm_failure();
+    if(!clock_key_read(&discarded,"WATCH_KEY stage=alarm-entry-discard"))return clock_alarm_failure();
     alarm_token_v1 shown=clock_alarm.status.occurrence;
     bool redraw=true;
     for(;;) {
@@ -117,7 +117,7 @@ static bool clock_alarm_foreground(void) {
         if(!clock_broadcast_step())return false;
 #endif
         rt->yield_ms(20);
-        if(!watch_capabilities_key_events(&device_clients,&events))return clock_alarm_failure();
+        if(!clock_key_read(&events,"WATCH_KEY stage=alarm-modal"))return clock_alarm_failure();
         portable_touch_sample sample;portable_touch_read(&alert_touch,&sample);
         bool tap=sample.valid && sample.released && sample.tap_eligible && !sample.cancelled && !sample.moved;
         bool retry=tap && sample.y>=watch_home_alarm_retry(clock_viewport.layout.height);

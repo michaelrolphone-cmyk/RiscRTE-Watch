@@ -183,6 +183,7 @@ static void sample_launcher_touch(uint32_t now, bool force) {
 static const risc_display_output_api_v1 *display;
 static const twatch_rtc_api_v1 *rtc;
 static watch_capability_clients device_clients;
+static bool clock_key_read(uint32_t *,const char *);
 static const risc_battery_gauge_api_v1 *battery_api;
 static const risc_power_sleep_api_v1 *pmu;
 static const risc_display_power_api_v1 *panel;
@@ -1278,8 +1279,8 @@ __attribute__((visibility("default"))) void app_main(void) {
             picker_save_failed=!saved;
             rt->diagnostic(saved?"WATCH_CLOCK face=saved":"WATCH_CLOCK face=save-failed");
         }
-        /* A short crown press dismisses the picker without changing selection;
-         * the existing long-press sleep path remains untouched. */
+        /* A long-held crown gesture dismisses the picker without changing
+         * selection; short-release manual sleep is evaluated below. */
         if(picker.open&&(events&1u)){watch_face_close(&picker);free(picker_scratch);picker_scratch=NULL;picker_save_failed=false;}
         if(launcher_swipe_pending) {
             launcher_swipe_pending=false;
