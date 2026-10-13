@@ -774,6 +774,26 @@ static bool clock_sleep_failure(const char *stage) {
     if(rt && rt->diagnostic)(void)rt->diagnostic(line);
     return false;
 }
+/* At most24 transition messages per invocation. No per-poll output, clock
+ * queries, allocation, waiting or capability acquisition. Events are the key
+ * API's classified short-release/long-held gestures, not invented raw edges. */
+static unsigned clock_key_trace_left;
+static void clock_key_trace(const char *stage) {
+    if(!clock_key_trace_left || !rt || !rt->diagnostic)return;
+    --clock_key_trace_left;
+    (void)rt->diagnostic(stage);
+}
+static bool clock_key_read(uint32_t *events,const char *stage) {
+    if(!watch_capabilities_key_events(&device_clients,events)){
+        clock_key_trace("WATCH_KEY read=failed");return false;
+    }
+    if(*events&3u){
+        clock_key_trace(stage);
+        clock_key_trace((*events&3u)==3u?"WATCH_KEY receipt=short-release+long-held":
+            (*events&2u)?"WATCH_KEY receipt=short-release":"WATCH_KEY receipt=long-held");
+    }
+    return true;
+}
 static int sleep_cycle(void) {
     if(!watch_capabilities_can_sleep(&device_clients))return clock_sleep_failure("CAPABILITY");
     sleep_status[0]=0;
@@ -827,7 +847,7 @@ static int sleep_cycle(void) {
     if(rc==WATCH_SLEEP_RETAINED)return WATCH_SLEEP_RETAINED;
     if(rc<0)return clock_sleep_failure("SLEEP-RESTORE");
     uint32_t cleared=0;
-    if(!watch_capabilities_key_events(&device_clients,&cleared))return clock_sleep_failure("WAKE-KEY-CLEAR");
+    if(!clock_key_read(&cleared,"WATCH_KEY stage=wake-discard"))return clock_sleep_failure("WAKE-KEY-CLEAR");
 #ifdef WATCH_FAST_WAKE
     clock_deferred_phase=0;clock_radios_pending=true;clock_input_reported=false;
 #ifdef WATCH_RUNTIME_FEATURES
@@ -871,10 +891,10 @@ static int sleep_cycle(void) {
             !frame(&fresh) || !draw_clock(now,&fresh) || !present() ||
             !display->set_brightness(display->context,(uint16_t)clock_brightness(),100)) return clock_sleep_failure("REFUSAL-REDRAW");
     }
-    return watch_capabilities_key_events(&device_clients,&discard) || clock_sleep_failure("FINAL-KEY-CLEAR");
+    return clock_key_read(&discard,"WATCH_KEY stage=wake-final-discard") || clock_sleep_failure("FINAL-KEY-CLEAR");
 }
 __attribute__((visibility("default"))) void app_main(void) {
-    sleep_status[0]=0;rt=risc_runtime_get_api(1);
+    sleep_status[0]=0;clock_key_trace_left=24;rt=risc_runtime_get_api(1);
 #ifdef WATCH_FAST_WAKE
     clock_deferred_phase=0;clock_radios_pending=true;clock_input_reported=false;clock_wake_started=0;
 #ifdef WATCH_RUNTIME_FEATURES
@@ -977,6 +997,8 @@ __attribute__((visibility("default"))) void app_main(void) {
         memcpy(sleep_status,"SLEEP ERR CAPABILITY",sizeof("SLEEP ERR CAPABILITY"));
         clock_sleep_failure(missing);
     }
+    clock_key_trace(device_clients.key?"WATCH_KEY acquire=present instance=unique":"WATCH_KEY acquire=missing instance=unique");
+    clock_key_trace(pmu&&panel?"WATCH_KEY sleep-capabilities=present":"WATCH_KEY sleep-capabilities=missing");
     CLOCK_WAKE_MARK("power-services-end");
     CLOCK_WAKE_MARK("rtc-begin");
 #if defined(WATCH_FAST_WAKE) && defined(WATCH_RUNTIME_FEATURES)
@@ -1053,7 +1075,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 #endif
 #endif
     uint32_t discarded,now,armed_at=0,last_activity=0;
-    if (!watch_capabilities_key_events(&device_clients,&discarded) ||
+    if (!clock_key_read(&discarded,"WATCH_KEY stage=startup-discard") ||
 #ifdef WATCH_CLOCK_RETURN
         !return_to_clock() ||
 #else
@@ -1065,7 +1087,7 @@ __attribute__((visibility("default"))) void app_main(void) {
         !startup() ||
 #endif
 #endif
-        !watch_capabilities_key_events(&device_clients,&discarded) || !alive(&armed_at)) goto done;
+        !clock_key_read(&discarded,"WATCH_KEY stage=startup-discard") || !alive(&armed_at)) goto done;
 #ifdef WATCH_CLOCK_LAUNCHER
 #ifdef WATCH_CLOCK_ALARMS
     if(!rt->request_launch)goto done;
@@ -1073,6 +1095,7 @@ __attribute__((visibility("default"))) void app_main(void) {
     if(!rt->request_launch || !launcher_touch_open(&touch)) goto done;
 #endif
 #endif
+    clock_key_trace("WATCH_KEY arming=start interval-ms=250");
     last_activity=armed_at;
 #ifdef WATCH_CLOCK_LAUNCHER
     /* Read once per fresh Clock invocation, release the grant before sleep.
@@ -1134,7 +1157,7 @@ __attribute__((visibility("default"))) void app_main(void) {
         if(clock_contexts_handoff)break;
 #endif
         uint32_t events=0;
-        if (!watch_capabilities_key_events(&device_clients,&events)) break;
+        if (!clock_key_read(&events,"WATCH_KEY stage=foreground")) break;
         /* The clock closure currently exposes only PMU short/long key events.
          * Do not invent touch activity. Short press is reported on release. */
         if (events&3u) last_activity=now;
@@ -1158,7 +1181,7 @@ __attribute__((visibility("default"))) void app_main(void) {
             CLOCK_WAKE_MARK("reconcile-begin");
             if(!clock_alarm_foreground() || !alive(&now))break;
             CLOCK_WAKE_MARK("reconcile-end");
-            if(clock_alarm_input_cancelled)events=0;
+            if(clock_alarm_input_cancelled){if(events&3u)clock_key_trace("WATCH_KEY decision=alarm-suppressed");events=0;}
             /* Loading or a visible alarm must not exhaust the idle interval. */
             last_activity=now;
         }
@@ -1196,7 +1219,7 @@ __attribute__((visibility("default"))) void app_main(void) {
         }
 #endif
 #ifdef WATCH_CONTEXTS_CLIENT
-        if(clock_context_message[0]&&(launcher_activity_pending||(events&3u))){clock_context_message[0]=0;clock_alarm_cancel_input();events=0;}
+        if(clock_context_message[0]&&(launcher_activity_pending||(events&3u))){if(events&3u)clock_key_trace("WATCH_KEY decision=context-message-dismissed");clock_context_message[0]=0;clock_alarm_cancel_input();events=0;}
 #endif
         if(launcher_activity_pending) last_activity=now;
         launcher_activity_pending=false;
@@ -1276,6 +1299,10 @@ __attribute__((visibility("default"))) void app_main(void) {
         }
 #endif
         bool manual=(events&2u) && (uint32_t)(now-armed_at)>=250u;
+        if(events&3u)clock_key_trace(!(events&2u)?"WATCH_KEY decision=long-no-sleep":
+            !manual?"WATCH_KEY decision=arming-suppressed":
+            !watch_capabilities_can_sleep(&device_clients)?"WATCH_KEY decision=capability-missing":
+            "WATCH_KEY decision=manual-sleep");
         bool idle=(uint32_t)(now-last_activity)>=
 #ifdef PORTABLE_LOW_BATTERY
             clock_quick.idle_ms;
@@ -1305,6 +1332,7 @@ __attribute__((visibility("default"))) void app_main(void) {
                 clock_sleep_failure("CHECKPOINT-STAGE");break;
             }
 #endif
+            clock_key_trace(manual?"WATCH_KEY sleep-enter=manual":"WATCH_KEY sleep-enter=idle");
             int sleep_result=sleep_cycle();
             if(sleep_result==WATCH_SLEEP_RETAINED)return; /* Runtime retains before fini. */
 #ifdef WATCH_RUNTIME_FEATURES

@@ -43,6 +43,8 @@ static unsigned transient_rtc_failures,rtc_read_at[16];
 static bool wait_rtc_recovery,first_time_valid,first_time_warning;
 static uint32_t prealarm_crown_events;
 static const char *fail_capability;
+static unsigned key_trace_count,key_acquire_cost,startup_events;
+static bool repeated_hold,trace_manual,trace_discard,trace_long;
 static unsigned sleep_fault,failure_reports;
 static char failure_stage[80];
 static bool fail_frame_acquire,fail_unblank,fail_marker_sample,fail_next_health;
@@ -86,6 +88,12 @@ static bool fast_retain(void){retains++;retained_fence=true;return true;}
 static bool fast_confirm(void){check_io();assert(!queued_context_handoff);confirmations++;if(service_acquires<4)confirmed_early=true;return true;}
 static bool fast_health(risc_runtime_health_v1*h){check_io();h->uptime_ms=clock_ms;if(fail_next_health){fail_next_health=false;return false;}return !ended&&clock_ms<30000u;}
 static bool fast_diagnostic(const char*s){
+ if(!strncmp(s,"WATCH_KEY ",10)){
+  assert(++key_trace_count<=24);
+  if(!strcmp(s,"WATCH_KEY decision=manual-sleep"))trace_manual=true;
+  if(!strcmp(s,"WATCH_KEY stage=startup-discard"))trace_discard=true;
+  if(!strcmp(s,"WATCH_KEY decision=long-no-sleep"))trace_long=true;
+ }
  if(!strncmp(s,"WATCH_CLOCK sleep=failed stage=",30)){
   assert(strlen(s)<sizeof(failure_stage));strcpy(failure_stage,s);failure_reports++;
  }
@@ -155,6 +163,8 @@ static bool fast_brightness(void*c,uint16_t level,uint16_t maximum) {
  check_io();return !(level&&fail_unblank)&&brightness(c,level,maximum);
 }
 static bool fast_key(void*c,uint32_t*out){check_io();(void)c;*out=0;
+ if(startup_events){*out=startup_events;startup_events=0;return true;}
+ if(repeated_hold&&ready&&clock_ms-ready_time>300){*out=1;return true;}
  if(crown_before_alarm&&ready&&!alarm_acquires){*out=2;crown_before_alarm=false;prealarm_crown_events++;}
  else if(clock_alarm_modal&&alarm_view.occurrence.generation&&alarm_frames)*out=1;
  else if(first_seen&&(clock_deferred_phase==4||(early_sleep&&clock_deferred_phase==1))&&wake_count+refused_cycles<requested_wakes&&clock_ms-ready_time>300){*out=2;sleep_failure_armed=fail_sleep_acquire!=0&&refused_cycles<2;}
@@ -214,6 +224,7 @@ static bool fast_acquire(const char*n,uint32_t version,uint64_t instance,risc_ru
   for(unsigned pixel=0;pixel<TEST_WIDTH*TEST_HEIGHT;pixel++)assert(!completed_pixels[pixel]);
   sleep_failure_armed=false;return false;
  }
+ if(!strcmp(n,"input.power-key"))clock_ms+=key_acquire_cost;
  if(fail_capability&&!strcmp(n,fail_capability))return false;
  if(!strcmp(n,"display.output"))clock_ms+=display_load_cost;
  if(!strcmp(n,"rtc.clock"))rtc_acquires++;
@@ -261,6 +272,7 @@ static const risc_key_value_v1 fast_kv={1,sizeof(fast_kv),NULL,fast_get,face_put
 static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
+ key_trace_count=key_acquire_cost=startup_events=0;repeated_hold=trace_manual=trace_discard=trace_long=false;
  (void)runtime;
  assert(!allocations);scenario=30;clock_ms=submitted=released=grants=ungrants=subscribed=unsubscribed=polls=launches=sleeps=touch_step=0;
  ready=owned=pending=launched=false;last_complete=swipe_submitted=swipe_time=0;hardware_brightness=40;
@@ -506,6 +518,14 @@ int main(void){
   app_main();check_clean();assert(first_seen&&!sleeps&&failure_reports==1);
   assert(!strcmp(failure_stage+strlen("WATCH_CLOCK sleep=failed stage="),stages[i]));
  }
+ reset_case();key_acquire_cost=700;requested_wakes=1;app_main();check_clean();assert(sleeps==1&&trace_manual&&first_at==795);
+ /* A fresh default invocation after a child receives no child gesture twice.
+  * Startup consumes stale events, while the later press still sleeps normally. */
+ reset_case();startup_events=2;requested_wakes=1;app_main();check_clean();assert(trace_discard&&trace_manual&&sleeps==1);
+ reset_case();startup_events=1;requested_wakes=1;app_main();check_clean();assert(trace_discard&&trace_manual&&sleeps==1);
+ reset_case();repeated_hold=true;app_main();check_clean();assert(!sleeps&&trace_long&&key_trace_count<=24);
+ unsigned unchanged_frames=submitted;for(unsigned i=0;i<100;i++)clock_key_trace("WATCH_KEY test=budget");assert(key_trace_count==24&&submitted==unchanged_frames);
+ puts("Bounded key trace: delayed key acquisition, fresh Home after stale short/long gesture, held-input suppression, manual sleep,24-message cap and unchanged cleanup PASS");
  puts("Sleep diagnostics: real Home blank brightness/acquire failure injection, absent key/power/panel capability, exact stage and unchanged cleanup PASS");
  return 0;
 }
