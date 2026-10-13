@@ -1,0 +1,63 @@
+{
+  "kind": "source-host-qualification",
+  "physical_devices_qualified": false,
+  "published": false,
+  "direct_bridge_runs": 1002,
+  "actual_system_adapter_navigation_runs": 90,
+  "modes": [
+    "normal",
+    "address-sanitizer",
+    "undefined-behavior-sanitizer"
+  ],
+  "physical_dimensions": [
+    [
+      240,
+      240
+    ],
+    [
+      410,
+      502
+    ]
+  ],
+  "direct_system_header_ref": "269440c1a6b72407cc57f02f99dc4ec2c47402c0",
+  "utilities_header_ref": "fc0bdbbbc600ce891e60c44d091fce0586ade7d8",
+  "paired_adapter_head_at_test": "c088e3cca918618d65a81a4d39e21f81bd67a80a",
+  "paired_adapter_was_worktree_pending_source_checkpoint": false,
+  "leak_sanitizer_ptrace_limited": true,
+  "manual_allocation_and_post_fence_guards": true,
+  "xtensa_esp32s3_full_feature_translation_units": "passed -Wall -Wextra -Werror",
+  "source_sha256": {
+    "apps/clock/portable_navigation.c": "b9c143f6156676352418d7fb0947b96e31b7188aaa0e3ee574f09ca8791a2b04",
+    "apps/clock/portable_sleep.c": "173c09eafb77c9c1d1e5901cc232bbec71bef16ba74a93907d6e09673a8a0019",
+    "include/WatchPortableBridgeGuard.h": "1a81267b1173edad567c97f8752de89d5932b8efabdb8944d1b2cfb17685dd10",
+    "tests/portable_watch_bridge_test.c": "9668c2635a7803dc8ec5a9b777983074519cb81b8f80aec0884b7ede28e959be"
+  },
+  "adapter_input_sha256": {
+    "system/lib/PortableApps/src/settings.inc": "989162c1034d9f51ca22ee3960c62115cc3ac3668cf40b9f927f588a91e16eba",
+    "system/lib/PortableApps/src/alarm.inc": "165dbe6c1fbfbb9a6e93d8b37949a2abf87517615e2ce2328ab6c5c134bd93bf",
+    "system/lib/PortableApps/src/adapter.c": "55ba75d7565299d8c14593b266e0a9ec9e6220e023bd80c8b44b781c781a4075",
+    "system/lib/PortableApps/include/PortableNavigation.h": "a0f3361c1392bd0522cb00ca1a23b17acf3c1c1d5958cde7dfe3b1293bc03b2a",
+    "system/test/native_apps/optional_service_adapter_test.c": "090a5bef49aa2eb37f4453bed6609203090b52fc604df05a70d052b272c16b0c",
+    "bridge/apps/clock/portable_navigation.c": "b9c143f6156676352418d7fb0947b96e31b7188aaa0e3ee574f09ca8791a2b04",
+    "bridge/include/WatchPortableBridgeGuard.h": "1a81267b1173edad567c97f8752de89d5932b8efabdb8944d1b2cfb17685dd10",
+    "bridge/tests/portable_watch_adapter_bridge_test.c": "8e232aec59a0cde094bfc9e0d06d25cf1a90a8aa1f0b08679198f430228949ea"
+  },
+  "reproduce": [
+    "python3 scripts/test_portable_watch_bridges.py --system SYSTEM --utilities UTILITIES --output OUTPUT",
+    "python3 scripts/test_portable_watch_adapter_bridge.py --system PAIRED_SYSTEM --system-ref c088e3cca918618d65a81a4d39e21f81bd67a80a --output OUTPUT"
+  ],
+  "limits": [
+    "Host service fakes do not prove physical wake or provider availability.",
+    "Generic display.output alone does not promise previous-image acquisition; the selected retained-RGB565 provider contract remains required.",
+    "Actual adapter integration covers the generic navigation bridge; sleep policy is exercised through actual sleep bridge translation units.",
+    "LeakSanitizer is unavailable under this execution environment; ASan remains active and allocation/free counters enforce cleanup boundaries."
+  ],
+  "paired_adapter_immutable": true,
+  "review_regressions": [
+    "Failed diagnostics and owner loss during yields fence before later I/O",
+    "Healthy pre-policy frame/acquire/submit failure restores image and brightness",
+    "A false brightness callback that changed hardware is rolled back",
+    "Exact last-row-short padded surfaces accepted; one byte less rejected",
+    "Failed acquire with changed struct_size is retained even with empty handles"
+  ]
+}
