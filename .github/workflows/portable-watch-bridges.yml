@@ -1,0 +1,45 @@
+name: Generic Watch app power bridges
+on:
+  push:
+    branches: [work/native-height-layout-20261013, feat/universal-watch, main]
+    paths:
+      - 'apps/clock/portable_*.c'
+      - 'include/WatchPortableBridgeGuard.h'
+      - 'scripts/test_portable_watch_*.py'
+      - 'tests/portable_watch_*.c'
+      - '.github/workflows/portable-watch-bridges.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  generic-bridges:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: 2c3f44dd773e27e3a142462088a96328119a79e7
+          path: .source/bridge-system
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: fc0bdbbbc600ce891e60c44d091fce0586ade7d8
+          path: .source/bridge-utilities
+          persist-credentials: false
+      - name: Real generic bridges and paired Settings adapter
+        run: |
+          python3 scripts/test_portable_watch_bridges.py --system .source/bridge-system --utilities .source/bridge-utilities --output dist/bridge-tests/direct
+          python3 scripts/test_portable_watch_adapter_bridge.py --system .source/bridge-system --system-ref 2c3f44dd773e27e3a142462088a96328119a79e7 --output dist/bridge-tests/adapter
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generic-watch-bridge-test-receipts
+          path: dist/bridge-tests/**/*.json
+          retention-days: 30

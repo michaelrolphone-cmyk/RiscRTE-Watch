@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "scope": "Source/component checkpoint only; no firmware or hardware qualification claim",
+  "home": {
+    "repository": "RiscRTE-Watch",
+    "commit": "ec768c7fae6fdb484fef28c6ec87f129b0a7f585",
+    "default_elf_bytes": 871088,
+    "default_elf_sha256": "7397f8ba6a036299a71bf7c62ba7882065e9ffca0ea87f0175a7eb35908cfbc1",
+    "clock_elf_bytes": 1232,
+    "clock_elf_sha256": "cfd7de71d1949e415ba6662862feba4733e384258670ec73760425436d3fcde1",
+    "system_dependency": "076f8da38f7dfebdfde6dd5d46e06446470fb828",
+    "utilities_dependency": "fc0bdbbbc600ce891e60c44d091fce0586ade7d8",
+    "public_ci_run": 38363187180,
+    "public_artifacts_match_local": true
+  },
+  "app_bridges": {
+    "repository": "RiscRTE-Watch",
+    "commit": "6e82fdcaec0b73ed700d2104cfb4d94f011c19d4",
+    "local_reviewed_commit": "5a2d8c9f417ddedab0a49eaab23faacdf8d4e655",
+    "paired_system_public": "2c3f44dd773e27e3a142462088a96328119a79e7",
+    "paired_system_local_test": "c088e3cca918618d65a81a4d39e21f81bd67a80a",
+    "paired_system_public_ci": 38363710598,
+    "extra_define": "PORTABLE_NAVIGATION_RETENTION",
+    "direct_cases": 1002,
+    "actual_adapter_cases": 90,
+    "independent_extra_fault_cases": 144,
+    "hook_boundary_cases": 20
+  },
+  "native_geometry": {
+    "240x240": [
+      240,
+      240
+    ],
+    "410x502": [
+      240,
+      294
+    ],
+    "policy": "uniform width scale, vertical reflow, inverse touch through final physical row"
+  },
+  "deployment_gates": [
+    "Build and stage one identical Home ELF for both devices.",
+    "Preserve each other app's qualified source/component receipt; the System UI branch is not a replacement for newer unrelated per-app repairs.",
+    "Retain native/appdata recovery fixes, all features/fonts, and at least two free SPIFFS blocks in each applicable Watch recipe.",
+    "Verify complete provider closure and generic instance-0 power-key/sleep/display-power grants.",
+    "The original app-sleep contract requires the selected retained-RGB565 provider behavior.",
+    "Run complete device cohort/firmware composition admission and then physical tests."
+  ],
+  "known_baseline_unit_failures": "Two pre-existing standalone Contexts assertions are documented in System docs/WATCH_OPTIONAL_SERVICES.md; complete repository test success is not claimed."
+}
