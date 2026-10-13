@@ -13,6 +13,9 @@ typedef struct { uint8_t ch; int8_t left,top; uint8_t width,height; uint16_t adv
 typedef struct { const face_glyph *glyphs; unsigned count; } face_font;
 #ifdef WATCH_POINTS_LEGACY_PRESENTATION
 #include "assets.inc"
+#elif defined(WATCH_COMPRESSED_FACE_ALPHA)
+#include "assets_packed.inc"
+#include "packed_alpha.inc"
 #else
 #include "assets_text.inc"
 #endif
@@ -46,13 +49,22 @@ static void ftext_alpha(canvas *c,const face_font *font,const char *s,int cx,int
     int scale=fit?fit*65536/width:256,pen=cx*256-width*scale/512;
     for(;*s;s++) {
         const face_glyph*g=fglyph(font,*s);if(!g)continue;
+        const uint8_t *glyph_alpha;
+#if defined(WATCH_COMPRESSED_FACE_ALPHA) && !defined(WATCH_POINTS_LEGACY_PRESENTATION)
+        if(alpha==face_alpha) {
+            unsigned count=(unsigned)g->width*g->height;
+            if(count>sizeof(face_alpha_glyph) || !face_alpha_read(g->data,count,face_alpha_glyph))return;
+            glyph_alpha=face_alpha_glyph;
+        } else
+#endif
+        glyph_alpha=alpha+g->data;
         int left=pen+g->left*scale,first=left>=0?left/256:(left-255)/256,last=(left+g->width*scale+255)/256;
         for(int dx=first;dx<last;dx++)if(dx>=0&&dx<240) {
             int src=((dx*256+128-left)*256)/scale-128,sx=src>=0?src/256:(src-255)/256;
             unsigned frac=(unsigned)(src-sx*256);
             for(unsigned gy=0;gy<g->height;gy++) {
                 int dy=y+g->top+(int)gy;if(dy<0||dy>=(int)CANVAS_HEIGHT(c))continue;
-                const uint8_t*row=alpha+g->data+gy*g->width;
+                const uint8_t*row=glyph_alpha+gy*g->width;
                 unsigned a=sx>=0&&sx<g->width?row[sx]:0,b=sx+1>=0&&sx+1<g->width?row[sx+1]:0;
                 blend(at(c,(unsigned)dx,(unsigned)dy),*s==':'&&colon?colon:color,(a*(256-frac)+b*frac+128)>>8);
             }
