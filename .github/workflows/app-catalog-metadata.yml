@@ -1,0 +1,34 @@
+name: Read-only app catalog provisioning
+on:
+  push:
+    branches: [work/native-height-layout-20261013]
+  pull_request:
+    paths:
+      - 'scripts/stage_app_catalog_metadata.py'
+      - 'tests/test_stage_app_catalog_metadata.py'
+      - '.github/workflows/app-catalog-metadata.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: 72f435fcee376ec62d17ece6180753385ea547d9
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Preserve bytes, runtime inventory and explicit native capacities
+        run: |
+          python tests/test_stage_app_catalog_metadata.py --system .source/system
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          python scripts/check_capability_boundaries.py
