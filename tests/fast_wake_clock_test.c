@@ -269,9 +269,18 @@ static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_
  if(!strcmp(k,PORTABLE_CONTEXT_ENABLED_KEY)&&contexts_enabled){assert(n>=4);memcpy(b,(uint8_t[]){0x43,1,1,1^0xa5},4);*z=4;return RISC_KEY_VALUE_OK;}
  return face_get(c,k,b,n,z);}
 static const risc_key_value_v1 fast_kv={1,sizeof(fast_kv),NULL,fast_get,face_put};
-static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain};
+static unsigned launch_failure_kind,launch_failure_reads;
+static bool fast_launch_failure(risc_runtime_launch_failure_v1 *out){
+ assert(out && out->struct_size==sizeof(*out));++launch_failure_reads;
+ if(!launch_failure_kind)return false;
+ out->flags=launch_failure_kind==1?RISC_LAUNCH_FAILURE_EXTERNAL_IMAGE:0;
+ strcpy(out->application,"optional-app.elf");strcpy(out->detail,"media absent or invalid");
+ launch_failure_kind=0;return true;
+}
+static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
+ launch_failure_kind=launch_failure_reads=0;
  key_trace_count=key_acquire_cost=startup_events=0;repeated_hold=trace_manual=trace_discard=trace_long=false;
  (void)runtime;
  assert(!allocations);scenario=30;clock_ms=submitted=released=grants=ungrants=subscribed=unsubscribed=polls=launches=sleeps=touch_step=0;
@@ -505,6 +514,12 @@ static int regression_main(void){
 
 int main(void){
  regression_main();
+ for(unsigned kind=1;kind<=2;kind++){
+  reset_case();launch_failure_kind=kind;app_main();check_clean();
+  assert(first_seen&&launch_failure_reads==1&&!launch_failure_kind);
+  assert(!strcmp(sleep_status,kind==1?"APP MEDIA UNAVAILABLE":"APP FAILED TO START"));
+ }
+ puts("Launch feedback: actual Home first-frame pixels include missing-media/general failure status; no extra grants; fresh invocation reads once PASS");
  for(unsigned failure=1;failure<=2;failure++){
   reset_case();sleep_fault=failure;failure_reports=0;requested_wakes=1;
   app_main();check_clean();assert(!sleeps&&failure_reports==1);

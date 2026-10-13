@@ -894,6 +894,18 @@ static int sleep_cycle(void) {
     }
     return clock_key_read(&discard,"WATCH_KEY stage=wake-final-discard") || clock_sleep_failure("FINAL-KEY-CLEAR");
 }
+static void clock_launch_feedback(void) {
+    if(rt->struct_size<RISC_RUNTIME_LAUNCH_FAILURE_V1_SIZE || !rt->take_launch_failure)return;
+    risc_runtime_launch_failure_v1 failure={.struct_size=sizeof(failure)};
+    if(!rt->take_launch_failure(&failure))return;
+    failure.application[sizeof(failure.application)-1]=0;
+    failure.detail[sizeof(failure.detail)-1]=0;
+    const char *message=(failure.flags&RISC_LAUNCH_FAILURE_EXTERNAL_IMAGE)?
+        "APP MEDIA UNAVAILABLE":"APP FAILED TO START";
+    memcpy(sleep_status,message,strlen(message)+1);
+    rt->diagnostic("WATCH_CLOCK launch=failed action=visible-status");
+    rt->diagnostic(failure.application);rt->diagnostic(failure.detail);
+}
 __attribute__((visibility("default"))) void app_main(void) {
     sleep_status[0]=0;clock_key_trace_left=24;rt=risc_runtime_get_api(1);
 #ifdef WATCH_FAST_WAKE
@@ -1075,6 +1087,7 @@ __attribute__((visibility("default"))) void app_main(void) {
     if(!clock_alarm_open_optional() || !launcher_touch_open(&touch) || !clock_alarm_foreground())goto done;
 #endif
 #endif
+    clock_launch_feedback();
     uint32_t discarded,now,armed_at=0,last_activity=0;
     if (!clock_key_read(&discarded,"WATCH_KEY stage=startup-discard") ||
 #ifdef WATCH_CLOCK_RETURN
