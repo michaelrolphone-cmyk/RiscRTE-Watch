@@ -3,10 +3,11 @@
 from pathlib import Path
 import argparse, os, subprocess
 root=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('--system-apps',type=Path,required=True);p.add_argument('--utilities',type=Path,required=True);a=p.parse_args()
-out=root/'dist/fast-wake-clock';out.mkdir(parents=True,exist_ok=True)
+p=argparse.ArgumentParser();p.add_argument('--system-apps',type=Path,required=True);p.add_argument('--utilities',type=Path,required=True);p.add_argument('--native',action='store_true');a=p.parse_args()
+out=root/('dist/fast-wake-clock-native' if a.native else 'dist/fast-wake-clock');out.mkdir(parents=True,exist_ok=True)
 for sanitize in (False,True):
- flags=['-DWATCH_FAST_WAKE','-DPORTABLE_RTC_UTC8_DENVER','-O1','-g','-Wall','-Wextra','-Werror',*['-I'+str(x) for x in (a.system_apps/'lib/PortableApps/include',a.utilities/'lib/Contexts/include',a.utilities/'lib/Alarm/include',root/'sdk/app',root/'sdk/driver',root/'include',root)]]
+ flags=['-DWATCH_FAST_WAKE','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_RTC_UTC8_DENVER','-O1','-g','-Wall','-Wextra','-Werror',*['-I'+str(x) for x in (a.system_apps/'lib/PortableApps/include',a.utilities/'lib/Contexts/include',a.utilities/'lib/Alarm/include',root/'sdk/app',root/'sdk/driver',root/'include',root)]]
+ if a.native:flags+=['-DTEST_WIDTH=410u','-DTEST_HEIGHT=502u']
  if sanitize:flags+=['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer','-no-pie']
  objects=[]
  for i,source in enumerate([root/'tests/fast_wake_clock_test.c',root/'apps/clock/nova/nova.c',root/'apps/clock/points_projection.c',root/'apps/clock/viewport.c',root/'apps/clock/capability_clients.c',root/'apps/clock/quick_radios.c',*[a.system_apps/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')]]):

@@ -47,14 +47,15 @@ static bool fail_frame_acquire,fail_unblank,fail_marker_sample,fail_next_health;
 static unsigned fail_sleep_acquire,refused_cycles,refused_restores,clean_refusal_frames,sleep_acquire_errors;
 static bool sleep_failure_armed;
 static void check_refusal_pixels(void){
- risc_display_surface_v1 expected={0,expected_pixels,240,240,480,sizeof(expected_pixels),5};
- assert(nova_watch_face_render(&expected,&face,picker.selected));
+ fixture_expected_face(false);
  if(sleep_status[0]){
-  /* A genuine error may change only the existing status strip. */
-  for(unsigned y=0;y<240;y++)for(unsigned x=0;x<240;x++)
-   if(y<203||y>=231||x<10||x>=230)assert(completed_pixels[y*240+x]==expected_pixels[y*240+x]);
+  for(unsigned y=0;y<TEST_HEIGHT;y++)for(unsigned x=0;x<TEST_WIDTH;x++) {
+   unsigned ly=y*240/TEST_WIDTH,lx=x*240/TEST_WIDTH;
+   if(ly<TEST_LOGICAL_HEIGHT-37||ly>=TEST_LOGICAL_HEIGHT-9||lx<10||lx>=230)
+    assert(completed_pixels[y*TEST_WIDTH+x]==expected_pixels[y*TEST_WIDTH+x]);
+  }
   assert(memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
-  assert(nova_watch_sleep_status(&expected,sleep_status));
+  fixture_expected_face(true);
  }
  assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
 }
@@ -111,7 +112,7 @@ static bool fast_diagnostic(const char*s){
   assert(hardware_brightness==clock_quick.brightness&&!pending&&!owned&&touch.subscription&&last_complete==submitted);assert(service_acquires==0);
   assert(points_loads==1&&face.points==&clock_points_view&&!sleep_setting_reads&&!alarm_acquires&&!alarm_frames);
   if(face.time_valid){twatch_rtc_time_v1 raw={0},expected={0};assert(watch_runtime_calendar(native_time.epoch_seconds,&raw));assert(watch_display_time(&raw,&expected));assert(!memcmp(&face.time,&expected,sizeof(expected)));}
-  risc_display_surface_v1 expected={0,expected_pixels,240,240,480,sizeof(expected_pixels),5};assert(nova_watch_face_render(&expected,&face,picker.selected));if(sleep_status[0])assert(nova_watch_sleep_status(&expected,sleep_status));assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
+  fixture_expected_face(true);assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
   if(early_launch)launcher_swipe_pending=true;
  }
  if(strstr(s,"stage=first-input-poll")){input_at=clock_ms;input_stages++;assert(touch.subscription&&polls);if(wake_count)resume_input_at=clock_ms;}
@@ -204,7 +205,7 @@ static bool fast_acquire(const char*n,uint32_t version,uint64_t instance,risc_ru
  if(sleep_failure_armed&&((fail_sleep_acquire==1&&!strcmp(n,RISC_KEY_VALUE_CAPABILITY)&&instance==1)||
     (fail_sleep_acquire==2&&!strcmp(n,TWATCH_MOTION_CAPABILITY)&&instance==0))){
   assert(!hardware_brightness&&!touch.subscription&&!pending&&!owned&&!broadcast_live&&!contexts_live);
-  for(unsigned pixel=0;pixel<240u*240u;pixel++)assert(!completed_pixels[pixel]);
+  for(unsigned pixel=0;pixel<TEST_WIDTH*TEST_HEIGHT;pixel++)assert(!completed_pixels[pixel]);
   sleep_failure_armed=false;return false;
  }
  if(fail_capability&&!strcmp(n,fail_capability))return false;
@@ -242,7 +243,7 @@ static bool fast_launch(const char*path){check_io();assert(!held&&!pending);
  if(expect_context_handoff){assert(!strcmp(path,"waterfall.elf")&&!queued_context_handoff);queued_context_handoff=true;}
  else{assert(!strcmp(path,"springboard.elf")&&!touch.subscription);ended=true;}
  launches++;return true;}
-static bool fast_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();(void)c;*out=(risc_touch_snapshot_v1){.width=240,.height=240};return true;}
+static bool fast_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();(void)c;*out=(risc_touch_snapshot_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT};return true;}
 static bool fast_ble_enable(void*c,bool enabled){check_io();radio_apply_count++;if(fail_ble_enable)return false;return ble_enable(c,enabled);}
 static bool fast_ble_status(void*c,uint8_t*out){check_io();return ble_status(c,out);}
 static const portable_bluetooth_control_v1 fast_ble={.api_version=1,.struct_size=sizeof(fast_ble),.set_enabled=fast_ble_enable,.status=fast_ble_status};

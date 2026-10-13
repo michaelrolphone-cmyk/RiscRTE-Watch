@@ -4,6 +4,7 @@
  * the inverse transform. The same binary runs on every admitted display. */
 #include "RiscDisplayOutputV1.h"
 #include "RiscTouchV1.h"
+#include "WatchLayout.h"
 #include <stdbool.h>
 #include <stdint.h>
 #define WATCH_CANVAS_SIDE 240u
@@ -14,7 +15,8 @@ typedef struct {
     const risc_display_output_api_v1 *native;
     risc_display_surface_v1 lease;
     uint16_t *canvas, *columns;
-    uint32_t width,height,side,left,top;
+    uint32_t width,height;
+    watch_layout layout;
     bool scaled;
 } watch_viewport;
 

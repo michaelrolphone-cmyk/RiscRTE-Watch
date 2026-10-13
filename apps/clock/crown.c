@@ -163,7 +163,7 @@ static void launcher_touch_latch(unsigned action,bool activity) {
     if(action==WATCH_FACE_SELECT){picker_selection_pending=watch_face_page_for(picker.category)->ids[picker.target];picker_select_pending=true;}
     if(activity)launcher_activity_pending=true;
 }
-/* Sampling must not wait for a whole 240-row presentation. Latch the first
+/* Sampling must not wait for a whole presentation. Latch the first
  * qualified swipe, but let the accepted frame finish before handing it off. */
 static void sample_launcher_touch(uint32_t now, bool force) {
 #ifdef WATCH_CONTEXTS_CLIENT
@@ -463,15 +463,16 @@ static bool hold_boot_frame(void) {
  * across submit, sleep, or an application switch. Allocation failure preserves
  * the normal sharp clock path instead of making Clock unavailable. */
 static bool logo_to_clock(void) {
-    const size_t bytes=240u*240u*sizeof(uint16_t);
+    const unsigned height=clock_viewport.layout.height;
+    const size_t bytes=240u*height*sizeof(uint16_t);
     uint16_t *old=malloc(bytes),*scratch=old?malloc(bytes):NULL;
     bool ok=false;
-    if (!old || !scratch) {
+    if (!old || !scratch || height>PORTABLE_TRANSITION_MAX_SIDE) {
         risc_display_surface_v1 s={0};uint32_t now;
         free(scratch);free(old);
         return alive(&now) && frame(&s) && draw_clock(now,&s) && present() && pace_frame(now);
     }
-    risc_display_surface_v1 logo={0,old,240,240,480,bytes,RISC_DISPLAY_FORMAT_RGB565};
+    risc_display_surface_v1 logo={0,old,240,height,480,bytes,RISC_DISPLAY_FORMAT_RGB565};
     uint32_t start,now;
     if (!watch_boot_render(&logo,1800) || !alive(&start)) goto done;
     for(unsigned count=0;count<100;count++) {
@@ -480,7 +481,7 @@ static bool logo_to_clock(void) {
         if (!count) start=now;
         unsigned alpha=portable_transition_alpha(now-start);
         if (!portable_transition_rgb565(s.pixels,s.stride_bytes,old,480,
-                scratch,bytes,240,240,alpha) || !present() || !pace_frame(now)) goto done;
+                scratch,bytes,240,height,alpha) || !present() || !pace_frame(now)) goto done;
         if (alpha==256u) {ok=true;break;}
     }
 done:
@@ -499,22 +500,23 @@ done:
  * Capture it before drawing, preserve its light level, and never play the boot
  * intro. Actual successful wake below still uses startup() in both variants. */
 static bool return_to_clock(void) {
-    const size_t bytes=240u*240u*sizeof(uint16_t);
+    const unsigned height=clock_viewport.layout.height;
+    const size_t bytes=240u*height*sizeof(uint16_t);
     uint16_t *old=malloc(bytes),*scratch=old?malloc(bytes):NULL;
     bool ok=false;
     uint32_t start,now;
     risc_display_surface_v1 retained={0};
-    if (!old || !scratch) {
+    if (!old || !scratch || height>PORTABLE_TRANSITION_MAX_SIDE) {
         free(scratch);free(old);
         return alive(&now) && frame(&retained) && draw_clock(now,&retained) && present();
     }
     if (!frame(&retained)) goto done;
     size_t span;
     if (!retained.pixels || retained.pixel_format!=RISC_DISPLAY_FORMAT_RGB565 ||
-        retained.width!=240u || retained.height!=240u || retained.stride_bytes<480u ||
+        retained.width!=240u || retained.height!=height || retained.stride_bytes<480u ||
         retained.stride_bytes%sizeof(uint16_t) ||
-        !pt_image_span(retained.stride_bytes,480u,240u,&span) || span>retained.size_bytes) goto done;
-    for(unsigned y=0;y<240u;y++)
+        !pt_image_span(retained.stride_bytes,480u,height,&span) || span>retained.size_bytes) goto done;
+    for(unsigned y=0;y<height;y++)
         memcpy(old+y*240u,(const uint8_t *)retained.pixels+(size_t)y*retained.stride_bytes,480u);
     display->release(display->context,held);held=0;
     if (!alive(&start)) goto done;
@@ -530,7 +532,7 @@ static bool return_to_clock(void) {
         age=painted-start; /* Rendering time belongs to the same 60ms budget. */
         unsigned alpha=age>=60u?256u:age*256u/60u;
         if (!portable_transition_rgb565(s.pixels,s.stride_bytes,old,480,
-                scratch,bytes,240,240,alpha) || !present()) goto done;
+                scratch,bytes,240,height,alpha) || !present()) goto done;
         if (alpha==256u) {ok=true;break;}
         if (!pace_frame(now)) goto done;
     }
@@ -787,10 +789,10 @@ static int sleep_cycle(void) {
     size_t span;
     if (!display->set_brightness(display->context,0,100) || !frame(&blank) ||
         !blank.pixels || blank.pixel_format!=RISC_DISPLAY_FORMAT_RGB565 ||
-        blank.width!=240u || blank.height!=240u || blank.stride_bytes<480u ||
+        blank.width!=240u || blank.height!=clock_viewport.layout.height || blank.stride_bytes<480u ||
         blank.stride_bytes%sizeof(uint16_t) ||
-        !pt_image_span(blank.stride_bytes,480u,240u,&span) || span>blank.size_bytes) return false;
-    for(unsigned y=0;y<240u;y++) memset((uint8_t *)blank.pixels+(size_t)y*blank.stride_bytes,0,480u);
+        !pt_image_span(blank.stride_bytes,480u,blank.height,&span) || span>blank.size_bytes) return false;
+    for(unsigned y=0;y<blank.height;y++) memset((uint8_t *)blank.pixels+(size_t)y*blank.stride_bytes,0,480u);
     if (!present()) return false;
     /* Every preparation attempt is paired with resume, including partial
      * preparation and platform refusal. No framebuffer lease survives here. */
@@ -942,6 +944,12 @@ __attribute__((visibility("default"))) void app_main(void) {
         rt->diagnostic("WATCH_CLOCK error=display-viewport");goto done;
     }
     display=&clock_viewport.display;
+#ifdef WATCH_CLOCK_LAUNCHER
+    if(!watch_face_set_height(&picker,clock_viewport.layout.height))goto done;
+#endif
+#ifdef WATCH_QUICK_ACTIONS
+    if(!pqa_set_height(&clock_quick.ui,clock_viewport.layout.height))goto done;
+#endif
 #ifndef WATCH_CLOCK_RETURN
     if (!display->set_brightness(display->context,0,100)) goto done;
 #endif

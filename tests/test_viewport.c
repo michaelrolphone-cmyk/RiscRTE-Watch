@@ -44,11 +44,11 @@ static void exercise(unsigned w,unsigned h) {
     width=w;height=h;stride=(w+4)*2;pixels=malloc(height*stride);assert(pixels);
     memset(pixels,0xa5,height*stride);borrowed=reject_submit=bad_surface=false;submits=releases=0;
     watch_viewport v={0};assert(watch_viewport_open(&v,&native));
-    risc_display_info_v1 i={0};assert(v.display.get_info(v.display.context,&i));assert(i.width==240&&i.height==240);
+    risc_display_info_v1 i={0};assert(v.display.get_info(v.display.context,&i));assert(i.width==240&&i.height==(h*240+w-1)/w);
     risc_display_surface_v1 s={0},other={0};assert(v.display.acquire(v.display.context,RISC_DISPLAY_FORMAT_RGB565,&s));
-    assert(s.width==240&&s.height==240);assert((s.pixels==pixels)==(w==240&&h==240));
+    assert(s.width==240&&s.height==i.height);assert((s.pixels==pixels)==(w==240&&h==240));
     assert(!v.display.acquire(v.display.context,RISC_DISPLAY_FORMAT_RGB565,&other));
-    for(unsigned y=0;y<240;y++)for(unsigned x=0;x<240;x++)((uint16_t*)((uint8_t*)s.pixels+y*s.stride_bytes))[x]=(uint16_t)(y*240+x);
+    for(unsigned y=0;y<i.height;y++)for(unsigned x=0;x<240;x++)((uint16_t*)((uint8_t*)s.pixels+y*s.stride_bytes))[x]=(uint16_t)(y*240+x);
     risc_display_present_token_v1 token=0;
     risc_display_rect_v1 invalid={239,0,2,1};assert(!v.display.submit(v.display.context,s.frame,&invalid,1,NULL,&token));
     reject_submit=true;assert(!v.display.submit(v.display.context,s.frame,NULL,0,NULL,&token));assert(borrowed);
@@ -57,28 +57,30 @@ static void exercise(unsigned w,unsigned h) {
     for(unsigned y=0;y<h;y++)for(unsigned x=0;x<w+4;x++) {
         uint16_t actual=pixels[y*(stride/2)+x];
         if(x>=w){assert(actual==0xa5a5);continue;}
-        bool inside=x>=v.left&&x<v.left+v.side&&y>=v.top&&y<v.top+v.side;
-        unsigned expected=inside?((y-v.top)*240/v.side)*240+(x-v.left)*240/v.side:0;
+        unsigned expected=(uint16_t)((y*240/w)*240+x*240/w);
         assert(actual==expected);
     }
     assert(v.display.acquire(v.display.context,RISC_DISPLAY_FORMAT_RGB565,&s));
-    for(unsigned y=0;y<240;y++)for(unsigned x=0;x<240;x++)
-        assert(((uint16_t*)((uint8_t*)s.pixels+y*s.stride_bytes))[x]==y*240+x);
+    for(unsigned y=0;y<i.height;y++)for(unsigned x=0;x<240;x++)
+        {
+            unsigned py=watch_layout_ceil(y*w,240),px=watch_layout_ceil(x*w,240);
+            if(py>=h)py=h-1;if(px>=w)px=w-1;
+            unsigned expected=(uint16_t)((py*240/w)*240+px*240/w);
+            assert(((uint16_t*)((uint8_t*)s.pixels+y*s.stride_bytes))[x]==expected);
+        }
     v.display.release(v.display.context,s.frame);assert(!borrowed&&releases==1);
     bad_surface=true;assert(!v.display.acquire(v.display.context,RISC_DISPLAY_FORMAT_RGB565,&s));assert(!borrowed&&releases==2);bad_surface=false;
     watch_viewport_touch t={0};assert(watch_viewport_touch_open(&t,&v,&touch));assert(t.api.subscribe(t.api.context)==42);
     snapshot=(risc_touch_snapshot_v1){.width=w,.height=h,.sequence=123,.contact_count=1};
     for(unsigned y=0;y<h;y++)for(unsigned x=0;x<w;x++) {
         uint16_t xx=x,yy=y;assert(watch_viewport_map(&v,&xx,&yy));
-        unsigned cx=x<v.left?0:x-v.left,cy=y<v.top?0:y-v.top;
-        if(cx>=v.side)cx=v.side-1;if(cy>=v.side)cy=v.side-1;
-        assert(xx==cx*240/v.side&&yy==cy*240/v.side);
+        assert(xx==x*240/w&&yy==y*240/w);
     }
     event=(risc_touch_event_v1){.sequence=7,.kind=RISC_TOUCH_EVENT_DOWN,.id=2,.x=w/2,.y=h/2};
     risc_touch_event_v1 transformed={0};assert(t.api.next(t.api.context,42,&transformed)==1);
-    assert(transformed.sequence==7&&transformed.id==2&&transformed.x==120&&transformed.y==120);
+    assert(transformed.sequence==7&&transformed.id==2&&transformed.x==(w/2)*240/w&&transformed.y==(h/2)*240/w);
     snapshot.contacts[0]=(risc_touch_contact_v1){.id=2,.x=w/2,.y=h/2};risc_touch_snapshot_v1 mapped;
-    assert(t.api.snapshot(t.api.context,&mapped));assert(mapped.width==240&&mapped.height==240&&mapped.sequence==123&&mapped.contacts[0].x==120);
+    assert(t.api.snapshot(t.api.context,&mapped));assert(mapped.width==240&&mapped.height==i.height&&mapped.sequence==123&&mapped.contacts[0].x==(w/2)*240/w);
     snapshot.width++;assert(!t.api.snapshot(t.api.context,&mapped));snapshot.width--;
     event.x=w;assert(t.api.next(t.api.context,42,&transformed)==-1);
     assert(t.api.unsubscribe(t.api.context,42));
@@ -87,8 +89,8 @@ static void exercise(unsigned w,unsigned h) {
     watch_viewport_close(&v);free(pixels);
 }
 int main(void) {
-    exercise(240,240);exercise(410,502);exercise(502,410);exercise(480,480);
+    exercise(240,240);exercise(410,502);exercise(502,410);exercise(480,480);exercise(120,150);exercise(241,295);exercise(240,294);exercise(2048,2048);
     width=0;height=502;watch_viewport v={0};assert(!watch_viewport_open(&v,&native));
     width=3000;assert(!watch_viewport_open(&v,&native));
-    puts("viewport: direct/scaled/landscape/retained pixels/touch/ownership PASS");return 0;
+    puts("viewport: direct/native-height/landscape/fractional/final-row/retained pixels/touch/ownership PASS");return 0;
 }

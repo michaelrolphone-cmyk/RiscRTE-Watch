@@ -5,6 +5,10 @@ on:
   pull_request:
     paths:
       - 'include/WatchLayout.h'
+      - 'include/WatchHomeLayout.h'
+      - 'apps/clock/**'
+      - 'tests/home_*'
+      - 'scripts/test_home_native_height.py'
       - 'tests/test_watch_layout.c'
       - 'scripts/test_watch_layout.py'
       - 'docs/NATIVE_HEIGHT_LAYOUT.md'
@@ -23,4 +27,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python scripts/test_watch_layout.py
+      - run: |
+          python scripts/test_watch_layout.py
+          python scripts/test_viewport.py
+          python scripts/test_viewport.py --sanitize
+          python scripts/test_home_native_height.py

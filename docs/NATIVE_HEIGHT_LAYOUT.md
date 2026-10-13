@@ -2,8 +2,9 @@
 
 The owner accepts existing width-based sizing and requests additional vertical
 space for content, rather than stretching a square to fit a taller screen.
-`WatchLayout.h` supplies the shared geometry foundation. This first checkpoint
-does not change the active renderer or claim a finished device build.
+`WatchLayout.h` supplies the shared geometry foundation. The geometry foundation is now used by the active Home display/touch adapter.
+Home reflow and host qualification are recorded in `HOME_NATIVE_HEIGHT.md`; this
+is not a finished device build.
 
 The native provider keeps its real dimensions. App-side logical width is 240;
 logical height is `ceil(native_height * 240 / native_width)`. Both coordinate

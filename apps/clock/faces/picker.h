@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "RiscKeyValueV1.h"
 #include "catalog.h"
+#include "WatchHomeLayout.h"
 #define WATCH_FACE_KEY "watch_face"
 #define WATCH_FACE_STORE_INSTANCE 1u
 #define WATCH_FACE_HOLD_MS 600u
@@ -12,13 +13,20 @@
 typedef struct {
     bool open,neutral,down,hold,moved,consume,pulse_active,tap_blocked;
     uint8_t contact,selected,target,pulse_face,category,axis;
-    uint16_t x,y,last_x,last_y;
+    uint16_t x,y,last_x,last_y,logical_height;
     uint32_t began,last_move,last_tick,phase,pulse_started;
     int position,velocity,travel;
     int category_position,category_velocity,category_positions[WATCH_FACE_CATEGORY_COUNT];
     uint8_t category_target;
     bool snapping,category_snapping;
 } watch_face_picker;
+static inline unsigned watch_face_height(const watch_face_picker *p) { return watch_home_height(p->logical_height); }
+static inline int watch_category_pitch(const watch_face_picker *p) { return (int)watch_face_height(p)*256; }
+static inline int watch_category_period(const watch_face_picker *p) { return (int)WATCH_FACE_CATEGORY_COUNT*watch_category_pitch(p); }
+static inline bool watch_face_set_height(watch_face_picker *p,unsigned height) {
+    if(!p || p->open || p->down || height<240 || height>WATCH_LAYOUT_MAX_SIDE)return false;
+    p->logical_height=(uint16_t)height;return true;
+}
 enum { WATCH_FACE_NONE, WATCH_FACE_LAUNCHER, WATCH_FACE_OPEN, WATCH_FACE_SELECT };
 static inline unsigned watch_axis_nearest(int position,int pitch,unsigned count) {
     int n=(-position+pitch/2)/pitch;
@@ -28,14 +36,14 @@ static inline unsigned watch_face_nearest(const watch_face_picker*p) {
     return watch_axis_nearest(p->position,WATCH_FACE_PITCH,watch_face_page_for(p->category)->count);
 }
 static inline void watch_category_normalize(watch_face_picker*p) {
-    p->category_position%=(int)WATCH_CATEGORY_PERIOD;
-    if(p->category_position>0)p->category_position-=(int)WATCH_CATEGORY_PERIOD;
+    p->category_position%=(int)watch_category_period(p);
+    if(p->category_position>0)p->category_position-=(int)watch_category_period(p);
 }
 static inline unsigned watch_category_nearest(const watch_face_picker*p) {
-    return (unsigned)((-p->category_position+WATCH_CATEGORY_PITCH/2)/WATCH_CATEGORY_PITCH)%WATCH_FACE_CATEGORY_COUNT;
+    return (unsigned)((-p->category_position+watch_category_pitch(p)/2)/watch_category_pitch(p))%WATCH_FACE_CATEGORY_COUNT;
 }
 static inline bool watch_category_settled(const watch_face_picker*p) {
-    return p->category_position==-(int)p->category*WATCH_CATEGORY_PITCH&&p->category_velocity==0;
+    return p->category_position==-(int)p->category*watch_category_pitch(p)&&p->category_velocity==0;
 }
 static inline void watch_category_sync(watch_face_picker*p) {
     watch_category_normalize(p);
@@ -54,7 +62,7 @@ static inline void watch_face_close(watch_face_picker*p) {
     p->open=false;watch_face_reset_contact(p);
 }
 static inline unsigned watch_face_input(watch_face_picker*p,uint32_t now,bool valid,unsigned count,unsigned id,unsigned x,unsigned y) {
-    if(!valid||count>1||(count&&(x>=240||y>=240))){watch_face_reset_contact(p);return WATCH_FACE_NONE;}
+    if(!valid||count>1||(count&&(x>=240||y>=watch_face_height(p)))){watch_face_reset_contact(p);return WATCH_FACE_NONE;}
     if(!count) {
         unsigned result=WATCH_FACE_NONE;
         if(p->down&&p->open&&!p->consume&&!p->moved&&!p->axis&&!p->tap_blocked&&watch_category_settled(p)) {
@@ -62,7 +70,7 @@ static inline unsigned watch_face_input(watch_face_picker*p,uint32_t now,bool va
             for(unsigned i=0;i<watch_face_page_for(p->category)->count;i++) {
                 int offset=(int)i*WATCH_FACE_PITCH+p->position,abs=offset<0?-offset:offset;
                 int scale=256-(abs<135*256?abs:135*256)*102/(108*256),half=66*scale/256;
-                int dx=(int)p->last_x-(120+offset/256),dy=(int)p->last_y-92;
+                int dx=(int)p->last_x-(120+offset/256),dy=(int)p->last_y-(int)watch_home_picker_center(watch_face_height(p));
                 if(dx>-half&&dx<half&&dy>-half&&dy<half&&abs<distance){best=(int)i;distance=abs;}
             }
             if(best>=0){p->target=(uint8_t)best;p->snapping=true;if(distance<20*256){result=WATCH_FACE_SELECT;p->pulse_face=watch_face_page_for(p->category)->ids[best];p->pulse_started=now;p->pulse_active=true;}}
@@ -113,7 +121,7 @@ static inline unsigned watch_face_input(watch_face_picker*p,uint32_t now,bool va
         watch_face_reset_contact(p);return WATCH_FACE_LAUNCHER;
     } else if(p->hold&&(uint32_t)(now-p->began)>=WATCH_FACE_HOLD_MS) {
         p->open=true;p->category=(uint8_t)watch_face_category_for(p->selected);p->target=(uint8_t)watch_face_index_for(p->category,p->selected);p->position=-(int)p->target*WATCH_FACE_PITCH;p->snapping=true;
-        p->category_position=-(int)p->category*WATCH_CATEGORY_PITCH;p->category_positions[p->category]=p->position;
+        p->category_position=-(int)p->category*watch_category_pitch(p);p->category_positions[p->category]=p->position;
         watch_face_reset_contact(p);p->last_tick=now;return WATCH_FACE_OPEN;
     }
     p->last_x=(uint16_t)x;p->last_y=(uint16_t)y;return WATCH_FACE_NONE;
@@ -150,11 +158,11 @@ static inline void watch_category_step(watch_face_picker*p) {
         if(p->category_velocity>-103&&p->category_velocity<103){p->category_target=(uint8_t)watch_category_nearest(p);p->category_snapping=true;}
     }
     if(p->category_snapping) {
-        int d=-(int)p->category_target*WATCH_CATEGORY_PITCH-p->category_position;
-        if(d>(int)WATCH_CATEGORY_PERIOD/2)d-=(int)WATCH_CATEGORY_PERIOD;
-        if(d<-(int)WATCH_CATEGORY_PERIOD/2)d+=(int)WATCH_CATEGORY_PERIOD;
+        int d=-(int)p->category_target*watch_category_pitch(p)-p->category_position;
+        if(d>(int)watch_category_period(p)/2)d-=(int)watch_category_period(p);
+        if(d<-(int)watch_category_period(p)/2)d+=(int)watch_category_period(p);
         p->category_position+=d*16/100;
-        if(d>-7&&d<7){p->category_position=-(int)p->category_target*WATCH_CATEGORY_PITCH;p->category_velocity=0;}
+        if(d>-7&&d<7){p->category_position=-(int)p->category_target*watch_category_pitch(p);p->category_velocity=0;}
         watch_category_normalize(p);
     }
 }

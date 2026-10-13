@@ -7,11 +7,11 @@
 namespace {
 constexpr int kLogoSize=240,kFrameHeight=320;
 constexpr uint8_t kLogoLayerCount=4,kFullCoverage=64;
-static uint32_t visualTimeMs;
+static uint32_t visualTimeMs,visualStride;
 static const struct {int width,height;} videoSurface={320,320};
 static void setPhysicalPixel(uint8_t* buffer,size_t bytes,int x,int y,bool ink) {
   if(x<0 || y<0 || x>=320 || y>=320) return;
-  const size_t offset=((size_t)(y*3/4)*240+(unsigned)(x*3/4))*2;
+  const size_t offset=(size_t)(y*3/4)*visualStride+(unsigned)(x*3/4)*2;
   if(offset+2>bytes) return;
   uint16_t value=ink?0xffff:0;memcpy(buffer+offset,&value,2);
 }
@@ -276,8 +276,10 @@ void drawVideoLogo(uint8_t* buffer, size_t bufferSize, uint8_t visibleBlocks,
 
 }
 extern "C" bool watch_boot_render(const risc_display_surface_v1* s,uint32_t ms) {
- if(!s || !s->pixels || s->width!=240 || s->height!=240 || s->stride_bytes!=480 || s->size_bytes<115200 || s->pixel_format!=5) return false;
- memset(s->pixels,0,115200);visualTimeMs=ms;
- drawVideoLogo((uint8_t*)s->pixels,115200,9,64,ms>1000?64:0);
+ if(!s || !s->pixels || s->width!=240 || s->height<240 || s->height>2048 || (s->stride_bytes&1u) || s->stride_bytes<480 || s->stride_bytes>UINT32_MAX/s->height || s->size_bytes<s->stride_bytes*s->height || s->pixel_format!=5) return false;
+ for(unsigned y=0;y<s->height;y++)memset((uint8_t*)s->pixels+y*s->stride_bytes,0,480);
+ visualTimeMs=ms;visualStride=s->stride_bytes;
+ unsigned top=(s->height-240)/2;
+ drawVideoLogo((uint8_t*)s->pixels+top*s->stride_bytes,240*s->stride_bytes,9,64,ms>1000?64:0);
  return true;
 }

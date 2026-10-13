@@ -1,4 +1,5 @@
 #include "nova.h"
+#include "WatchHomeLayout.h"
 #include <string.h>
 
 typedef struct { uint16_t pixel, count, data; } nova_span;
@@ -16,13 +17,13 @@ typedef struct {
 #define MUTED 0x6bf0u
 #define ORANGE 0xfce3u
 
-typedef struct { uint8_t *pixels; uint32_t stride;
+typedef struct { uint8_t *pixels; uint32_t stride,height;
 #ifdef WATCH_CONTEXTS_CLIENT
     bool (*capture)(void *);void *context;unsigned operations;bool failed;uint8_t sink[2];
 #endif
 } canvas;
 #ifdef WATCH_CONTEXTS_CLIENT
-#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(state)?(state)->capture_audio:NULL,(state)?(state)->capture_context:NULL,0,false,{0,0}}
+#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height,(state)?(state)->capture_audio:NULL,(state)?(state)->capture_context:NULL,0,false,{0,0}}
 #define CANVAS_OK(c) (!(c).failed)
 static bool canvas_checkpoint(canvas*c) {
     if(c->failed)return false;
@@ -30,7 +31,7 @@ static bool canvas_checkpoint(canvas*c) {
     return !c->failed;
 }
 static bool canvas_clear(canvas*c) {
-    for(unsigned y=0;y<240;y++){
+    for(unsigned y=0;y<c->height;y++){
         if(!(y&7u)&&!canvas_checkpoint(c))return false;
         memset(c->pixels+y*c->stride,0,480);
     }
@@ -38,10 +39,22 @@ static bool canvas_clear(canvas*c) {
 }
 #define CANVAS_CLEAR(c) do {if(!canvas_clear(&(c)))return false;}while(0)
 #else
-#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes}
+#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height}
 #define CANVAS_OK(c) true
-#define CANVAS_CLEAR(c) for(unsigned y=0;y<240;y++)memset(at(&(c),0,y),0,480)
+#define CANVAS_CLEAR(c) for(unsigned y=0;y<(c).height;y++)memset(at(&(c),0,y),0,480)
 #endif
+#define CANVAS_HEIGHT(c) ((c)->height)
+static bool home_surface_valid(const risc_display_surface_v1 *s) {
+    return s && s->pixels && s->pixel_format==RISC_DISPLAY_FORMAT_RGB565 &&
+        s->width==240 && s->height>=240 && s->height<=WATCH_LAYOUT_MAX_SIDE &&
+        !(s->stride_bytes&1u) && s->stride_bytes>=480 &&
+        s->stride_bytes<=UINT32_MAX/s->height && s->size_bytes>=s->stride_bytes*s->height;
+}
+typedef bool (*home_square_renderer)(risc_display_surface_v1 *,const nova_watch_state *,unsigned);
+static bool home_face_render(risc_display_surface_v1 *,const nova_watch_state *,unsigned,home_square_renderer);
+static bool home_classic_render(risc_display_surface_v1 *s,const nova_watch_state *state,unsigned id) {
+    (void)id;return nova_watch_render(s,state);
+}
 static void two(char *s, unsigned n) { s[0]=(char)('0'+n/10); s[1]=(char)('0'+n%10); }
 void nova_watch_format(const nova_watch_state *s, nova_watch_labels *out) {
     if (!out) return;
@@ -121,7 +134,7 @@ static void text(canvas *c,const nova_glyph *set,unsigned count,const char *s,
             int sx=source>=0?source/256:(source-255)/256;
             unsigned frac=(unsigned)(source-sx*256);
             for (unsigned gy=0;gy<g->height;gy++) {
-                int dy=baseline+g->top+(int)gy;if (dy<0 || dy>=240) continue;
+                int dy=baseline+g->top+(int)gy;if (dy<0 || dy>=(int)c->height) continue;
                 const uint8_t *row=nova_glyph_alpha+g->data+gy*g->width;
                 unsigned a=sx>=0 && sx<g->width?row[sx]:0;
                 unsigned b=sx+1>=0 && sx+1<g->width?row[sx+1]:0;
@@ -171,6 +184,7 @@ static void seconds(canvas *c,unsigned milliseconds) {
             blend(at(c,(unsigned)(x+dx),(unsigned)(y+dy)),0xffff,sprite[dy*22+dx]);
 }
 bool nova_watch_render(risc_display_surface_v1 *s,const nova_watch_state *state) {
+    if(s && s->height!=240)return home_face_render(s,state,0,home_classic_render);
     if (!s || !s->pixels || s->pixel_format!=RISC_DISPLAY_FORMAT_RGB565 ||
         s->width!=240 || s->height!=240 || s->stride_bytes<480 ||
         s->stride_bytes>UINT32_MAX/240 || s->size_bytes<s->stride_bytes*240) return false;
@@ -221,20 +235,19 @@ bool nova_watch_render(risc_display_surface_v1 *s,const nova_watch_state *state)
 
 /* Temporary sleep-refusal diagnosis uses the existing NOVA typeface. */
 bool nova_watch_sleep_status(risc_display_surface_v1 *s,const char *label){
-    if(!s||!s->pixels||s->width!=240||s->height!=240||s->stride_bytes<480||
-       s->stride_bytes>UINT32_MAX/240u||s->size_bytes<s->stride_bytes*240u||!label)return false;
+    if(!home_surface_valid(s)||!label)return false;
     for(unsigned n=0;label[n];n++)if(n==31)return false;
     canvas c=CANVAS_INIT(s,((const nova_watch_state*)NULL));
-    for(unsigned y=203;y<231;y++)for(unsigned x=10;x<230;x++)put(at(&c,x,y),0);
-    centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),label,222,128,ORANGE);return true;
+    for(unsigned y=s->height-37;y<s->height-9;y++)for(unsigned x=10;x<230;x++)put(at(&c,x,y),0);
+    centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),label,(int)s->height-18,128,ORANGE);return true;
 }
 
 bool nova_watch_context_message(risc_display_surface_v1*s,const char*message){
- if(!s||!s->pixels||s->width!=240||s->height!=240||s->stride_bytes<480||s->size_bytes<s->stride_bytes*240u||!message)return false;
+ if(!home_surface_valid(s)||!message)return false;
  canvas c=CANVAS_INIT(s,((const nova_watch_state*)NULL));CANVAS_CLEAR(c);
  char first[17]={0},second[17]={0};unsigned n=0;while(message[n]&&n<16){first[n]=message[n];n++;}unsigned j=0;while(message[n]&&j<16)second[j++]=message[n++];
  centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),"CONTEXT",65,256,CYAN);
- centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),first,112,0,0xffff);
- centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),second,142,0,0xffff);
- centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),"TAP TO DISMISS",190,0,MUTED);return CANVAS_OK(c);
+ centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),first,112+(int)watch_home_extra(s->height)/2,0,0xffff);
+ centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),second,142+(int)watch_home_extra(s->height)/2,0,0xffff);
+ centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),"TAP TO DISMISS",(int)s->height-50,0,MUTED);return CANVAS_OK(c);
 }

@@ -12,15 +12,28 @@ static void test_picker_free(void*p);
 #include "apps/clock/crown.c"
 #undef malloc
 #undef free
+#ifndef TEST_WIDTH
+#define TEST_WIDTH 240u
+#define TEST_HEIGHT 240u
+#endif
+#define TEST_LOGICAL_HEIGHT ((TEST_HEIGHT*240u+TEST_WIDTH-1u)/TEST_WIDTH)
 static unsigned allocations,cache_allocations;
-static uint16_t pixels[240*240],completed_pixels[240*240],expected_pixels[240*240];
+static uint16_t pixels[TEST_WIDTH*TEST_HEIGHT],completed_pixels[TEST_WIDTH*TEST_HEIGHT],expected_pixels[TEST_WIDTH*TEST_HEIGHT];
+static uint16_t expected_logical_pixels[240*TEST_LOGICAL_HEIGHT];
+static void fixture_expected_face(bool with_status) {
+ risc_display_surface_v1 expected={0,expected_logical_pixels,240,TEST_LOGICAL_HEIGHT,480,sizeof(expected_logical_pixels),5};
+ assert(nova_watch_face_render(&expected,&face,picker.selected));
+ if(with_status&&sleep_status[0])assert(nova_watch_sleep_status(&expected,sleep_status));
+ for(unsigned y=0;y<TEST_HEIGHT;y++)for(unsigned x=0;x<TEST_WIDTH;x++)
+  expected_pixels[y*TEST_WIDTH+x]=expected_logical_pixels[(y*240/TEST_WIDTH)*240+x*240/TEST_WIDTH];
+}
 static unsigned last_complete,swipe_submitted,swipe_time;
 static unsigned clock_ms,submitted,released,grants,ungrants,subscribed,unsubscribed,polls,launches,sleeps,scenario;
 static bool ready,owned,pending,launched;
 static unsigned touch_step,ready_time,face_writes,face_reads,frame_started;
 static void*test_picker_malloc(size_t n){
  if(n==sizeof(nova_watch_picker_cache)){cache_allocations++;if(scenario==16)return NULL;}
- else assert(n==240u*240u*2u);
+ else assert(n==240u*TEST_LOGICAL_HEIGHT*2u);
  void*p=malloc(n);if(p){allocations++;memset(p,0xa5,n);}return p;
 }
 static void test_picker_free(void*p){if(p){assert(allocations);allocations--;}free(p);}
@@ -45,15 +58,13 @@ static bool saved_face;static uint8_t saved_blob[4];
 static bool health(risc_runtime_health_v1 *h){h->uptime_ms=clock_ms;return !launched && clock_ms<(scenario==24?10000u:scenario>=8?6000u:3000u);}
 static void yield(uint32_t n){assert(n>=1&&n<=20);clock_ms+=n;}
 static bool diagnostic(const char*s){if(strstr(s,"ready")){ready=true;ready_time=clock_ms;}return true;}
-static bool info(void*c,risc_display_info_v1*i){(void)c;*i=(risc_display_info_v1){.width=240,.height=240,.supported_formats=RISC_DISPLAY_FORMAT_BIT(RISC_DISPLAY_FORMAT_RGB565)};return true;}
-static bool acquire_frame(void*c,uint32_t f,risc_display_surface_v1*s){(void)c;assert(f==5&&!owned&&!pending);owned=true;*s=(risc_display_surface_v1){1,pixels,240,240,480,sizeof(pixels),5};return true;}
+static bool info(void*c,risc_display_info_v1*i){(void)c;*i=(risc_display_info_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT,.supported_formats=RISC_DISPLAY_FORMAT_BIT(RISC_DISPLAY_FORMAT_RGB565)};return true;}
+static bool acquire_frame(void*c,uint32_t f,risc_display_surface_v1*s){(void)c;assert(f==5&&!owned&&!pending);owned=true;*s=(risc_display_surface_v1){1,pixels,TEST_WIDTH,TEST_HEIGHT,TEST_WIDTH*2,sizeof(pixels),5};return true;}
 static void release_frame(void*c,uint64_t f){(void)c;assert(f==1&&owned);owned=false;released++;}
 static bool submit_frame(void*c,uint64_t f,const risc_display_rect_v1*d,size_t n,const risc_display_present_options_v1*o,uint64_t*t){(void)c;(void)d;(void)n;(void)o;assert(owned&&!pending&&f==1);
  if(face_writes&&scenario!=11&&scenario!=15){
   assert(!picker.open&&!picker_scratch);
-  risc_display_surface_v1 expected={0,expected_pixels,240,240,480,sizeof(expected_pixels),5};
-  assert(nova_watch_face_render(&expected,&face,picker.selected));
-  if(sleep_status[0])assert(nova_watch_sleep_status(&expected,sleep_status));
+  fixture_expected_face(true);
   assert(!memcmp(pixels,expected_pixels,sizeof(pixels)));
  }
  owned=false;pending=true;frame_started=clock_ms;*t=++submitted;return true;}
@@ -179,9 +190,7 @@ if(!strcmp(n,RISC_KEY_VALUE_CAPABILITY)){if(scenario<8)return false;assert(id==1
 static bool release_cap(risc_runtime_capability_v1*g){assert(g->api&&!owned&&!pending);g->api=NULL;ungrants++;return true;}
 static bool launch(const char*p){assert(!strcmp(p,"springboard.elf")&&!owned&&!pending&&!touch.subscription);assert(submitted==last_complete&&submitted==swipe_submitted&&clock_ms==swipe_time);
  assert(!memcmp(completed_pixels,pixels,sizeof(pixels)));
- risc_display_surface_v1 expected={0,expected_pixels,240,240,480,sizeof(expected_pixels),5};
- assert(nova_watch_face_render(&expected,&face,picker.selected));
-  if(sleep_status[0])assert(nova_watch_sleep_status(&expected,sleep_status));
+ fixture_expected_face(true);
   assert(!memcmp(pixels,expected_pixels,sizeof(pixels)));
  launches++;if(scenario==6)return false;launched=true;return true;}
 static const risc_runtime_api_v1 runtime={.api_version=1,.struct_size=sizeof(runtime),.health=health,.yield_ms=yield,.diagnostic=diagnostic,.request_launch=launch,.acquire=acquire_cap,.release=release_cap};

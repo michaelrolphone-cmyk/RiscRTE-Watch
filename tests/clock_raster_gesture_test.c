@@ -51,14 +51,15 @@ static bool fail_frame_acquire,fail_unblank,fail_marker_sample,fail_next_health;
 static unsigned fail_sleep_acquire,refused_cycles,refused_restores,clean_refusal_frames,sleep_acquire_errors;
 static bool sleep_failure_armed;
 static void check_refusal_pixels(void){
- risc_display_surface_v1 expected={0,expected_pixels,240,240,480,sizeof(expected_pixels),5};
- assert(nova_watch_face_render(&expected,&face,picker.selected));
+ fixture_expected_face(false);
  if(sleep_status[0]){
-  /* A genuine error may change only the existing status strip. */
-  for(unsigned y=0;y<240;y++)for(unsigned x=0;x<240;x++)
-   if(y<203||y>=231||x<10||x>=230)assert(completed_pixels[y*240+x]==expected_pixels[y*240+x]);
+  for(unsigned y=0;y<TEST_HEIGHT;y++)for(unsigned x=0;x<TEST_WIDTH;x++) {
+   unsigned ly=y*240/TEST_WIDTH,lx=x*240/TEST_WIDTH;
+   if(ly<TEST_LOGICAL_HEIGHT-37||ly>=TEST_LOGICAL_HEIGHT-9||lx<10||lx>=230)
+    assert(completed_pixels[y*TEST_WIDTH+x]==expected_pixels[y*TEST_WIDTH+x]);
+  }
   assert(memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
-  assert(nova_watch_sleep_status(&expected,sleep_status));
+  fixture_expected_face(true);
  }
  assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
 }
@@ -106,7 +107,7 @@ static bool fast_diagnostic(const char*s){
   assert(hardware_brightness==clock_quick.brightness&&!pending&&!owned&&touch.subscription&&last_complete==submitted);assert(service_acquires==0);
   assert(points_loads==1&&face.points==&clock_points_view&&!sleep_setting_reads&&!alarm_acquires&&!alarm_frames);
   if(face.time_valid){twatch_rtc_time_v1 raw={0},expected={0};assert(watch_runtime_calendar(native_time.epoch_seconds,&raw));assert(watch_display_time(&raw,&expected));assert(!memcmp(&face.time,&expected,sizeof(expected)));}
-  risc_display_surface_v1 expected={0,expected_pixels,240,240,480,sizeof(expected_pixels),5};assert(nova_watch_face_render(&expected,&face,picker.selected));assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
+  fixture_expected_face(true);assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
 
  }
  if(strstr(s,"stage=first-input-poll")){input_at=clock_ms;input_stages++;assert(touch.subscription&&polls);if(wake_count)resume_input_at=clock_ms;}
@@ -198,7 +199,7 @@ static bool fast_acquire(const char*n,uint32_t version,uint64_t instance,risc_ru
  if(sleep_failure_armed&&((fail_sleep_acquire==1&&!strcmp(n,RISC_KEY_VALUE_CAPABILITY)&&instance==1)||
     (fail_sleep_acquire==2&&!strcmp(n,TWATCH_MOTION_CAPABILITY)&&instance==0))){
   assert(!hardware_brightness&&!touch.subscription&&!pending&&!owned&&!broadcast_live&&!contexts_live);
-  for(unsigned pixel=0;pixel<240u*240u;pixel++)assert(!completed_pixels[pixel]);
+  for(unsigned pixel=0;pixel<TEST_WIDTH*TEST_HEIGHT;pixel++)assert(!completed_pixels[pixel]);
   sleep_failure_armed=false;return false;
  }
  if(fail_capability&&!strcmp(n,fail_capability))return false;
@@ -236,13 +237,13 @@ static bool fast_launch(const char*path){check_io();assert(!held&&!pending);
  if(expect_context_handoff){assert(!strcmp(path,"waterfall.elf")&&!queued_context_handoff);queued_context_handoff=true;}
  else{assert(!strcmp(path,"springboard.elf")&&!touch.subscription);ended=true;}
  launches++;return true;}
-static bool fast_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();(void)c;*out=(risc_touch_snapshot_v1){.width=240,.height=240};
+static bool fast_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();(void)c;*out=(risc_touch_snapshot_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT};
  if(probe_began && clock_ms>=probe_began+probe_offset && clock_ms<probe_began+probe_offset+probe_duration) {
  unsigned age=clock_ms-probe_began-probe_offset; unsigned x=120,y=120;
  if(probe_trajectory==0)x=200-age*160/probe_duration;
- else {y=10+age*225/probe_duration;x=120;}
- out->contact_count=1;out->contacts[0]=(risc_touch_contact_v1){1,0,x,y};
- } if(clock_quick.ui.target_q8==PQA_OPEN_Q8)probe_quick_open=1;
+ else {y=10+age*(TEST_LOGICAL_HEIGHT-15)/probe_duration;x=120;}
+ out->contact_count=1;out->contacts[0]=(risc_touch_contact_v1){1,0,watch_layout_ceil(x*TEST_WIDTH,240),watch_layout_ceil(y*TEST_WIDTH,240)};
+ } if(clock_quick.ui.target_q8==pqa_open_q8(&clock_quick.ui))probe_quick_open=1;
  return true;}
 static bool fast_ble_enable(void*c,bool enabled){check_io();radio_apply_count++;if(fail_ble_enable)return false;return ble_enable(c,enabled);}
 static bool fast_ble_status(void*c,uint8_t*out){check_io();return ble_status(c,out);}
@@ -291,7 +292,7 @@ static bool (*probe_saved_capture)(void *);
 static unsigned raster_delay, raster_cost, raster_probes, raster_at, raster_steps, max_poll_gap, last_poll_at;
 static bool probe_checkpoint(void *c){ (void)c; raster_steps++; clock_ms+=raster_delay;return !probe_saved_capture || probe_saved_capture(c); }
 bool probe_render(risc_display_surface_v1 *s,const nova_watch_state *f,unsigned n) {
- if(probe_began && s->pixels==pixels && clock_deferred_phase==4) {
+ if(probe_began && s->frame && s->frame==held && clock_deferred_phase==4) {
   nova_watch_state clone=*f;probe_saved_capture=f->capture_audio;clone.capture_audio=probe_checkpoint;clone.capture_context=NULL;
   unsigned began=clock_ms, polls_before=polls;raster_steps=0;
   bool result=nova_watch_face_render(s,&clone,n);
@@ -351,16 +352,16 @@ static bool boundary_snapshot(void*c,risc_touch_snapshot_v1*out){(void)c;*out=bo
 static bool boundary_poll(void*c,size_t n){(void)c;assert(n==1);return boundary_poll_ok;}
 static int32_t boundary_next(void*c,uint64_t s,risc_touch_event_v1*out){(void)c;(void)s;(void)out;return boundary_next_result;}
 static void boundary_reset(void) {
- reset_case();rt=&fast_runtime;native_clock=(watch_clock_runtime){0};
+ reset_case();clock_viewport.layout.height=TEST_LOGICAL_HEIGHT;rt=&fast_runtime;native_clock=(watch_clock_runtime){0};
  clock_contexts=(portable_contexts_client){0};clock_contexts_uncertain=false;clock_alarm_modal=false;
- pqa_session_init(&clock_quick);picker=(watch_face_picker){0};picker_scratch=NULL;
+ pqa_session_init(&clock_quick);assert(pqa_set_height(&clock_quick.ui,TEST_LOGICAL_HEIGHT));picker=(watch_face_picker){0};assert(watch_face_set_height(&picker,TEST_LOGICAL_HEIGHT));picker_scratch=NULL;
  launcher_swipe_pending=launcher_activity_pending=picker_open_pending=picker_select_pending=false;
  launcher_sampled_at=0;clock_raster_count=0;clock_raster_overflow=clock_raster_activity=false;
  clock_rendering=true;clock_display_settled=false;held=1;
  touch=(watch_launcher_touch){.api=&ta,.subscription=1};
  ta.snapshot=boundary_snapshot;ta.poll=boundary_poll;ta.next=boundary_next;
  boundary_snapshot_ok=boundary_poll_ok=true;boundary_next_result=0;
- boundary_state=(risc_touch_snapshot_v1){.width=240,.height=240};
+ boundary_state=(risc_touch_snapshot_v1){.width=240,.height=TEST_LOGICAL_HEIGHT};
 }
 static void boundary_capture(unsigned ms,unsigned count,unsigned id,unsigned x,unsigned y) {
  clock_ms=ms;boundary_state.contact_count=count;boundary_state.contacts[0]=(risc_touch_contact_v1){id,0,x,y};
@@ -400,20 +401,20 @@ static void run_boundaries(void){
  assert(clock_raster_overflow);boundary_flush();boundary_idle();
  boundary_capture(1200,1,1,40,120);boundary_flush();boundary_idle();
  boundary_neutral(1208);boundary_capture(1224,1,2,120,120);boundary_capture(1240,1,2,60,120);boundary_flush();assert(launcher_swipe_pending);boundary_done("overflow discards queued swipe and requires fresh neutral");
- boundary_reset();boundary_neutral(8);boundary_capture(24,1,1,120,10);boundary_capture(40,1,1,120,120);boundary_capture(56,1,1,120,235);boundary_capture(64,0,0,0,0);boundary_capture(72,0,0,0,0);boundary_flush();assert(clock_quick.ui.target_q8==PQA_OPEN_Q8&&!launcher_swipe_pending);
- clock_quick.ui.position_q8=PQA_OPEN_Q8; /* Model fully settled previous frame. */
- boundary_capture(80,1,2,120,222);boundary_capture(96,1,2,120,100);boundary_capture(112,1,2,120,0);boundary_capture(120,0,0,0,0);boundary_capture(128,0,0,0,0);boundary_flush();assert(clock_quick.ui.target_q8==0&&!launcher_swipe_pending);
+ boundary_reset();boundary_neutral(8);boundary_capture(24,1,1,120,10);boundary_capture(40,1,1,120,120);boundary_capture(56,1,1,120,TEST_LOGICAL_HEIGHT-5);boundary_capture(64,0,0,0,0);boundary_capture(72,0,0,0,0);boundary_flush();assert(clock_quick.ui.target_q8==pqa_open_q8(&clock_quick.ui)&&!launcher_swipe_pending);
+ clock_quick.ui.position_q8=pqa_open_q8(&clock_quick.ui); /* Model fully settled previous frame. */
+ boundary_capture(80,1,2,120,TEST_LOGICAL_HEIGHT-18);boundary_capture(96,1,2,120,100);boundary_capture(112,1,2,120,0);boundary_capture(120,0,0,0,0);boundary_capture(128,0,0,0,0);boundary_flush();assert(clock_quick.ui.target_q8==0&&!launcher_swipe_pending);
  clock_quick.ui.position_q8=0;
- boundary_capture(136,1,3,120,10);boundary_capture(152,1,3,120,120);boundary_capture(168,1,3,120,235);boundary_capture(176,0,0,0,0);boundary_flush();assert(clock_quick.ui.target_q8==PQA_OPEN_Q8&&!launcher_swipe_pending);boundary_done("consecutive quick-controls open close reopen");
+ boundary_capture(136,1,3,120,10);boundary_capture(152,1,3,120,120);boundary_capture(168,1,3,120,TEST_LOGICAL_HEIGHT-5);boundary_capture(176,0,0,0,0);boundary_flush();assert(clock_quick.ui.target_q8==pqa_open_q8(&clock_quick.ui)&&!launcher_swipe_pending);boundary_done("consecutive quick-controls open close reopen");
  boundary_reset();boundary_neutral(8);boundary_capture(24,1,1,120,10);boundary_capture(40,1,1,180,10);boundary_flush();assert(launcher_swipe_pending&&!pqa_visible(&clock_quick.ui));boundary_done("horizontal top-edge gesture replays to launcher");
  boundary_reset();boundary_neutral(8);boundary_flush();boundary_direct(24,1,1,120,120);assert(picker.down);
  boundary_capture(32,1,1,80,120);boundary_capture(40,0,0,0,0);boundary_flush();assert(launcher_swipe_pending);boundary_done("launcher starts before raster and ends inside raster");
  boundary_reset();boundary_neutral(8);boundary_capture(24,1,1,120,120);boundary_flush();assert(picker.down&&!launcher_swipe_pending);
  boundary_direct(32,1,1,80,120);assert(launcher_swipe_pending);boundary_done("launcher starts inside raster and completes after raster");
  boundary_reset();boundary_neutral(8);boundary_flush();boundary_direct(24,1,1,120,10);
- boundary_capture(40,1,1,120,120);boundary_capture(56,1,1,120,235);boundary_capture(64,0,0,0,0);boundary_flush();assert(clock_quick.ui.target_q8==PQA_OPEN_Q8&&!launcher_swipe_pending);boundary_done("Quick starts before raster and releases inside raster");
- boundary_reset();boundary_neutral(8);boundary_capture(24,1,1,120,10);boundary_capture(40,1,1,120,120);boundary_capture(56,1,1,120,235);boundary_flush();assert(clock_quick.ui.gesture==PQA_PANEL_DRAG&&!launcher_swipe_pending);
- boundary_direct(64,0,0,0,0);assert(clock_quick.ui.target_q8==PQA_OPEN_Q8&&!launcher_swipe_pending);boundary_done("Quick starts inside raster and releases after raster");
+ boundary_capture(40,1,1,120,120);boundary_capture(56,1,1,120,TEST_LOGICAL_HEIGHT-5);boundary_capture(64,0,0,0,0);boundary_flush();assert(clock_quick.ui.target_q8==pqa_open_q8(&clock_quick.ui)&&!launcher_swipe_pending);boundary_done("Quick starts before raster and releases inside raster");
+ boundary_reset();boundary_neutral(8);boundary_capture(24,1,1,120,10);boundary_capture(40,1,1,120,120);boundary_capture(56,1,1,120,TEST_LOGICAL_HEIGHT-5);boundary_flush();assert(clock_quick.ui.gesture==PQA_PANEL_DRAG&&!launcher_swipe_pending);
+ boundary_direct(64,0,0,0,0);assert(clock_quick.ui.target_q8==pqa_open_q8(&clock_quick.ui)&&!launcher_swipe_pending);boundary_done("Quick starts inside raster and releases after raster");
  printf("BOUNDARY SUMMARY %u cases; exact capture/replay; no UI mutation during capture; no allocation or launch before settled handling\n",boundary_cases);
 }
 

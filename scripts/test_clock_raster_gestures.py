@@ -18,6 +18,7 @@ p.add_argument('--source-root', type=Path, default=ROOT)
 p.add_argument('--output', type=Path, default=ROOT / 'dist/clock-raster-gestures')
 p.add_argument('--expect-loss', action='store_true')
 p.add_argument('--mode', choices=('normal', 'sanitized', 'both'), default='both')
+p.add_argument('--native', action='store_true')
 a = p.parse_args()
 source_root = a.source_root.resolve()
 a.output.mkdir(parents=True, exist_ok=True)
@@ -25,8 +26,10 @@ for sanitize in ((False, True) if a.mode == 'both' else (a.mode == 'sanitized',)
     label = 'sanitized' if sanitize else 'normal'
     out = a.output / label
     out.mkdir(parents=True, exist_ok=True)
-    flags = ['-DWATCH_FAST_WAKE', '-DPORTABLE_RTC_UTC8_DENVER', '-O1', '-g',
+    flags = ['-DWATCH_FAST_WAKE','-DPORTABLE_WATCH_NATIVE_HEIGHT', '-DPORTABLE_RTC_UTC8_DENVER', '-O1', '-g',
              '-Wall', '-Wextra', '-Werror']
+    if a.native:
+        flags += ['-DTEST_WIDTH=410u', '-DTEST_HEIGHT=502u']
     if a.expect_loss:
         flags += ['-DWATCH_RASTER_EXPECT_LOSS']
     for include in (a.system_apps / 'lib/PortableApps/include',

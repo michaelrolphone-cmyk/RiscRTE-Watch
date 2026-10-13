@@ -120,8 +120,8 @@ static bool clock_alarm_foreground(void) {
         if(!watch_capabilities_key_events(&device_clients,&events))return clock_alarm_failure();
         portable_touch_sample sample;portable_touch_read(&alert_touch,&sample);
         bool tap=sample.valid && sample.released && sample.tap_eligible && !sample.cancelled && !sample.moved;
-        bool retry=tap && sample.y>=198;
-        bool dismiss=(events&3u) || (tap && sample.y>=150 && sample.y<198);
+        bool retry=tap && sample.y>=watch_home_alarm_retry(clock_viewport.layout.height);
+        bool dismiss=(events&3u) || (tap && sample.y>=watch_home_alarm_dismiss(clock_viewport.layout.height) && sample.y<watch_home_alarm_retry(clock_viewport.layout.height));
         if(clock_alarm.status.state==ALARM_STATE_BLOCKED && retry) {
             (void)clock_alarm.api->refresh(clock_alarm.api->context);alert_touch.neutral=alert_touch.down=false;redraw=true;
         } else if(dismiss) {

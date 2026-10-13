@@ -35,7 +35,9 @@ typedef struct {
 bool nova_watch_context_message(risc_display_surface_v1 *surface,const char *message);
 bool nova_watch_sleep_status(risc_display_surface_v1 *surface,const char *label);
 void nova_watch_format(const nova_watch_state *state, nova_watch_labels *labels);
-/* Bounded 240x240 little-endian RGB565 face output. With a NULL capture
+/* Bounded 240-wide little-endian RGB565 output, height 240..2048. Face cores
+ * retain exact 240x240 geometry; additional height hosts independent header /
+ * live Point-summary content. With a NULL capture
  * callback this is pure. The opt-in owner callback may only drain already-owned
  * audio or journal raw input without UI mutation; false stops frame writes and propagates failure. No allocation,
  * mutable globals, floating point, trig, or runtime SVG/font engine. The picker

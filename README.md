@@ -16,7 +16,19 @@ See `docs/CAPABILITY_BOUNDARIES.md` for API and provisioning details.
 
 ## Display and input
 
-The app queries physical dimensions and applies matching drawing/touch transforms. The native 240x240 path directly uses its surface. At 410x502, existing faces occupy a centered 410x410 area with 46-pixel gesture gutters. This preserves circular geometry; full-height rectangular reflow is not implemented yet.
+The app queries physical dimensions and uses a 240-wide, width-scaled logical
+canvas: 410x502 provides 240x294 layout units. Both axes use the same scale,
+including touch and the final partial row. There are no gesture gutters. The
+240x240 path remains direct and preserves the baseline pixels exactly.
+
+Proportional face artwork keeps its square core. Extra height adds the selected
+face name and a live next-Point summary (or date/battery when no valid upcoming
+Point exists). Picker headings stay at the top while its fixed-size cards move
+with the flexible middle and its labels/dots anchor at the bottom. Quick Actions
+uses its qualified full-height layout; alarms and status controls anchor to the
+bottom with matching hit bands. Sleep clearing and retained transitions cover
+the complete canvas. See `docs/HOME_NATIVE_HEIGHT.md` for exact qualification and
+remaining device-integration limits.
 
 ## Build and test
 
@@ -27,6 +39,7 @@ python3 -m pip install -r scripts/requirements.txt
 python3 scripts/test_capabilities.py
 python3 scripts/test_capabilities.py --sanitize
 python3 scripts/test_viewport.py
+python3 scripts/test_home_native_height.py
 python3 scripts/check_capability_boundaries.py
 python3 scripts/build.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities --cc /path/to/xtensa-esp32s3-elf-gcc
 ```
