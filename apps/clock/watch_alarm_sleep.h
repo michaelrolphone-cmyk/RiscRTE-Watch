@@ -133,7 +133,10 @@ static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *pa
     int32_t panel_restore=panel->struct_size>=RISC_DISPLAY_POWER_RESUME_STATUS_SIZE && panel->resume_status?
         panel->resume_status(panel->context):(panel->resume(panel->context)?0:RISC_LIGHT_SLEEP_PLATFORM);
     if(panel_restore==RISC_DEEP_SLEEP_RETAINED)return WATCH_SLEEP_RETAINED;
-    if(!pmu_restored || panel_restore!=0)return WATCH_SLEEP_FAILED;
+    if(!pmu_restored || panel_restore!=0){
+        diagnostic(!pmu_restored?"WATCH_ALARM restore=power-failed":"WATCH_ALARM restore=panel-failed");
+        return WATCH_SLEEP_FAILED;
+    }
     if(!alarm_failed)(void)a->refresh(a->context);
     return rc==RISC_LIGHT_SLEEP_OK && !deep?WATCH_SLEEP_WOKE:WATCH_SLEEP_REFUSED;
 }

@@ -763,8 +763,19 @@ static void clock_sleep_refused(void) {
     sleep_status[label_used]=0;
     line[used]=0;(void)rt->diagnostic(line);
 }
+/* Failure-only diagnostics: no polling, timing calls, allocations or new grants.
+ * A fatal/retained path must never attempt a display redraw merely for status. */
+static bool clock_sleep_failure(const char *stage) {
+    char line[80];size_t used=0;
+    const char *prefix="WATCH_CLOCK sleep=failed stage=";
+    while(*prefix && used+1<sizeof(line))line[used++]=*prefix++;
+    while(*stage && used+1<sizeof(line))line[used++]=*stage++;
+    line[used]=0;
+    if(rt && rt->diagnostic)(void)rt->diagnostic(line);
+    return false;
+}
 static int sleep_cycle(void) {
-    if(!watch_capabilities_can_sleep(&device_clients))return WATCH_SLEEP_REFUSED;
+    if(!watch_capabilities_can_sleep(&device_clients))return clock_sleep_failure("CAPABILITY");
     sleep_status[0]=0;
 #if defined(WATCH_BLE_BROADCAST) || defined(WATCH_CONTEXTS_CLIENT)
     if(!clock_background_pause())return WATCH_SLEEP_RETAINED;
@@ -778,7 +789,7 @@ static int sleep_cycle(void) {
 #if defined(WATCH_FAST_WAKE) && defined(WATCH_RUNTIME_FEATURES)
         watch_runtime_halt(&native_clock);return WATCH_SLEEP_RETAINED;
 #else
-        return false;
+        return clock_sleep_failure("RADIO-SUSPEND");
 #endif
     }
 #endif
@@ -787,13 +798,15 @@ static int sleep_cycle(void) {
      * the exposed completed image is black rather than the old Clock. */
     risc_display_surface_v1 blank={0};
     size_t span;
-    if (!display->set_brightness(display->context,0,100) || !frame(&blank) ||
+    if (!display->set_brightness(display->context,0,100))return clock_sleep_failure("BLANK-BRIGHTNESS");
+    if (!frame(&blank))return clock_sleep_failure("BLANK-ACQUIRE");
+    if (
         !blank.pixels || blank.pixel_format!=RISC_DISPLAY_FORMAT_RGB565 ||
         blank.width!=240u || blank.height!=clock_viewport.layout.height || blank.stride_bytes<480u ||
         blank.stride_bytes%sizeof(uint16_t) ||
-        !pt_image_span(blank.stride_bytes,480u,blank.height,&span) || span>blank.size_bytes) return false;
+        !pt_image_span(blank.stride_bytes,480u,blank.height,&span) || span>blank.size_bytes) return clock_sleep_failure("BLANK-SURFACE");
     for(unsigned y=0;y<blank.height;y++) memset((uint8_t *)blank.pixels+(size_t)y*blank.stride_bytes,0,480u);
-    if (!present()) return false;
+    if (!present()) return clock_sleep_failure("BLANK-PRESENT");
     /* Every preparation attempt is paired with resume, including partial
      * preparation and platform refusal. No framebuffer lease survives here. */
     unsigned mode=PORTABLE_SLEEP_LIGHT;
@@ -812,9 +825,9 @@ static int sleep_cycle(void) {
     int rc=watch_sleep_prepared(panel,pmu,mode,rt->diagnostic);
 #endif
     if(rc==WATCH_SLEEP_RETAINED)return WATCH_SLEEP_RETAINED;
-    if(rc<0)return false;
+    if(rc<0)return clock_sleep_failure("SLEEP-RESTORE");
     uint32_t cleared=0;
-    if(!watch_capabilities_key_events(&device_clients,&cleared))return false;
+    if(!watch_capabilities_key_events(&device_clients,&cleared))return clock_sleep_failure("WAKE-KEY-CLEAR");
 #ifdef WATCH_FAST_WAKE
     clock_deferred_phase=0;clock_radios_pending=true;clock_input_reported=false;
 #ifdef WATCH_RUNTIME_FEATURES
@@ -824,25 +837,27 @@ static int sleep_cycle(void) {
 #ifdef WATCH_QUICK_RADIOS
     clock_radios.valid=clock_radios.available=clock_quick.ui.radios_valid=false;
 #endif
-    if(!alive(&clock_wake_started))return false;
+    if(!alive(&clock_wake_started))return clock_sleep_failure("WAKE-HEALTH");
     clock_wake_stage("light-resume",clock_wake_started);
 #elif defined(WATCH_QUICK_RADIOS)
-    if(!pqa_radios_resume(&clock_radios,&clock_quick.ui,rt))return false;
+    if(!pqa_radios_resume(&clock_radios,&clock_quick.ui,rt))return clock_sleep_failure("RADIO-RESUME");
 #endif
     uint32_t discard;
     reset_telemetry();
 #ifdef WATCH_CLOCK_LAUNCHER
-    if(!reload_time_format())return false;
+    if(!reload_time_format())return clock_sleep_failure("WAKE-TIME-FORMAT");
 #endif
 #ifdef WATCH_CLOCK_ALARMS
     /* Due work is handled before wake intro; short/crown and touch are fresh. */
-    if(!launcher_touch_open(&touch) || !clock_alarm_foreground() || !launcher_touch_close(&touch))return false;
+    if(!launcher_touch_open(&touch))return clock_sleep_failure("WAKE-TOUCH-OPEN");
+    if(!clock_alarm_foreground())return clock_sleep_failure("WAKE-ALARM");
+    if(!launcher_touch_close(&touch))return clock_sleep_failure("WAKE-TOUCH-CLOSE");
 #endif
     if (rc==WATCH_SLEEP_WOKE) {
         rt->diagnostic("WATCH_CLOCK woke");
 #ifdef WATCH_FAST_WAKE
         if(!resume_from_deep())return false;
-        uint32_t shown;if(!alive(&shown))return false;
+        uint32_t shown;if(!alive(&shown))return clock_sleep_failure("WAKE-FRAME-HEALTH");
         clock_wake_stage("light-frame",shown);
 #else
         if (!display->set_brightness(display->context,0,100) || !startup()) return false;
@@ -854,9 +869,9 @@ static int sleep_cycle(void) {
          * with a complete fresh Clock before restoring the previous level. */
         if (!display->set_brightness(display->context,0,100) || !alive(&now) ||
             !frame(&fresh) || !draw_clock(now,&fresh) || !present() ||
-            !display->set_brightness(display->context,(uint16_t)clock_brightness(),100)) return false;
+            !display->set_brightness(display->context,(uint16_t)clock_brightness(),100)) return clock_sleep_failure("REFUSAL-REDRAW");
     }
-    return watch_capabilities_key_events(&device_clients,&discard);
+    return watch_capabilities_key_events(&device_clients,&discard) || clock_sleep_failure("FINAL-KEY-CLEAR");
 }
 __attribute__((visibility("default"))) void app_main(void) {
     sleep_status[0]=0;rt=risc_runtime_get_api(1);
@@ -957,6 +972,11 @@ __attribute__((visibility("default"))) void app_main(void) {
     CLOCK_WAKE_MARK("power-services-begin");
     if(!watch_capabilities_open(&device_clients,rt))goto done;
     battery_api=device_clients.battery;pmu=device_clients.sleep;panel=device_clients.display_power;
+    if(!device_clients.key || !pmu || !panel) {
+        const char *missing=!device_clients.key?"KEY-CAPABILITY":!pmu?"POWER-CAPABILITY":"PANEL-CAPABILITY";
+        memcpy(sleep_status,"SLEEP ERR CAPABILITY",sizeof("SLEEP ERR CAPABILITY"));
+        clock_sleep_failure(missing);
+    }
     CLOCK_WAKE_MARK("power-services-end");
     CLOCK_WAKE_MARK("rtc-begin");
 #if defined(WATCH_FAST_WAKE) && defined(WATCH_RUNTIME_FEATURES)
@@ -1265,20 +1285,24 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef PORTABLE_LOW_BATTERY
         idle=idle&&clock_quick.idle_ms!=0;
 #endif
+        if(manual && !watch_capabilities_can_sleep(&device_clients)) {
+            memcpy(sleep_status,"SLEEP ERR CAPABILITY",sizeof("SLEEP ERR CAPABILITY"));
+            clock_sleep_failure(!device_clients.sleep?"POWER-CAPABILITY":"PANEL-CAPABILITY");
+        }
         if ((manual || idle) && watch_capabilities_can_sleep(&device_clients)) {
 #ifdef WATCH_CLOCK_LAUNCHER
 #ifdef WATCH_QUICK_ACTIONS
             pqa_cancel(&clock_quick.ui);(void)pqa_take_action(&clock_quick.ui);
 #endif
             /* Retained input subscriptions must not veto platform sleep. */
-            if(!launcher_touch_close(&touch)) break;
+            if(!launcher_touch_close(&touch)) {clock_sleep_failure("TOUCH-CLOSE");break;}
             watch_face_close(&picker);free(picker_scratch);picker_scratch=NULL;
             picker_open_pending=picker_select_pending=picker_save_failed=false;
 #endif
 #ifdef WATCH_RUNTIME_FEATURES
             if(!watch_runtime_stage(&native_clock)) {
                 if(native_clock.halted)return;
-                break;
+                clock_sleep_failure("CHECKPOINT-STAGE");break;
             }
 #endif
             int sleep_result=sleep_cycle();
@@ -1286,7 +1310,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef WATCH_RUNTIME_FEATURES
             if(!watch_runtime_abandon(&native_clock)) {
                 if(native_clock.halted)return;
-                break;
+                clock_sleep_failure("CHECKPOINT-ABANDON");break;
             }
 #endif
             if (!sleep_result || !alive(&armed_at)) break;

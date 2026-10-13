@@ -43,6 +43,8 @@ static unsigned transient_rtc_failures,rtc_read_at[16];
 static bool wait_rtc_recovery,first_time_valid,first_time_warning;
 static uint32_t prealarm_crown_events;
 static const char *fail_capability;
+static unsigned sleep_fault,failure_reports;
+static char failure_stage[80];
 static bool fail_frame_acquire,fail_unblank,fail_marker_sample,fail_next_health;
 static unsigned fail_sleep_acquire,refused_cycles,refused_restores,clean_refusal_frames,sleep_acquire_errors;
 static bool sleep_failure_armed;
@@ -84,6 +86,9 @@ static bool fast_retain(void){retains++;retained_fence=true;return true;}
 static bool fast_confirm(void){check_io();assert(!queued_context_handoff);confirmations++;if(service_acquires<4)confirmed_early=true;return true;}
 static bool fast_health(risc_runtime_health_v1*h){check_io();h->uptime_ms=clock_ms;if(fail_next_health){fail_next_health=false;return false;}return !ended&&clock_ms<30000u;}
 static bool fast_diagnostic(const char*s){
+ if(!strncmp(s,"WATCH_CLOCK sleep=failed stage=",30)){
+  assert(strlen(s)<sizeof(failure_stage));strcpy(failure_stage,s);failure_reports++;
+ }
  if(!strcmp(s,"WATCH_CLOCK rtc-reconcile=unavailable retry-ms=5000"))rtc_reconcile_errors++;
  if(!strncmp(s,"WATCH_SLEEP error=",18)){
   const char *expected=fail_sleep_acquire==1?
@@ -139,9 +144,10 @@ static bool fast_status(void*c,uint64_t token,risc_display_present_status_v1*out
  }return true;
 }
 static bool fast_frame_acquire(void*c,uint32_t format,risc_display_surface_v1*out) {
- check_io();return !fail_frame_acquire&&acquire_frame(c,format,out);
+ check_io();if(sleep_fault==2 && ready && !hardware_brightness)return false;return !fail_frame_acquire&&acquire_frame(c,format,out);
 }
 static bool fast_brightness(void*c,uint16_t level,uint16_t maximum) {
+ if(sleep_fault==1 && ready && !level)return false;
  if(level&&refused_cycles>refused_restores){
   assert(!owned&&!pending&&last_complete==submitted&&!hardware_brightness);
   assert(sleep_status[0]);check_refusal_pixels();refused_restores++;
@@ -325,7 +331,7 @@ static void check_refusal_diagnostics(void){
  }
  watch_sleep_stage=0;watch_sleep_detail=0;sleep_status[0]=0;rt=saved;
 }
-int main(void){
+static int regression_main(void){
  /* A transient external RTC read failure must recover in the same Home
   * invocation, whether native time began UNSET or valid/provisional. */
  for(unsigned native_valid=0;native_valid<2;native_valid++) {
@@ -482,5 +488,24 @@ int main(void){
  puts("Boot/wake stage timing: ordered essential grants, settings, alarm/touch/reconciliation, render/transfer/unblank; first-frame precedes sleep settings; failure markers stop at failed boundary; light logs bounded per wake PASS");
  puts("Minimal first-frame closure: valid deep native time defers RTC then reconciles after first input; alarm/output admission follows first frame/input and precedes handoff/radios; 700 ms modeled load deferred; deep due alarms and stale crown cancellation PASS");
  puts("Sleep refusal: settings acquisition, every face unchanged outside explicit error strip, completed redraw before unblank, repeated retry/cleanup, success clears error, and exact stage/signed-detail diagnostics PASS");
+ return 0;
+}
+
+int main(void){
+ regression_main();
+ for(unsigned failure=1;failure<=2;failure++){
+  reset_case();sleep_fault=failure;failure_reports=0;requested_wakes=1;
+  app_main();check_clean();assert(!sleeps&&failure_reports==1);
+  assert(!strcmp(failure_stage,failure==1?"WATCH_CLOCK sleep=failed stage=BLANK-BRIGHTNESS":"WATCH_CLOCK sleep=failed stage=BLANK-ACQUIRE"));
+ }
+ sleep_fault=0;
+ const char *caps[]={"input.power-key","power.sleep","display.power"};
+ const char *stages[]={"KEY-CAPABILITY","POWER-CAPABILITY","PANEL-CAPABILITY"};
+ for(unsigned i=0;i<3;i++){
+  reset_case();fail_capability=caps[i];failure_reports=0;
+  app_main();check_clean();assert(first_seen&&!sleeps&&failure_reports==1);
+  assert(!strcmp(failure_stage+strlen("WATCH_CLOCK sleep=failed stage="),stages[i]));
+ }
+ puts("Sleep diagnostics: real Home blank brightness/acquire failure injection, absent key/power/panel capability, exact stage and unchanged cleanup PASS");
  return 0;
 }
