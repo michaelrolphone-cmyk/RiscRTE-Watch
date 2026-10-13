@@ -32,6 +32,11 @@ static const risc_runtime_api_v1 *rt;
 #ifdef WATCH_RUNTIME_FEATURES
 #include "../runtime_features/clock_runtime.h"
 static watch_clock_runtime native_clock;
+#ifdef WATCH_FAST_WAKE
+static bool clock_rtc_reconcile_pending,clock_rtc_retry_delayed;
+static uint32_t clock_rtc_retry_sampled_at;
+#define CLOCK_RTC_RETRY_MS 5000u
+#endif
 #endif
 #ifdef WATCH_CONTEXTS_CLIENT
 #include "PortableContextsClient.h"
@@ -143,6 +148,21 @@ static unsigned picker_selection_pending;
 static watch_launcher_touch touch;
 static bool launcher_swipe_pending, launcher_activity_pending;
 static uint32_t launcher_sampled_at;
+#ifdef WATCH_CONTEXTS_CLIENT
+/* Bounded raster-only journal. No recognizer/UI state changes while pixels are
+ * being written. Overflow cancels the complete journal until fresh neutral. */
+#define CLOCK_RASTER_OBSERVATIONS 128u
+static watch_launcher_observation clock_raster_observations[CLOCK_RASTER_OBSERVATIONS];
+static unsigned clock_raster_count;
+static bool clock_rendering,clock_raster_overflow,clock_raster_activity;
+static bool clock_render_checkpoint(void *context);
+#endif
+static void launcher_touch_latch(unsigned action,bool activity) {
+    if(action==WATCH_FACE_LAUNCHER)launcher_swipe_pending=true;
+    if(action==WATCH_FACE_OPEN)picker_open_pending=true;
+    if(action==WATCH_FACE_SELECT){picker_selection_pending=watch_face_page_for(picker.category)->ids[picker.target];picker_select_pending=true;}
+    if(activity)launcher_activity_pending=true;
+}
 /* Sampling must not wait for a whole 240-row presentation. Latch the first
  * qualified swipe, but let the accepted frame finish before handing it off. */
 static void sample_launcher_touch(uint32_t now, bool force) {
@@ -157,10 +177,7 @@ static void sample_launcher_touch(uint32_t now, bool force) {
     bool activity=false;
     launcher_sampled_at=now;
     unsigned action=launcher_touch_sample(&touch,&picker,now,&activity);
-    if(action==WATCH_FACE_LAUNCHER)launcher_swipe_pending=true;
-    if(action==WATCH_FACE_OPEN)picker_open_pending=true;
-    if(action==WATCH_FACE_SELECT){picker_selection_pending=watch_face_page_for(picker.category)->ids[picker.target];picker_select_pending=true;}
-    if (activity) launcher_activity_pending=true;
+    launcher_touch_latch(action,activity);
 }
 #endif
 static const risc_display_output_api_v1 *display;
@@ -219,7 +236,11 @@ static bool sampled_rtc, sampled_battery;
 static void reset_telemetry(void) {
     face=(nova_watch_state){0}; sampled_rtc=false; sampled_battery=false;
 #ifdef WATCH_CONTEXTS_CLIENT
+#ifdef WATCH_CLOCK_LAUNCHER
+    face.capture_audio=clock_render_checkpoint;
+#else
     face.capture_audio=clock_contexts_capture_checkpoint;
+#endif
 #endif
 #ifdef WATCH_CLOCK_POINTS
     clock_points_sampled=false;face.points=&clock_points_view;
@@ -246,6 +267,36 @@ static bool alive(uint32_t *ms) {
     if (!rt->health(&h)) return false;
     *ms=h.uptime_ms; return true;
 }
+#if defined(WATCH_CONTEXTS_CLIENT) && defined(WATCH_CLOCK_LAUNCHER)
+static bool clock_render_checkpoint(void *context) {
+    if(!clock_contexts_capture_checkpoint(context))return false;
+    if(!clock_rendering||!touch.subscription||launcher_swipe_pending)return true;
+#ifdef WATCH_CLOCK_ALARMS
+    if(clock_alarm_modal)return true;
+#endif
+    uint32_t now;
+    if(!alive(&now))return false;
+    if((uint32_t)(now-launcher_sampled_at)<8u)return true;
+    launcher_sampled_at=now;
+    watch_launcher_observation o=launcher_touch_capture(&touch,now);
+    clock_raster_activity|=o.activity;
+    if(clock_raster_count<CLOCK_RASTER_OBSERVATIONS)
+        clock_raster_observations[clock_raster_count++]=o;
+    else clock_raster_overflow=true;
+    return true;
+}
+static void clock_replay_raster_input(void) {
+    if(clock_raster_overflow) {
+        watch_launcher_observation cancelled={.now=launcher_sampled_at};
+        (void)launcher_touch_observe(&picker,&cancelled);
+    } else for(unsigned i=0;i<clock_raster_count&&!launcher_swipe_pending;i++) {
+        const watch_launcher_observation *o=&clock_raster_observations[i];
+        launcher_touch_latch(launcher_touch_observe(&picker,o),o->activity);
+    }
+    launcher_activity_pending|=clock_raster_activity;
+    clock_raster_count=0;clock_raster_overflow=false;clock_raster_activity=false;
+}
+#endif
 static bool present(void) {
 #ifdef WATCH_CONTEXTS_CLIENT
     if(!clock_contexts_capture_checkpoint(NULL))return false;
@@ -295,7 +346,7 @@ static bool frame(risc_display_surface_v1 *surface) {
     if (!display->acquire(display->context,RISC_DISPLAY_FORMAT_RGB565,surface)) return false;
     held=surface->frame;return held!=0;
 }
-static bool draw_clock(uint32_t now,risc_display_surface_v1 *surface) {
+static bool draw_clock_pixels(uint32_t now,risc_display_surface_v1 *surface) {
     /* RTC sampling and fractional phase are independent of the frame cadence.
      * Only a successful RTC sample may advance civil time. The first observed
      * edge anchors the fractional hand within one 100ms sampling interval. */
@@ -360,6 +411,19 @@ static bool draw_clock(uint32_t now,risc_display_surface_v1 *surface) {
 #else
     return nova_watch_render(surface,&face);
 #endif
+}
+static bool draw_clock(uint32_t now,risc_display_surface_v1 *surface) {
+#if defined(WATCH_CONTEXTS_CLIENT) && defined(WATCH_CLOCK_LAUNCHER)
+    clock_raster_count=0;clock_raster_overflow=false;clock_raster_activity=false;
+    clock_rendering=true;
+#endif
+    bool rendered=draw_clock_pixels(now,surface);
+#if defined(WATCH_CONTEXTS_CLIENT) && defined(WATCH_CLOCK_LAUNCHER)
+    clock_rendering=false;
+    if(rendered)clock_replay_raster_input();
+    else {clock_raster_count=0;clock_raster_overflow=false;clock_raster_activity=false;}
+#endif
+    return rendered;
 }
 static bool pace_frame(uint32_t began) {
 #ifdef WATCH_BLE_BROADCAST
@@ -751,6 +815,9 @@ static int sleep_cycle(void) {
     if(!watch_capabilities_key_events(&device_clients,&cleared))return false;
 #ifdef WATCH_FAST_WAKE
     clock_deferred_phase=0;clock_radios_pending=true;clock_input_reported=false;
+#ifdef WATCH_RUNTIME_FEATURES
+    clock_rtc_reconcile_pending=true;clock_rtc_retry_delayed=false;
+#endif
     clock_broadcast_started=clock_contexts_started=false;
 #ifdef WATCH_QUICK_RADIOS
     clock_radios.valid=clock_radios.available=clock_quick.ui.radios_valid=false;
@@ -790,9 +857,12 @@ static int sleep_cycle(void) {
     return watch_capabilities_key_events(&device_clients,&discard);
 }
 __attribute__((visibility("default"))) void app_main(void) {
-    rt=risc_runtime_get_api(1);
+    sleep_status[0]=0;rt=risc_runtime_get_api(1);
 #ifdef WATCH_FAST_WAKE
     clock_deferred_phase=0;clock_radios_pending=true;clock_input_reported=false;clock_wake_started=0;
+#ifdef WATCH_RUNTIME_FEATURES
+    clock_rtc_reconcile_pending=clock_rtc_retry_delayed=false;clock_rtc_retry_sampled_at=0;
+#endif
     clock_broadcast_started=clock_contexts_started=false;
     clock_boot_frame_pending=true;
 #endif
@@ -890,6 +960,7 @@ __attribute__((visibility("default"))) void app_main(void) {
         watch_runtime_snapshot(&native_clock,&retained_time) &&
         retained_time.validity==RISC_REALTIME_VALID;
     if(native_clock.halted)goto done;
+    clock_rtc_reconcile_pending=defer_rtc;
     if(!defer_rtc) {
 #endif
     have_r=rt->acquire("rtc.clock",2,0,&rg);
@@ -901,7 +972,18 @@ __attribute__((visibility("default"))) void app_main(void) {
     } else CLOCK_WAKE_MARK("rtc-deferred");
 #endif
 #ifdef WATCH_RUNTIME_FEATURES
-    if(!watch_runtime_seed(&native_clock,rtc))goto done;
+    bool rtc_seeded=watch_runtime_seed(&native_clock,rtc);
+    if(!rtc_seeded || native_clock.rtc_reconcile_pending) {
+        /* An ordinary RTC refusal cannot strand Home. A fresh Runtime read
+         * proves that even an UNSET clock still belongs to this invocation. */
+        risc_realtime_snapshot_v1 remaining;
+        if(!watch_runtime_snapshot(&native_clock,&remaining))goto done;
+    }
+#ifdef WATCH_FAST_WAKE
+    clock_rtc_reconcile_pending=native_clock.rtc_reconcile_pending;
+    if(clock_rtc_reconcile_pending&&!defer_rtc)
+        memcpy(sleep_status,"TIME CHECK ERR",sizeof("TIME CHECK ERR"));
+#endif
 #endif
     CLOCK_WAKE_MARK("rtc-end");
     CLOCK_WAKE_MARK("settings-begin");
@@ -1051,6 +1133,38 @@ __attribute__((visibility("default"))) void app_main(void) {
             if(clock_alarm_input_cancelled)events=0;
             /* Loading or a visible alarm must not exhaust the idle interval. */
             last_activity=now;
+        }
+#endif
+#if defined(WATCH_FAST_WAKE) && defined(WATCH_RUNTIME_FEATURES)
+        /* Keep first-frame/input latency independent of RTC availability.
+         * Reconcile before handoff/sleep; on ordinary refusal retry at a
+         * bounded cadence while the visible native clock remains usable. */
+        if(clock_rtc_reconcile_pending && (!clock_rtc_retry_delayed ||
+           (uint32_t)(now-clock_rtc_retry_sampled_at)>=CLOCK_RTC_RETRY_MS)) {
+            if(!have_r) {
+                have_r=rt->acquire("rtc.clock",2,0,&rg);
+                if(!have_r && (rg.api || rg.slot || rg.generation)) {
+                    watch_runtime_halt(&native_clock);break;
+                }
+                rtc=have_r?rg.api:NULL;
+                if(rtc && (rtc->api_version!=2 || rtc->struct_size<sizeof(*rtc) || !rtc->read))rtc=NULL;
+            }
+            bool reconciled=rtc && watch_runtime_seed(&native_clock,rtc) &&
+                !native_clock.rtc_reconcile_pending;
+            if(!reconciled) {
+                /* VALID is provisional continuity; UNSET remains explicit.
+                 * CONTEXT or malformed native custody still stops all I/O. */
+                risc_realtime_snapshot_v1 remaining;
+                if(!watch_runtime_snapshot(&native_clock,&remaining))break;
+                memcpy(sleep_status,"TIME CHECK ERR",sizeof("TIME CHECK ERR"));
+                rt->diagnostic("WATCH_CLOCK rtc-reconcile=unavailable retry-ms=5000");
+                clock_rtc_retry_delayed=true;
+            } else {
+                clock_rtc_reconcile_pending=clock_rtc_retry_delayed=false;
+                if(!strcmp(sleep_status,"TIME CHECK ERR"))sleep_status[0]=0;
+            }
+            if(!alive(&now))break;
+            clock_rtc_retry_sampled_at=now;sampled_rtc=false;
         }
 #endif
 #ifdef WATCH_CONTEXTS_CLIENT

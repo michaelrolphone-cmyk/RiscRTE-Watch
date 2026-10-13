@@ -36,7 +36,11 @@ static char wake_stages[128][32];
 static uint32_t wake_stage_times[128],wake_stage_count;
 static uint32_t display_load_cost,sleep_setting_cost,sleep_setting_reads;
 static uint32_t alarm_load_cost,alarm_acquires,rtc_acquires;
-static bool crown_before_alarm;
+static bool crown_before_alarm,fail_late_rtc_read,late_rtc_retention,native_context_failed;
+static int32_t light_wake_drift;
+static unsigned rtc_refusal_wake,rtc_recovery_wake,rtc_reconcile_errors,rtc_read_calls;
+static unsigned transient_rtc_failures,rtc_read_at[16];
+static bool wait_rtc_recovery,first_time_valid,first_time_warning;
 static uint32_t prealarm_crown_events;
 static const char *fail_capability;
 static bool fail_frame_acquire,fail_unblank,fail_marker_sample,fail_next_health;
@@ -65,7 +69,7 @@ static void check_io(void){assert(!retained_fence);}
 static risc_realtime_snapshot_v1 native_time;
 static alarm_status_v1 alarm_view;
 static contexts_status_v1 contexts_view;
-static int32_t native_read(void*c,risc_realtime_snapshot_v1*out){check_io();(void)c;*out=native_time;return 0;}
+static int32_t native_read(void*c,risc_realtime_snapshot_v1*out){check_io();(void)c;if(native_context_failed)return RISC_REALTIME_CONTEXT;*out=native_time;return 0;}
 static int32_t native_seed(void*c,int64_t seconds,uint32_t ns){check_io();(void)c;assert(!ns);seed_calls++;native_time.epoch_seconds=seconds;native_time.validity=1;return 0;}
 static int32_t wake_read(void*c,uint32_t type,uint32_t schema,risc_retained_wake_record_v1*out,uint32_t*cause){
  check_io();(void)c;*cause=boot_cause;*out=(risc_retained_wake_record_v1){.struct_size=sizeof(*out),.type=type,.schema_version=schema,.size=1,.payload={1}};return checkpoint_result;}
@@ -79,6 +83,7 @@ static bool fast_retain(void){retains++;retained_fence=true;return true;}
 static bool fast_confirm(void){check_io();assert(!queued_context_handoff);confirmations++;if(service_acquires<4)confirmed_early=true;return true;}
 static bool fast_health(risc_runtime_health_v1*h){check_io();h->uptime_ms=clock_ms;if(fail_next_health){fail_next_health=false;return false;}return !ended&&clock_ms<30000u;}
 static bool fast_diagnostic(const char*s){
+ if(!strcmp(s,"WATCH_CLOCK rtc-reconcile=unavailable retry-ms=5000"))rtc_reconcile_errors++;
  if(!strncmp(s,"WATCH_SLEEP error=",18)){
   const char *expected=fail_sleep_acquire==1?
    "WATCH_SLEEP error=settings-acquire capability=storage.key-value instance=1":
@@ -102,10 +107,11 @@ static bool fast_diagnostic(const char*s){
  }
  if(!strcmp(s,"WATCH_CLOCK ready crown=enabled")){ready=true;ready_time=clock_ms;}
  if(strstr(s,"stage=first-frame")){assert(!first_seen);first_seen=true;first_at=clock_ms;first_frames=submitted;
+  first_time_valid=face.time_valid;first_time_warning=!strcmp(sleep_status,"TIME CHECK ERR");
   assert(hardware_brightness==clock_quick.brightness&&!pending&&!owned&&touch.subscription&&last_complete==submitted);assert(service_acquires==0);
   assert(points_loads==1&&face.points==&clock_points_view&&!sleep_setting_reads&&!alarm_acquires&&!alarm_frames);
   if(face.time_valid){twatch_rtc_time_v1 raw={0},expected={0};assert(watch_runtime_calendar(native_time.epoch_seconds,&raw));assert(watch_display_time(&raw,&expected));assert(!memcmp(&face.time,&expected,sizeof(expected)));}
-  risc_display_surface_v1 expected={0,expected_pixels,240,240,480,sizeof(expected_pixels),5};assert(nova_watch_face_render(&expected,&face,picker.selected));assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
+  risc_display_surface_v1 expected={0,expected_pixels,240,240,480,sizeof(expected_pixels),5};assert(nova_watch_face_render(&expected,&face,picker.selected));if(sleep_status[0])assert(nova_watch_sleep_status(&expected,sleep_status));assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
   if(early_launch)launcher_swipe_pending=true;
  }
  if(strstr(s,"stage=first-input-poll")){input_at=clock_ms;input_stages++;assert(touch.subscription&&polls);if(wake_count)resume_input_at=clock_ms;}
@@ -116,7 +122,7 @@ static bool fast_diagnostic(const char*s){
  if(strstr(s,"stage=radios-begin")){radio_at=clock_ms;assert(input_stages>0);if(wake_count)assert(resume_input_at>=wake_began);assert(frame_at>=(wake_count?wake_began:first_at));}
  if(strstr(s,"stage=broadcast-begin"))broadcast_at=clock_ms;
  if(strstr(s,"stage=contexts-begin"))contexts_at=clock_ms;
- if(strstr(s,"stage=services-ready")){stage_calls++;if(wake_count+refused_cycles==requested_wakes&&!early_launch)ended=true;}
+ if(strstr(s,"stage=services-ready")){stage_calls++;if(wake_count+refused_cycles==requested_wakes&&!early_launch&&!wait_rtc_recovery)ended=true;}
  return true;
 }
 static bool fast_status(void*c,uint64_t token,risc_display_present_status_v1*out){
@@ -125,6 +131,7 @@ static bool fast_status(void*c,uint64_t token,risc_display_present_status_v1*out
  if(clock_ms-frame_started<transfer_cost){out->state=RISC_DISPLAY_PRESENT_ACTIVE;return true;}
  pending=false;out->state=fail_display?RISC_DISPLAY_PRESENT_FAILED:RISC_DISPLAY_PRESENT_COMPLETE;
  if(!fail_display){memcpy(completed_pixels,pixels,sizeof(pixels));last_complete=submitted;frame_at=clock_ms;if(clock_alarm_modal)alarm_frames++;
+  if(wait_rtc_recovery&&first_seen&&!clock_rtc_reconcile_pending&&face.time_valid&&!sleep_status[0])ended=true;
   if(refused_restores&&hardware_brightness){
    check_refusal_pixels();clean_refusal_frames++;
   }
@@ -145,9 +152,9 @@ static bool fast_key(void*c,uint32_t*out){check_io();(void)c;*out=0;
  else if(clock_alarm_modal&&alarm_view.occurrence.generation&&alarm_frames)*out=1;
  else if(first_seen&&(clock_deferred_phase==4||(early_sleep&&clock_deferred_phase==1))&&wake_count+refused_cycles<requested_wakes&&clock_ms-ready_time>300){*out=2;sleep_failure_armed=fail_sleep_acquire!=0&&refused_cycles<2;}
  return true;}
-static int32_t fast_sleep(void*c,risc_light_sleep_result_v1*out){check_io();(void)c;(void)out;assert(!touch.subscription&&!ble_state&&!pending&&!owned);assert(!broadcast_live&&!contexts_live);sleeps++;wake_count++;clock_ms+=500;native_time.epoch_seconds+=3600;if(low_on_wake){low_percent=5;clock_low_battery_sampled=false;}if(alarm_on_wake){alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;}return RISC_LIGHT_SLEEP_OK;}
+static int32_t fast_sleep(void*c,risc_light_sleep_result_v1*out){check_io();(void)c;(void)out;assert(!touch.subscription&&!ble_state&&!pending&&!owned);assert(!broadcast_live&&!contexts_live);sleeps++;wake_count++;clock_ms+=500;native_time.epoch_seconds+=light_wake_drift;if(wake_count==rtc_refusal_wake)fail_late_rtc_read=true;if(wake_count==rtc_recovery_wake)fail_late_rtc_read=false;if(low_on_wake){low_percent=5;clock_low_battery_sampled=false;}if(alarm_on_wake){alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;}return RISC_LIGHT_SLEEP_OK;}
 static int32_t fast_sleep_timed(void*c,uint32_t ms,risc_light_sleep_result_v1*out){(void)ms;return fast_sleep(c,out);}
-static bool fast_rtc(void*c,twatch_rtc_time_v1*out){if(unreadable_rtc)return false;if(unset_time){memset(out,0,sizeof(*out));return true;}return rtc_read(c,out);}
+static bool fast_rtc(void*c,twatch_rtc_time_v1*out){check_io();assert(rtc_read_calls<16);rtc_read_at[rtc_read_calls++]=clock_ms;if(transient_rtc_failures){transient_rtc_failures--;return false;}if(fail_late_rtc_read){native_context_failed=late_rtc_retention;return false;}if(unreadable_rtc)return false;if(unset_time){memset(out,0,sizeof(*out));return true;}return rtc_read(c,out);}
 static int32_t alarm_status(void*c,alarm_status_v1*out){check_io();(void)c;*out=alarm_view;return 0;}
 static int32_t alarm_step(void*c){check_io();(void)c;return 0;}
 static int32_t alarm_refresh(void*c){check_io();(void)c;return 0;}
@@ -263,7 +270,9 @@ static void reset_case(void){
  motion_prepares=motion_resumes=motion_sleeps=alarm_resumes=points_loads=broadcast_frame=0;service_start_cost=400;
  wake_stage_count=display_load_cost=sleep_setting_cost=sleep_setting_reads=0;
  alarm_load_cost=alarm_acquires=rtc_acquires=0;
- crown_before_alarm=false;prealarm_crown_events=0;
+ crown_before_alarm=fail_late_rtc_read=late_rtc_retention=native_context_failed=false;prealarm_crown_events=0;
+ light_wake_drift=3600;rtc_refusal_wake=rtc_recovery_wake=rtc_reconcile_errors=rtc_read_calls=0;
+ transient_rtc_failures=0;memset(rtc_read_at,0,sizeof(rtc_read_at));wait_rtc_recovery=first_time_valid=first_time_warning=false;
  fail_capability=NULL;fail_frame_acquire=fail_unblank=fail_marker_sample=fail_next_health=false;
  fail_sleep_acquire=refused_cycles=refused_restores=clean_refusal_frames=sleep_acquire_errors=0;sleep_failure_armed=false;
  low_percent=55;low_flags=0;low_read_fail=false;memset(low_lengths,0,sizeof(low_lengths));memset(low_writes,0,sizeof(low_writes));
@@ -316,11 +325,76 @@ static void check_refusal_diagnostics(void){
  watch_sleep_stage=0;watch_sleep_detail=0;sleep_status[0]=0;rt=saved;
 }
 int main(void){
+ /* A transient external RTC read failure must recover in the same Home
+  * invocation, whether native time began UNSET or valid/provisional. */
+ for(unsigned native_valid=0;native_valid<2;native_valid++) {
+  reset_case();transient_rtc_failures=2;wait_rtc_recovery=true;
+  native_time.validity=native_valid?RISC_REALTIME_VALID:RISC_REALTIME_UNSET;
+  if(!native_valid)native_time.epoch_seconds=0;
+  app_main();check_clean();assert(first_at==95&&input_at==95&&first_time_warning);
+  assert(first_time_valid==(bool)native_valid&&rtc_read_calls==3&&rtc_reconcile_errors==1);
+  assert(rtc_read_at[1]>=first_at&&rtc_read_at[2]-rtc_read_at[1]>=CLOCK_RTC_RETRY_MS);
+  assert(rtc_read_at[2]-rtc_read_at[1]<CLOCK_RTC_RETRY_MS+100);
+  assert(seed_calls==1&&face.time_valid&&!sleep_status[0]&&!clock_rtc_reconcile_pending);
+  assert(confirmations==1&&polls>100&&submitted>8);
+ }
+
+ /* Cold RTC failures also require fresh native custody before any settings,
+  * touch, display or optional service admission continues. */
+ for(unsigned native_valid=0;native_valid<2;native_valid++) {
+  reset_case();fail_late_rtc_read=late_rtc_retention=true;
+  native_time.validity=native_valid?RISC_REALTIME_VALID:RISC_REALTIME_UNSET;
+  if(!native_valid)native_time.epoch_seconds=0;
+  app_main();assert(retained_fence&&retains==1&&!first_seen&&!seed_calls&&!confirmations&&!service_acquires&&!points_loads);retained_reset();
+ }
+ /* Inject five-minute errors in both directions at every deep-wake cause.
+  * The first frame/input stays fast; settled display must follow read-only RTC. */
+ for(unsigned cause=RISC_BOOT_DEEP_TIMER;cause<=RISC_BOOT_DEEP_OTHER;cause++)for(int sign=-1;sign<=1;sign+=2) {
+  reset_case();boot_cause=cause;twatch_rtc_time_v1 raw,expected;int64_t hardware_epoch;
+  assert(rtc_read(NULL,&raw)&&watch_runtime_epoch(&raw,&hardware_epoch));
+  native_time.epoch_seconds=hardware_epoch+sign*300;
+  app_main();check_clean();assert(first_at==95&&input_at==95&&seed_calls==1&&rtc_acquires==1);
+  assert(native_time.epoch_seconds==hardware_epoch&&watch_display_time(&raw,&expected));
+  assert(face.time_valid&&!memcmp(&face.time,&expected,sizeof(expected)));
+ }
+ for(unsigned failure=0;failure<2;failure++) {
+  reset_case();boot_cause=RISC_BOOT_DEEP_GPIO;
+  if(failure)fail_late_rtc_read=true;else fail_capability="rtc.clock";
+  int64_t retained_epoch=native_time.epoch_seconds;app_main();check_clean();
+  assert(first_at==95&&input_at==95&&confirmations==1&&service_acquires==4&&!seed_calls);
+  assert(face.time_valid&&native_time.epoch_seconds==retained_epoch&&!strcmp(sleep_status,"TIME CHECK ERR"));
+  assert(rtc_reconcile_errors==1&&hardware_brightness==clock_quick.brightness&&clock_rtc_reconcile_pending);
+ }
+ /* Repeated light wakes correct drift in either direction after the fast
+  * resumed frame/input. An ordinary RTC refusal preserves valid native time;
+  * a later successful wake must clear the visible warning and reconcile. */
+ for(int sign=-1;sign<=1;sign+=2) {
+  reset_case();requested_wakes=2;light_wake_drift=sign*300;
+  twatch_rtc_time_v1 raw,expected;int64_t hardware_epoch;
+  assert(rtc_read(NULL,&raw)&&watch_runtime_epoch(&raw,&hardware_epoch));
+  app_main();check_clean();
+  assert(wake_count==2&&soft_frames==2&&soft_latency==95&&input_stages==3);
+  assert(seed_calls==3&&rtc_read_calls==3&&rtc_acquires==1&&!rtc_reconcile_errors);
+  assert(native_time.epoch_seconds==hardware_epoch&&watch_display_time(&raw,&expected));
+  assert(face.time_valid&&!memcmp(&face.time,&expected,sizeof(expected)));
+ }
+ for(unsigned recover=0;recover<2;recover++) {
+  reset_case();rtc_refusal_wake=1;rtc_recovery_wake=recover?2:0;requested_wakes=recover?2:1;
+  twatch_rtc_time_v1 raw;int64_t hardware_epoch;
+  assert(rtc_read(NULL,&raw)&&watch_runtime_epoch(&raw,&hardware_epoch));
+  app_main();check_clean();assert(wake_count==requested_wakes&&rtc_reconcile_errors==1);
+  assert(soft_latency==95&&face.time_valid&&hardware_brightness==clock_quick.brightness);
+  assert(rtc_read_calls==requested_wakes+1&&seed_calls==1+recover);
+  assert(native_time.epoch_seconds==hardware_epoch+(recover?0:light_wake_drift));
+  assert(recover?!sleep_status[0]:!strcmp(sleep_status,"TIME CHECK ERR"));
+ }
+ reset_case();boot_cause=RISC_BOOT_DEEP_GPIO;fail_late_rtc_read=late_rtc_retention=true;
+ app_main();assert(retained_fence&&retains==1&&!seed_calls&&!confirmations&&!service_acquires);retained_reset();
  for(unsigned cause=0;cause<=RISC_BOOT_DEEP_OTHER;cause++)for(unsigned present=0;present<2;present++){
   reset_case();boot_cause=cause;checkpoint_result=present?RISC_RETAINED_WAKE_OK:RISC_RETAINED_WAKE_ABSENT;
   app_main();check_clean();assert(first_seen&&first_at==95&&first_frames==1&&input_at==95&&input_stages==1);assert(service_acquires==4&&confirmations==1&&promotions==1&&stage_calls==1);
-  assert(seed_calls==(cause<RISC_BOOT_DEEP_TIMER));assert(face.time_valid);
-  assert(rtc_acquires==(cause<RISC_BOOT_DEEP_TIMER)&&alarm_acquires==1);
+  assert(seed_calls==1);assert(face.time_valid);
+  assert(rtc_acquires==1&&alarm_acquires==1);
   check_boot_stages();
  }
  reset_case();display_load_cost=275;sleep_setting_cost=900;app_main();check_clean();check_boot_stages();
@@ -328,7 +402,7 @@ int main(void){
  assert(wake_stage_times[stage_index("first-frame")]==370&&wake_stage_times[stage_index("sleep-settings-end")]==1270);
  assert(wake_stage_times[stage_index("first-frame")]==wake_stage_times[stage_index("unblank-end")]);
  reset_case();boot_cause=RISC_BOOT_DEEP_GPIO;alarm_load_cost=700;app_main();check_clean();check_boot_stages();
- assert(first_at==95&&input_at==95&&!rtc_acquires&&alarm_acquires==1&&radio_at==890);
+ assert(first_at==95&&input_at==95&&rtc_acquires==1&&alarm_acquires==1&&radio_at==890);
  assert(wake_stage_times[stage_index("alarm-end")]-wake_stage_times[stage_index("alarm-begin")]==700);
  reset_case();fail_marker_sample=true;app_main();check_clean();
  assert(first_seen&&first_at==95&&confirmations==1&&stage_count("display-begin")==1&&!stage_count("display-end"));
@@ -345,7 +419,7 @@ int main(void){
  assert(first_seen&&confirmations==1&&stage_count("alarm-begin")==1&&stage_count("alarm-end")==1&&!alarm_frames);
  reset_case();unreadable_rtc=true;native_time.validity=RISC_REALTIME_UNSET;native_time.epoch_seconds=0;
  app_main();check_clean();assert(first_seen&&!face.time_valid&&!seed_calls&&confirmations==1);
- reset_case();unreadable_rtc=true;app_main();check_clean();assert(!first_seen&&!confirmations);
+ reset_case();unreadable_rtc=true;app_main();check_clean();assert(first_seen&&face.time_valid&&confirmations==1&&rtc_reconcile_errors==1&&first_time_warning);
  reset_case();fail_capability="board.battery";app_main();check_clean();assert(first_seen&&!face.battery_valid&&confirmations==1);
  reset_case();fail_frame_acquire=true;app_main();check_clean();
  assert(stage_count("render-begin")==1&&!stage_count("render-end")&&!stage_count("transfer-begin")&&!first_seen);
@@ -357,7 +431,7 @@ int main(void){
  reset_case();unset_time=true;native_time.validity=RISC_REALTIME_UNSET;native_time.epoch_seconds=0;app_main();check_clean();assert(first_seen&&!face.time_valid&&!seed_calls);
  reset_case();alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;app_main();check_clean();assert(alarm_frames&&first_seen&&first_at==95&&service_acquires==4);
  reset_case();boot_cause=RISC_BOOT_DEEP_GPIO;alarm_load_cost=700;alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;
- app_main();check_clean();assert(first_at==95&&input_at==95&&alarm_frames&&!rtc_acquires&&alarm_acquires==1&&!alarm_view.occurrence.generation);
+ app_main();check_clean();assert(first_at==95&&input_at==95&&alarm_frames&&rtc_acquires==1&&alarm_acquires==1&&!alarm_view.occurrence.generation);
  assert(stage_index("first-input-poll")<stage_index("alarm-begin")&&stage_index("reconcile-end")<stage_index("radios-begin"));
  reset_case();boot_cause=RISC_BOOT_DEEP_GPIO;alarm_load_cost=700;crown_before_alarm=true;
  alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;
@@ -367,7 +441,7 @@ int main(void){
  reset_case();fail_display=true;app_main();check_clean();assert(!first_seen&&!service_acquires&&!confirmations);
  assert(stage_count("transfer-begin")==1&&!stage_count("transfer-end")&&!stage_count("unblank-begin"));
  for(unsigned fail=3;fail<=4;fail++){reset_case();fail_service=fail;app_main();check_clean();assert(first_seen&&service_acquires==4&&confirmations==1);}
- reset_case();contexts_enabled=true;requested_wakes=2;app_main();check_clean();assert(wake_count==2&&soft_frames==2&&soft_latency==95&&stage_calls==3&&input_stages==3&&broadcast_starts==3&&contexts_starts==3);
+ reset_case();contexts_enabled=true;requested_wakes=2;app_main();check_clean();assert(seed_calls==3&&wake_count==2&&soft_frames==2&&soft_latency==95&&stage_calls==3&&input_stages==3&&broadcast_starts==3&&contexts_starts==3);
  assert(stage_count("first-frame")==1&&stage_count("render-begin")==3&&stage_count("transfer-end")==3&&stage_count("unblank-end")==3);
  /* Settings acquisition refusal must preserve the selected face outside its
   * explicit error strip, finish the redraw before unblank, survive retries,
@@ -401,10 +475,11 @@ int main(void){
  /* Terminal retained fixture reset is outside that invocation. */
  retained_reset();
  reset_case();fail_release=true;app_main();assert(first_seen&&retains&&confirmations==1);retained_reset();
+ puts("RTC reconciliation: deep/light wake +/-5-minute drift, late acquire/read refusal continuity, bounded active/next-wake retry, cold UNSET and normal-return VALID recovery, and fresh native custody fencing PASS");
  puts("Fast Watch Clock: production Points/motion/alarm-resume feature paths; 10 cold/deep variants; exact first frame/input; mid-frame navigation; cold/light low-battery; phased service starts; radio policy/failure variants; early/repeated light wake; due alarms; terminal retain fences PASS");
  puts("Modeled cost only: 95 ms first Clock frame and input, four 700 ms service acquisitions plus 400 ms service starts deferred; 95 ms light-resume frame without an alarm; no physical timing claim.");
  puts("Boot/wake stage timing: ordered essential grants, settings, alarm/touch/reconciliation, render/transfer/unblank; first-frame precedes sleep settings; failure markers stop at failed boundary; light logs bounded per wake PASS");
- puts("Minimal first-frame closure: valid deep native time defers RTC; alarm/output admission follows first frame/input and precedes handoff/radios; 700 ms modeled load deferred; deep due alarms and stale crown cancellation PASS");
+ puts("Minimal first-frame closure: valid deep native time defers RTC then reconciles after first input; alarm/output admission follows first frame/input and precedes handoff/radios; 700 ms modeled load deferred; deep due alarms and stale crown cancellation PASS");
  puts("Sleep refusal: settings acquisition, every face unchanged outside explicit error strip, completed redraw before unblank, repeated retry/cleanup, success clears error, and exact stage/signed-detail diagnostics PASS");
  return 0;
 }

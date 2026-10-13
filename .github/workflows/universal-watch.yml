@@ -1,7 +1,7 @@
 name: Universal watch application
 on:
   push:
-    branches: [feat/universal-watch, main]
+    branches: [feat/universal-watch, main, work/native-height-layout-20261013]
     paths: ['apps/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', '.github/workflows/universal-watch.yml', 'dependencies.lock.json']
   pull_request:
 permissions:
@@ -43,6 +43,8 @@ jobs:
           python3 scripts/check_capability_boundaries.py
           python3 scripts/test_capabilities.py
           python3 scripts/test_fast_wake_clock.py --system-apps .source/system --utilities .source/utilities
+          python3 scripts/test_clock_raster_gestures.py --system-apps .source/system --utilities .source/utilities
+          python3 scripts/test_watch_layout.py
           python3 scripts/test_return_default.py --runtime .source/runtime
           python3 scripts/test_return_default.py --runtime .source/runtime --sanitize
           python3 scripts/test_capabilities.py --sanitize

@@ -17,6 +17,7 @@ typedef struct {
  const risc_retained_wake_api_v1 *wake;
  const twatch_rtc_api_v1 *fallback;
  bool time_live,wake_live,halted,resume;
+ bool rtc_reconcile_pending; /* RTC absent/unreadable/unset or seed not accepted. */
  uint32_t cause;
 } watch_clock_runtime;
 
@@ -111,12 +112,12 @@ static bool watch_runtime_open(watch_clock_runtime *c,const risc_runtime_api_v1 
  return true;
 }
 static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *rtc) {
+ c->rtc_reconcile_pending=true;
  risc_realtime_snapshot_v1 sample;
  if(!watch_runtime_snapshot(c,&sample))return false;
- /* A classified deep boot preserves native time, even if this app has no
-  * checkpoint. A normal invocation reseeds from the same persisted RTC basis,
-  * so a completed Settings time edit takes effect on its Clock return. */
- if(c->cause>=RISC_BOOT_DEEP_TIMER && sample.validity==RISC_REALTIME_VALID)return true;
+ /* A valid retained native sample is an interpolation source, not an
+  * accuracy check against the external RTC. Reconcile whenever the caller
+  * supplies that RTC, including deep/light wake. Never write the RTC. */
  twatch_rtc_time_v1 date={0};int64_t epoch=0;
  if(!rtc || !rtc->read)return true; /* Explicit TIME UNSET remains visible. */
  if(!rtc->read(rtc->context,&date)) {
@@ -130,11 +131,12 @@ static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *r
  if(!watch_runtime_epoch(&date,&epoch)) {
   /* Runtime v1 has a signed-32-bit epoch. Preserve the accepted Watch's
    * wider 2000..2099 civil domain through its original RTC outside that range. */
-  if(tw_valid_time(&date)){c->fallback=rtc;return true;}
+  if(tw_valid_time(&date)){c->fallback=rtc;c->rtc_reconcile_pending=false;return true;}
   return sample.validity==RISC_REALTIME_UNSET;
  }
  int rc=c->time->seed(c->time->context,epoch,0);
  if(rc==RISC_REALTIME_CONTEXT)watch_runtime_halt(c);
+ if(rc==RISC_REALTIME_OK){c->fallback=NULL;c->rtc_reconcile_pending=false;}
  return rc==RISC_REALTIME_OK;
 }
 static bool watch_runtime_read(watch_clock_runtime *c,twatch_rtc_time_v1 *out,uint16_t *fraction_ms) {

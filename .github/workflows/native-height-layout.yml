@@ -1,0 +1,26 @@
+name: Shared native-height layout
+on:
+  push:
+    branches: [work/native-height-layout-20261013]
+  pull_request:
+    paths:
+      - 'include/WatchLayout.h'
+      - 'tests/test_watch_layout.c'
+      - 'scripts/test_watch_layout.py'
+      - 'docs/NATIVE_HEIGHT_LAYOUT.md'
+      - '.github/workflows/native-height-layout.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  geometry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python scripts/test_watch_layout.py
