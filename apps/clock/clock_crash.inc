@@ -16,6 +16,7 @@ static bool clock_crash_prepare(void *context) {
 static void clock_crash_retain(void *context) {(void)context;watch_runtime_halt(&native_clock);}
 static uint64_t clock_crash_now(void *context) {(void)context;uint32_t now=0;(void)alive(&now);return now;}
 static void clock_crash_init(void) {
+ clock_crash_modal=false;
  crash_report_session_hooks hooks={.runtime=rt,.safe=clock_crash_safe,.prepare_storage=clock_crash_prepare,
   .now=clock_crash_now,.retain=clock_crash_retain,.namespace_id=WATCH_CRASH_REPORT_NAMESPACE};
 #ifdef WATCH_CRASH_REPORT_VOLUME
@@ -27,6 +28,7 @@ static bool clock_crash_step(void) {
  if(clock_handoff || clock_contexts_handoff || launcher_swipe_pending || clock_deferred_phase<4 || held || !clock_display_settled || clock_alarm_modal || picker.open || pqa_visible(&clock_quick.ui))return true;
  if(!crash_session_read(&clock_crash))return false;
  if(clock_crash.pending && !clock_crash.presented) {
+  clock_crash_modal=true;
   CLOCK_WAKE_MARK("crash-report-begin");
   if(!clock_crash_prepare(NULL))return false;
   uint32_t offset=0,now=0,events=0;
@@ -50,6 +52,7 @@ static bool clock_crash_step(void) {
   if(!crash_session_ack(&clock_crash))return false;
   watch_face_reset_contact(&picker);launcher_swipe_pending=launcher_activity_pending=false;
   (void)pqa_input(&clock_quick.ui,now,false,0,0,0,0,false);
+  clock_crash_modal=false;
   CLOCK_WAKE_MARK("crash-report-end");
  }
  return crash_session_checkpoint(&clock_crash);

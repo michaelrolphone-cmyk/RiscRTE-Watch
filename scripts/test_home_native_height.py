@@ -8,7 +8,7 @@ root=Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix='home-height-') as temp:
     out=Path(temp)
     for sanitize in (False,True):
-        flags=['-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-O1','-g','-Wall','-Wextra','-Werror','-DWATCH_CONTEXTS_CLIENT']
+        flags=['-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-O1','-g','-Wall','-Wextra','-Werror','-DWATCH_CONTEXTS_CLIENT']
         flags += ['-I'+str(root/p) for p in ('include','sdk/driver','sdk/app','.')]
         if sanitize:flags += ['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer','-no-pie']
         objects=[]

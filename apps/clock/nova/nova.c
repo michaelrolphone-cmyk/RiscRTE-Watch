@@ -11,6 +11,29 @@ typedef struct {
     uint16_t advance, data;
 } nova_glyph;
 #include "assets.inc"
+#ifdef WATCH_COMPACT_NOVA_ASSETS
+#include "compact_assets.inc"
+static bool compact_assets_ready;
+static bool unpack_alpha(uint8_t *out,size_t size,const uint8_t *in,size_t length) {
+ size_t i=0,j=0;
+ while(i<length){unsigned code=in[i++],count=(code&127u)+1u;
+  if(count>size-j)return false;
+  if(code&128u){if(i==length)return false;memset(out+j,in[i++],count);}
+  else {if(count>length-i)return false;memcpy(out+j,in+i,count);i+=count;}
+  j+=count;
+ }
+ return j==size;
+}
+static bool prepare_compact_assets(void) {
+ if(compact_assets_ready)return true;
+ compact_assets_ready=unpack_alpha(nova_glyph_alpha,sizeof(nova_glyph_alpha),nova_glyph_alpha_packed,sizeof(nova_glyph_alpha_packed)) &&
+  unpack_alpha(nova_dot_alpha,sizeof(nova_dot_alpha),nova_dot_alpha_packed,sizeof(nova_dot_alpha_packed)) &&
+  unpack_alpha(points_alpha,sizeof(points_alpha),points_alpha_packed,sizeof(points_alpha_packed));
+ return compact_assets_ready;
+}
+#else
+static bool prepare_compact_assets(void){return true;}
+#endif
 #define COUNT(x) (sizeof(x)/sizeof((x)[0]))
 #define CYAN 0x1f1fu
 #define GREEN 0x3ff3u
@@ -119,6 +142,7 @@ static int text_width(const nova_glyph *set,unsigned count,const char *s,int spa
 static void text(canvas *c,const nova_glyph *set,unsigned count,const char *s,
                  int x,int baseline,int spacing,unsigned scale,uint16_t color,
                  unsigned alpha,bool colon) {
+    if(!prepare_compact_assets())return;
     int pen=x;
     for (;*s;s++) {
         const nova_glyph *g=glyph(set,count,*s);
@@ -184,6 +208,7 @@ static void seconds(canvas *c,unsigned milliseconds) {
             blend(at(c,(unsigned)(x+dx),(unsigned)(y+dy)),0xffff,sprite[dy*22+dx]);
 }
 bool nova_watch_render(risc_display_surface_v1 *s,const nova_watch_state *state) {
+    if(!prepare_compact_assets())return false;
     if(s && s->height!=240)return home_face_render(s,state,0,home_classic_render);
     if (!s || !s->pixels || s->pixel_format!=RISC_DISPLAY_FORMAT_RGB565 ||
         s->width!=240 || s->height!=240 || s->stride_bytes<480 ||

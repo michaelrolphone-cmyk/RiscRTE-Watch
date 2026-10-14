@@ -3,12 +3,13 @@
 from pathlib import Path
 import argparse, os, subprocess
 root=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('--system-apps',type=Path,required=True);p.add_argument('--utilities',type=Path,required=True);p.add_argument('--native',action='store_true');p.add_argument('--atomic',action='store_true');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--system-apps',type=Path,required=True);p.add_argument('--utilities',type=Path,required=True);p.add_argument('--native',action='store_true');p.add_argument('--atomic',action='store_true');p.add_argument('--crash-report',action='store_true');a=p.parse_args()
 out=root/(('dist/fast-wake-clock-native' if a.native else 'dist/fast-wake-clock')+('-atomic' if a.atomic else ''));out.mkdir(parents=True,exist_ok=True)
 from merged_sdk import headers
 sdk=headers(out,a.system_apps,a.utilities,root)
 for sanitize in (False,True):
- flags=['-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_LOW_BATTERY','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_RTC_UTC8_DENVER','-O1','-g','-Wall','-Wextra','-Werror',*['-I'+str(x) for x in (sdk,root/'include',root)]]
+ flags=['-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_LOW_BATTERY','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_RTC_UTC8_DENVER','-O1','-g','-Wall','-Wextra','-Werror',*['-I'+str(x) for x in (sdk,root/'include',root)]]
+ if a.crash_report:flags += ['-DWATCH_CRASH_REPORT','-DWATCH_CRASH_REPORT_NAMESPACE=62']
  if a.atomic:flags+=['-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-I'+str(a.system_apps/'lib/PortableApps/src')]
  if a.native:flags+=['-DTEST_WIDTH=410u','-DTEST_HEIGHT=502u']
  if sanitize:flags+=['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer','-no-pie']

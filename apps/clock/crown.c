@@ -17,6 +17,9 @@ static watch_viewport clock_viewport;
 #include <stdlib.h>
 #include <string.h>
 static char sleep_status[32];
+#ifdef WATCH_CRASH_REPORT
+static bool clock_crash_modal;
+#endif
 #ifdef WATCH_FAST_WAKE
 /* Selected only by the separately qualified clock-first product build. */
 static unsigned clock_deferred_phase;
@@ -331,6 +334,9 @@ static bool present(void) {
         if (alive(&now)) {
             if ((uint32_t)(now-start)>=10000) return false;
 #ifdef WATCH_CLOCK_LAUNCHER
+#ifdef WATCH_CRASH_REPORT
+            if(!clock_crash_modal)
+#endif
             sample_launcher_touch(now,false);
 #ifdef WATCH_CONTEXTS_CLIENT
             if(clock_contexts_uncertain)return false;

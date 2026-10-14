@@ -43,6 +43,9 @@ static const face_glyph *fglyph(const face_font *font,char ch) {
 static void face_text_test(const face_font*,const char*,int,int,int,int,const uint8_t*);
 #endif
 static void ftext_alpha(canvas *c,const face_font *font,const char *s,int cx,int y,int spacing,int fit,uint16_t color,uint16_t colon,const uint8_t*alpha) {
+#ifdef WATCH_COMPACT_NOVA_ASSETS
+    if(!prepare_compact_assets())return;
+#endif
 #ifdef WATCH_FACE_TEXT_TEST
     face_text_test(font,s,cx,y,spacing,fit,alpha);
 #endif

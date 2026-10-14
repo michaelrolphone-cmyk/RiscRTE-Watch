@@ -2912,6 +2912,7 @@ static const nova_glyph nova_status_glyphs[] = {
     {69,-1,-7,7,8,1106,27575},{84,-1,-7,6,8,984,27631},
 };
 
+#ifndef WATCH_COMPACT_NOVA_ASSETS
 static const uint8_t nova_glyph_alpha[] = {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -4068,7 +4069,9 @@ static const uint8_t nova_glyph_alpha[] = {
     3,4,0,113,79,0,3,4,0,116,82,0,3,4,0,119,84,0,3,4,0,106,75,0,
     3,0,0,7,5,0,0,
 };
+#endif
 
+#ifndef WATCH_COMPACT_NOVA_ASSETS
 static const uint8_t nova_dot_alpha[] = {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -4394,6 +4397,7 @@ static const uint8_t nova_dot_alpha[] = {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 };
+#endif
 
 static const uint8_t nova_start_cap[] = {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
