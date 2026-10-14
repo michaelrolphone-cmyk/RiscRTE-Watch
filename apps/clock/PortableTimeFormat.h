@@ -1,4 +1,4 @@
-#ifdef WATCH_ATOMIC_PREFERENCES
+#if defined(WATCH_ATOMIC_PREFERENCES) || defined(WATCH_SHARED_PREFERENCE_HEADERS)
 #include <PortableTimeFormat.h>
 #else
 #pragma once

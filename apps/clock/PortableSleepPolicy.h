@@ -1,4 +1,4 @@
-#ifdef WATCH_ATOMIC_PREFERENCES
+#if defined(WATCH_ATOMIC_PREFERENCES) || defined(WATCH_SHARED_PREFERENCE_HEADERS)
 #include <PortableSleepPolicy.h>
 #else
 #ifndef PORTABLE_SLEEP_POLICY_H
