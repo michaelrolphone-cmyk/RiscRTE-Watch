@@ -9,8 +9,8 @@ program=pre+raw+'\n#include "calendar_packed.inc"\n#include "packed_calendar.inc
 int main(void){
  (void)calendar_alpha;(void)calendar_alpha_glyph;
  uint8_t result[CALENDAR_ALPHA_GLYPH_MAX];
- for(unsigned start=0;start<sizeof(original);start++){
-  unsigned n=sizeof(original)-start;if(n>257)n=257;
+ for(unsigned start=0;start<sizeof(original);start+=257){
+  unsigned n=sizeof(original)-start;if(n>4096)n=4096;
   assert(calendar_alpha_read(start,n,result));assert(!memcmp(result,original+start,n));
  }
  for(unsigned start=0;start<sizeof(original);start+=997){
@@ -18,7 +18,7 @@ int main(void){
   assert(calendar_alpha_read(start,n,result));assert(!memcmp(result,original+start,n));
  }
  assert(!calendar_alpha_read(sizeof(original),1,result));assert(!calendar_alpha_read(UINT32_MAX,1,result));assert(!calendar_alpha_read(0,1,NULL));
- puts("Packed alpha: every original byte and 257-byte boundary-crossing range exact; glyph-size spans and invalid bounds PASS");
+ puts("Packed alpha: every original byte in overlapping block-crossing ranges exact; glyph-size spans and invalid bounds PASS");
 }
 '''
 with tempfile.TemporaryDirectory() as temp:

@@ -1,17 +1,17 @@
 {
   "nova_glyph_alpha": {
     "bytes": 27679,
-    "packed_bytes": 17870,
+    "packed_bytes": 10938,
     "sha256": "9e2bd54c997f4de03e5984be51d07dc15a3ea1657893f3ec3f41deb20a9ce8c2"
   },
   "nova_dot_alpha": {
     "bytes": 7744,
-    "packed_bytes": 5045,
+    "packed_bytes": 2043,
     "sha256": "49b5a52d3b54ad731c3b3aeec3dfdd13781c2609b13eb56bd5e489db9c43bee0"
   },
   "points_alpha": {
     "bytes": 84835,
-    "packed_bytes": 60953,
+    "packed_bytes": 30796,
     "sha256": "624ceacbe47dcf0098250d2fe56c4c4798a70ec38f9f6ad50574fb2400d2d8d4"
   }
 }

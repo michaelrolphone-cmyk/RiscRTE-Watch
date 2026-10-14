@@ -3,9 +3,10 @@
   "input_sha256": "bc829687376d4452aa121d5301501bef688a14a10b20767c4724d388e2db0b64",
   "raw_alpha_sha256": "5da03c033e2175af4506c1e8185aff9ee52c9cdd03d3753fd8225f82509b663b",
   "raw_bytes": 262358,
-  "packed_bytes": 150061,
-  "index_bytes": 4104,
+  "packed_bytes": 86557,
+  "index_bytes": 264,
   "glyph_scratch_bytes": 6853,
-  "block_bytes": 256,
-  "lossless": true
+  "block_bytes": 4096,
+  "lossless": true,
+  "encoding": "raw-deflate-tinf1.2.1"
 }

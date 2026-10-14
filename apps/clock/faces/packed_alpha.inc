@@ -1,20 +1,14 @@
+#include "../../../include/AssetInflate.h"
 /* Generated atlas only. Bounded independent blocks, no heap or I/O. */
 static bool face_alpha_read(uint32_t start,uint32_t count,uint8_t *out) {
     if(!out || start>FACE_ALPHA_BYTES || count>FACE_ALPHA_BYTES-start)return false;
     while(count) {
-        unsigned block=start/256u,skip=start%256u;
-        unsigned expected=FACE_ALPHA_BYTES-block*256u;if(expected>256u)expected=256u;
+        unsigned block=start/4096u,skip=start%4096u;
+        unsigned expected=FACE_ALPHA_BYTES-block*4096u;if(expected>4096u)expected=4096u;
         uint32_t pos=face_alpha_blocks[block],end=face_alpha_blocks[block+1];
         if(pos>end || end>sizeof(face_alpha_packed))return false;
-        uint8_t decoded[256];unsigned used=0;
-        while(pos<end) {
-            unsigned tag=face_alpha_packed[pos++],n=(tag&127u)+1;
-            if(n>expected-used)return false;
-            if(tag&128u){if(pos==end)return false;memset(decoded+used,face_alpha_packed[pos++],n);}
-            else {if(n>end-pos)return false;memcpy(decoded+used,face_alpha_packed+pos,n);pos+=n;}
-            used+=n;
-        }
-        if(used!=expected)return false;
+        static uint8_t decoded[4096];unsigned used=expected;
+        if(tinf_uncompress(decoded,&used,face_alpha_packed+pos,end-pos)!=TINF_OK || used!=expected)return false;
         unsigned n=used-skip;if(n>count)n=count;
         memcpy(out,decoded+skip,n);out+=n;start+=n;count-=n;
     }

@@ -13,16 +13,11 @@ typedef struct {
 #include "assets.inc"
 #ifdef WATCH_COMPACT_NOVA_ASSETS
 #include "compact_assets.inc"
+#include "../../../include/AssetInflate.h"
 static bool compact_assets_ready;
 static bool unpack_alpha(uint8_t *out,size_t size,const uint8_t *in,size_t length) {
- size_t i=0,j=0;
- while(i<length){unsigned code=in[i++],count=(code&127u)+1u;
-  if(count>size-j)return false;
-  if(code&128u){if(i==length)return false;memset(out+j,in[i++],count);}
-  else {if(count>length-i)return false;memcpy(out+j,in+i,count);i+=count;}
-  j+=count;
- }
- return j==size;
+ unsigned actual=(unsigned)size;
+ return size<=0xffffffffu && length<=0xffffffffu && tinf_uncompress(out,&actual,in,(unsigned)length)==TINF_OK && actual==size;
 }
 static bool prepare_compact_assets(void) {
  if(compact_assets_ready)return true;

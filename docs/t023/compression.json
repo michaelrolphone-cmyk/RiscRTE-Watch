@@ -1,0 +1,16 @@
+{
+  "decoder": "tinf1.2.1 raw DEFLATE",
+  "baseline_home_bytes": 662860,
+  "candidate_home_bytes": 487720,
+  "saved_bytes": 175140,
+  "calendar_records": "same fields and values; remove only trailing padding",
+  "block_bytes": 4096,
+  "additional_static_decode_buffers": 8192,
+  "partitions_changed": false,
+  "installed_features_removed": false,
+  "hardware_tested": false,
+  "remaining": [
+    "Full product grant/feed/Springboard composition and admission",
+    "Hardware performance and sleep/wake qualification"
+  ]
+}

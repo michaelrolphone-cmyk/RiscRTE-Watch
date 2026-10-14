@@ -28,7 +28,7 @@ system_paths=['lib/PortableApps','lib/elf_loader','test/native_apps']
 utility_paths=['Apps/alarm_writer.h','lib/Alarm/include','lib/Contexts/include']
 verified_dependencies={'system':verify_dependency(S,lock['system']['commit'],system_paths),
  'utilities':verify_dependency(U,lock['utilities']['commit'],utility_paths)}
-home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py','scripts/merged_sdk.py','scripts/compact_current_elf.py',
+home_paths=['include/AssetInflate.h','lib/tinf','dependencies.lock.json','scripts/build.py','scripts/build_inputs.py','scripts/merged_sdk.py','scripts/compact_current_elf.py',
  'scripts/normalize_xtensa_relocations.py','sdk/app','sdk/driver','include/WatchViewport.h','include/WatchLayout.h',
  'include/WatchHomeLayout.h','include/WatchCapabilityClients.h','include/WatchCapabilities.h',
  'include/WatchTapPolicy.h','include/PortableMotionTap.h','include/PortablePowerStatus.h','include/PortableTapSettings.h',

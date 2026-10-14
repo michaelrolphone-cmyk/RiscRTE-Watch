@@ -48,7 +48,7 @@ for name, filename, size, chars, stroke in SETS:
 lines.append('static const uint8_t calendar_alpha[]={\n' + ',\n'.join(
     ','.join(map(str, alpha[i:i + 32])) for i in range(0, len(alpha), 32)) + '\n};')
 # Fixed annulus coverage avoids repeated line rasterization for static dial geometry.
-lines.append('typedef struct { uint16_t pixel,angle; uint8_t alpha; } fc_ring_pixel;')
+lines.append('typedef struct __attribute__((packed)) { uint16_t pixel,angle; uint8_t alpha; } fc_ring_pixel;')
 for radius, width in ((96, 7), (98, 10)):
     pixels = []
     for y in range(240):
