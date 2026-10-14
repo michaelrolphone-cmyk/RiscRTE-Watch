@@ -1,0 +1,2 @@
+Packed alpha: every original byte in overlapping block-crossing ranges exact; glyph-size spans and invalid bounds PASS
+sanitized=False elapsed_seconds=0.318

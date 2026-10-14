@@ -17,7 +17,9 @@
 #define WATCH_MOTION_WAKE
 #define WATCH_ALARM_SLEEP_RESUME
 #define WATCH_QUICK_RADIOS
+#ifndef PORTABLE_LOW_BATTERY
 #define PORTABLE_LOW_BATTERY
+#endif
 #define main inherited_quick_fixture_main
 #define WATCH_TEST_RUNTIME_EXTERN
 #include <tests/quick_clock_test.c>
@@ -96,11 +98,12 @@ static bool fast_diagnostic(const char*s){
   refused_cycles++;
  }
  if(!strncmp(s,"WATCH_WAKE stage=",17)) {
-  assert(wake_stage_count<128);unsigned now,elapsed;
-  assert(sscanf(s,"WATCH_WAKE stage=%31s t_ms=%u elapsed_ms=%u",wake_stages[wake_stage_count],&now,&elapsed)==3);
+  /* Long gesture matrices retain the last128 diagnostics; validate every row. */
+  unsigned slot=wake_stage_count++%128u,now,elapsed;
+  assert(sscanf(s,"WATCH_WAKE stage=%31s t_ms=%u elapsed_ms=%u",wake_stages[slot],&now,&elapsed)==3);
   assert(now==clock_ms&&elapsed==clock_ms-clock_wake_started);
-  wake_stage_times[wake_stage_count++]=now;
-  if(fail_marker_sample&&!strcmp(wake_stages[wake_stage_count-1],"display-begin"))fail_next_health=true;
+  wake_stage_times[slot]=now;
+  if(fail_marker_sample&&!strcmp(wake_stages[slot],"display-begin"))fail_next_health=true;
  }
  if(!strcmp(s,"WATCH_CLOCK ready crown=enabled")){ready=true;ready_time=clock_ms;}
  if(strstr(s,"stage=first-frame")){assert(!first_seen);first_seen=true;first_at=clock_ms;first_frames=submitted;
@@ -309,6 +312,7 @@ static void run_matrix(void) {
   raster_cost=raster_probes=max_poll_gap=last_poll_at=0;requested_wakes=wake;ta.poll=probe_poll;
   app_main();check_clean();
   bool correct=probe_trajectory?(probe_quick_open&&launches==0):(launches==1);
+  if(!correct)fprintf(stderr,"gesture failure wake=%u cost=%u began=%u stages=%u phase=%u time=%u last=%s\n",wake,raster_delay,probe_began,stage_calls,clock_deferred_phase,clock_ms,wake_stages[(wake_stage_count-1)%128u]);
   if(!raster_delay){assert(correct);}
   recognized+=correct;total++;
 #ifndef WATCH_RASTER_EXPECT_LOSS

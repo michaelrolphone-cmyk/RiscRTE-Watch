@@ -1,0 +1,5 @@
+render CPU total_seconds=0.007445 max_frame_seconds=0.000696
+render CPU total_seconds=0.042481 max_frame_seconds=0.005368
+compressed= False seconds= 0.3476 bytes= 7603200 sha256= ed3692321f546cc0bbf38d135d5ac27f9b60871bffe282ee3dbda2083ad4af0d
+compressed= True seconds= 0.2839 bytes= 7603200 sha256= ed3692321f546cc0bbf38d135d5ac27f9b60871bffe282ee3dbda2083ad4af0d
+Every production face: valid/unknown RTC and battery pixels exactly match raw atlases PASS; host durations are not device timings
