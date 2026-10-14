@@ -16,6 +16,8 @@
 
 #undef main
 
+static bool initial_default_entry;
+static bool fast_initial_default(void){return initial_default_entry;}
 static uint32_t boot_cause,checkpoint_result,retains,confirmations,promotions;
 static uint32_t service_acquires,first_at,service_input_polls,last_service_polls;
 static uint32_t first_frames,soft_frames,wake_began,soft_latency,input_at,input_stages;
@@ -277,9 +279,10 @@ static bool fast_launch_failure(risc_runtime_launch_failure_v1 *out){
  strcpy(out->application,"optional-app.elf");strcpy(out->detail,"media absent or invalid");
  launch_failure_kind=0;return true;
 }
-static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure};
+static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
+ initial_default_entry=false;
  launch_failure_kind=launch_failure_reads=0;
  key_trace_count=key_acquire_cost=startup_events=0;repeated_hold=trace_manual=trace_discard=trace_long=false;
  (void)runtime;
@@ -513,6 +516,13 @@ static int regression_main(void){
 }
 
 int main(void){
+ for(unsigned cause=0;cause<=RISC_BOOT_DEEP_OTHER;cause++) {
+  reset_case();initial_default_entry=true;boot_cause=cause;app_main();check_clean();
+  if(cause<RISC_BOOT_DEEP_TIMER){assert(first_seen&&first_frames>10&&first_at>2000);}
+  else {assert(first_seen&&first_frames==1&&first_at==95);}
+ }
+ puts("Cold first-default intro; deep wake and subsequent Home remain fast PASS");
+
  regression_main();
  for(unsigned kind=1;kind<=2;kind++){
   reset_case();launch_failure_kind=kind;app_main();check_clean();

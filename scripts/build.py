@@ -24,7 +24,7 @@ system_paths=['lib/PortableApps','lib/elf_loader','test/native_apps']
 utility_paths=['lib/Alarm/include','lib/Contexts/include']
 verified_dependencies={'system':verify_dependency(S,lock['system']['commit'],system_paths),
  'utilities':verify_dependency(U,lock['utilities']['commit'],utility_paths)}
-home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py','scripts/compact_current_elf.py',
+home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py','scripts/merged_sdk.py','scripts/compact_current_elf.py',
  'scripts/normalize_xtensa_relocations.py','sdk/app','sdk/driver','include/WatchViewport.h','include/WatchLayout.h',
  'include/WatchHomeLayout.h','include/WatchCapabilityClients.h','include/WatchCapabilities.h',
  'include/WatchTapPolicy.h','include/PortableMotionTap.h','include/PortablePowerStatus.h','include/PortableTapSettings.h',
@@ -41,7 +41,8 @@ home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py
 home_inputs=file_manifest(ROOT,home_paths)
 compiler=subprocess.check_output([a.cc,'--version'],text=True).splitlines()[0]
 if '8.4.0' not in compiler:raise RuntimeError('Expected the deployed ESP32-S3 GCC 8.4.0 toolchain')
-includes=[S/'lib/PortableApps/include',U/'lib/Alarm/include',U/'lib/Contexts/include',ROOT/'sdk/app',ROOT/'sdk/driver',ROOT/'include']
+from merged_sdk import headers
+includes=[headers(out,S,U,ROOT),ROOT/'include']
 incs=['-I'+str(x) for x in includes]
 common=['-Os','-fPIC','-mtext-section-literals','-mlongcalls','-fvisibility=hidden','-ffreestanding','-fno-builtin','-Wall','-Wextra','-Werror','-ffunction-sections','-fdata-sections']
 effect=out/'boot-effect.o'
