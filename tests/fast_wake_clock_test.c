@@ -18,6 +18,45 @@
 
 #undef main
 
+
+#ifdef WATCH_CRASH_REPORT
+static unsigned fixture_crash_mode,fixture_crash_pages,fixture_crash_acks;
+static uint8_t fixture_crash_bytes[CRASH_REPORT_SPOOL_FILE_MAX];
+static uint32_t fixture_crash_size;static uint64_t fixture_crash_revision;
+static int32_t fixture_crash_stat(void*c,const char*n,uint32_t*z,uint64_t*r){
+ (void)c;assert(!strcmp(n,CRASH_REPORT_SPOOL_FILE));*z=fixture_crash_size;*r=fixture_crash_revision;
+ if(fixture_crash_mode==2)return RISC_APP_DATA_UNAVAILABLE;
+ return *z?RISC_APP_DATA_OK:RISC_APP_DATA_NOT_FOUND;
+}
+static int32_t fixture_crash_read(void*c,const char*n,uint64_t rev,void*b,uint32_t cap,uint32_t*z,uint64_t*r){
+ (void)c;assert(!strcmp(n,CRASH_REPORT_SPOOL_FILE)&&rev==fixture_crash_revision&&cap>=fixture_crash_size);
+ *z=fixture_crash_size;*r=fixture_crash_revision;memcpy(b,fixture_crash_bytes,*z);return RISC_APP_DATA_OK;
+}
+static int32_t fixture_crash_write(void*c,const char*n,uint64_t rev,const void*b,uint32_t z){
+ (void)c;assert(!strcmp(n,CRASH_REPORT_SPOOL_FILE)&&rev==fixture_crash_revision&&z<=sizeof(fixture_crash_bytes));
+ memcpy(fixture_crash_bytes,b,z);fixture_crash_size=z;++fixture_crash_revision;return RISC_APP_DATA_OK;
+}
+static const risc_app_data_v1 fixture_crash_api={1,sizeof(fixture_crash_api),NULL,fixture_crash_stat,fixture_crash_read,fixture_crash_write};
+static int32_t fixture_crash_evidence(uint64_t token,risc_failure_evidence_v1 *r){
+ assert(token==41);if(!fixture_crash_mode)return RISC_FAILURE_EVIDENCE_NONE;
+ *r=(risc_failure_evidence_v1){.api_version=1,.struct_size=sizeof(*r),.record_boot=7,.record_sequence=11,.kind=RISC_FAILURE_NATIVE_PANIC,.flags=RISC_FAILURE_PENDING|RISC_FAILURE_CONTEXT|RISC_FAILURE_REGISTERS,.history_count=8,.frame_count=8,.stack_status=RISC_FAILURE_STACK_LIMIT};
+ strcpy(r->application,"apps/example.elf");strcpy(r->detail,"Crash report paging and durable acknowledgement fixture");
+ for(unsigned i=0;i<8;i++){r->history[i]=(risc_failure_step_v1){i+1,RISC_FAILURE_PHASE_MAIN,101+i};r->frames[i]=(risc_failure_frame_v1){0x42010000+i*32,0x3fca0000+i*64};}
+ return RISC_FAILURE_EVIDENCE_OK;
+}
+static int32_t fixture_crash_ack(uint64_t token,uint32_t boot,uint32_t sequence){
+ assert(token==41&&boot==7&&sequence==11&&fixture_crash_pages>1);
+ assert(clock_crash.presented&&clock_crash.committed&&!held&&!pending&&!owned&&last_complete==submitted);
+ crash_report_spool disk={0};disk.size=fixture_crash_size;memcpy(disk.bytes,fixture_crash_bytes,disk.size);
+ assert(crash_report_spool_validate(&disk)==CRASH_REPORT_SPOOL_OK);crash_report_spool_view report;
+ assert(crash_report_spool_peek(&disk,0,&report)==CRASH_REPORT_SPOOL_OK);
+ assert(report.text_size==clock_crash.text_size&&!memcmp(report.text,clock_crash.text,report.text_size));
+ ++fixture_crash_acks;return RISC_FAILURE_EVIDENCE_OK;
+}
+static bool fixture_crash_client(risc_failure_evidence_client_v1*out){*out=(risc_failure_evidence_client_v1){1,sizeof(*out),41,fixture_crash_evidence,fixture_crash_ack};return true;}
+#else
+#define fixture_crash_mode 0
+#endif
 static bool initial_default_entry;
 static bool fast_initial_default(void){return initial_default_entry;}
 static uint32_t boot_cause,checkpoint_result,retains,confirmations,promotions;
@@ -92,6 +131,10 @@ static bool fast_retain(void){retains++;retained_fence=true;return true;}
 static bool fast_confirm(void){check_io();assert(!queued_context_handoff);confirmations++;if(service_acquires<4)confirmed_early=true;return true;}
 static bool fast_health(risc_runtime_health_v1*h){check_io();h->uptime_ms=clock_ms;if(fail_next_health){fail_next_health=false;return false;}return !ended&&clock_ms<30000u;}
 static bool fast_diagnostic(const char*s){
+#ifdef WATCH_CRASH_REPORT
+ if(fixture_crash_mode&&!strcmp(s,"WATCH_WAKE stage=crash-report-end"))ended=true;
+ if(fixture_crash_mode&&strstr(s,"stage=crash-report-end "))ended=true;
+#endif
  if(!strncmp(s,"WATCH_KEY ",10)){
   assert(++key_trace_count<=24);
   if(!strcmp(s,"WATCH_KEY decision=manual-sleep"))trace_manual=true;
@@ -140,13 +183,16 @@ static bool fast_diagnostic(const char*s){
  if(strstr(s,"stage=radios-begin")){radio_at=clock_ms;assert(input_stages>0);if(wake_count)assert(resume_input_at>=wake_began);assert(frame_at>=(wake_count?wake_began:first_at));}
  if(strstr(s,"stage=broadcast-begin"))broadcast_at=clock_ms;
  if(strstr(s,"stage=contexts-begin"))contexts_at=clock_ms;
- if(strstr(s,"stage=services-ready")){stage_calls++;if(wake_count+refused_cycles==requested_wakes&&!early_launch&&!wait_rtc_recovery)ended=true;}
+ if(strstr(s,"stage=services-ready")){stage_calls++;if(wake_count+refused_cycles==requested_wakes&&!early_launch&&!wait_rtc_recovery&&!fixture_crash_mode)ended=true;}
  return true;
 }
 static bool fast_status(void*c,uint64_t token,risc_display_present_status_v1*out){
  check_io();(void)c;assert(token==submitted&&pending);
  if(swipe_during_frame&&first_seen&&submitted==2&&clock_ms-frame_started>=10&&!swipe_latched){launcher_swipe_pending=true;swipe_latched=true;swipe_time=clock_ms;}
  if(clock_ms-frame_started<transfer_cost){out->state=RISC_DISPLAY_PRESENT_ACTIVE;return true;}
+#ifdef WATCH_CRASH_REPORT
+ if(clock_crash_modal&&fixture_crash_mode){++fixture_crash_pages;if(fixture_crash_mode==3)fail_display=true;}
+#endif
  pending=false;out->state=fail_display?RISC_DISPLAY_PRESENT_FAILED:RISC_DISPLAY_PRESENT_COMPLETE;
  if(!fail_display){memcpy(completed_pixels,pixels,sizeof(pixels));last_complete=submitted;frame_at=clock_ms;if(clock_alarm_modal)alarm_frames++;
   if(wait_rtc_recovery&&first_seen&&!clock_rtc_reconcile_pending&&face.time_valid&&!sleep_status[0])ended=true;
@@ -167,6 +213,9 @@ static bool fast_brightness(void*c,uint16_t level,uint16_t maximum) {
  check_io();return !(level&&fail_unblank)&&brightness(c,level,maximum);
 }
 static bool fast_key(void*c,uint32_t*out){check_io();(void)c;*out=0;
+#ifdef WATCH_CRASH_REPORT
+ if(clock_crash_modal&&fixture_crash_mode){*out=1;return true;}
+#endif
  if(startup_events){*out=startup_events;startup_events=0;return true;}
  if(repeated_hold&&ready&&clock_ms-ready_time>300){*out=1;return true;}
  if(crown_before_alarm&&ready&&!alarm_acquires){*out=2;crown_before_alarm=false;prealarm_crown_events++;}
@@ -222,6 +271,9 @@ static const portable_bluetooth_control_v1 fast_ble;
 static const risc_key_value_v1 fast_kv;
 static bool fast_acquire(const char*n,uint32_t version,uint64_t instance,risc_runtime_capability_v1*g){
  check_io();
+#ifdef WATCH_CRASH_REPORT
+ if(fixture_crash_mode&&!strcmp(n,RISC_APP_DATA_CAPABILITY)){assert(instance==WATCH_CRASH_REPORT_NAMESPACE);g->api=&fixture_crash_api;++grants;return true;}
+#endif
  if(sleep_failure_armed&&((fail_sleep_acquire==1&&!strcmp(n,RISC_KEY_VALUE_CAPABILITY)&&instance==1)||
     (fail_sleep_acquire==2&&!strcmp(n,TWATCH_MOTION_CAPABILITY)&&instance==0))){
   assert(!hardware_brightness&&!touch.subscription&&!pending&&!owned&&!broadcast_live&&!contexts_live);
@@ -259,7 +311,11 @@ static bool fast_acquire(const char*n,uint32_t version,uint64_t instance,risc_ru
  if(acquired&&g->api==&face_kv)g->api=&fast_kv;
  return acquired;
 }
-static bool fast_release(risc_runtime_capability_v1*g){check_io();if(fail_release&&g->api==&context_api){fail_release=false;return false;}return release_cap(g);}
+static bool fast_release(risc_runtime_capability_v1*g){check_io();
+#ifdef WATCH_CRASH_REPORT
+ if(g->api==&fixture_crash_api){++ungrants;g->api=NULL;return true;}
+#endif
+if(fail_release&&g->api==&context_api){fail_release=false;return false;}return release_cap(g);}
 static bool fast_launch(const char*path){check_io();assert(!held&&!pending);
  if(expect_context_handoff){assert(!strcmp(path,"waterfall.elf")&&!queued_context_handoff);queued_context_handoff=true;}
  else{assert(!strcmp(path,"springboard.elf")&&!touch.subscription);ended=true;}
@@ -281,9 +337,16 @@ static bool fast_launch_failure(risc_runtime_launch_failure_v1 *out){
  strcpy(out->application,"optional-app.elf");strcpy(out->detail,"media absent or invalid");
  launch_failure_kind=0;return true;
 }
-static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
+static const risc_runtime_api_v1 fast_runtime={
+#ifdef WATCH_CRASH_REPORT
+.failure_evidence=fixture_crash_client,
+#endif
+.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
+#ifdef WATCH_CRASH_REPORT
+ fixture_crash_mode=fixture_crash_pages=fixture_crash_acks=fixture_crash_size=0;fixture_crash_revision=0;clock_crash_modal=false;
+#endif
 #ifdef WATCH_ATOMIC_PREFERENCES
  clock_atomic_retained=false;clock_quick_scope=false;quick_atomic_running=false;
  quick_atomic_grant=(risc_runtime_capability_v1){0};quick_atomic_edit=(portable_preference_atomic){0};quick_atomic_discard();
@@ -566,5 +629,13 @@ int main(void){
  unsigned unchanged_frames=submitted;for(unsigned i=0;i<100;i++)clock_key_trace("WATCH_KEY test=budget");assert(key_trace_count==24&&submitted==unchanged_frames);
  puts("Bounded key trace: delayed key acquisition, fresh Home after stale short/long gesture, held-input suppression, manual sleep,24-message cap and unchanged cleanup PASS");
  puts("Sleep diagnostics: real Home blank brightness/acquire failure injection, absent key/power/panel capability, exact stage and unchanged cleanup PASS");
+#ifdef WATCH_CRASH_REPORT
+ for(unsigned mode=1;mode<=3;++mode){
+  reset_case();fixture_crash_mode=mode;app_main();check_clean();
+  assert(fixture_crash_pages>=(mode==3?1u:2u));assert(fixture_crash_acks==(mode==1));
+  assert(clock_crash.committed==(mode!=2));assert(clock_crash.presented==(mode!=3));
+ }
+ puts("Actual crash modal PASS: all pages complete before ack; exact displayed/spooled bytes; unavailable storage and failed presentation preserve native evidence");
+#endif
  return 0;
 }
