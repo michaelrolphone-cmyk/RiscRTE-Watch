@@ -16,6 +16,8 @@ for name in ('system','utilities'):p.add_argument('--'+name,type=Path,required=T
 p.add_argument('--output',type=Path,default=ROOT/'dist')
 p.add_argument('--cc',default=os.environ.get('WATCH_APP_CC') or shutil.which('xtensa-esp32s3-elf-gcc'))
 p.add_argument('--role',choices=['default','clock','both'],default='both')
+p.add_argument('--automatic-provision',action='store_true',help='Explicit foreground core-profile reconciliation')
+p.add_argument('--provision-volume',type=int,help='Optional SD package volume; omitted means internal-only')
 p.add_argument('--crash-volume',type=int,help='Optional product SD instance; omission keeps internal reports')
 p.add_argument('--preferences',choices=['atomic','nvs'],default='atomic',help='Select copied atomic preferences or the deployed synchronous NVS capability')
 a=p.parse_args()
@@ -32,7 +34,7 @@ home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py
  'include/WatchTapPolicy.h','include/PortableMotionTap.h','include/PortablePowerStatus.h','include/PortableTapSettings.h',
  'include/twatch_calendar.h','include/twatch_caps.h','include/twatch_power.h','include/twatch_util.h',
  'apps/runtime_features/clock_runtime.h','apps/runtime_features/sdk',
- 'apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
+ 'apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
  'apps/clock/points_projection.c','apps/clock/points_projection.h','apps/clock/points_compat.h',
  'apps/clock/nova','apps/clock/faces','apps/clock/transitions','apps/clock/effects/boot.cpp',
  'apps/clock/effects/effects.h','apps/clock/effects/divdi3.c','apps/clock/clock_alarm.inc',
@@ -50,12 +52,16 @@ common=['-Os','-fPIC','-mtext-section-literals','-mlongcalls','-fvisibility=hidd
 effect=out/'boot-effect.o'
 subprocess.run([a.cc.removesuffix('gcc')+'g++','-std=c++11',*common,'-fno-exceptions','-fno-rtti','-fno-threadsafe-statics',*incs,'-c',str(ROOT/'apps/clock/effects/boot.cpp'),'-o',str(effect)],check=True)
 sources=[ROOT/'apps/clock/crown.c',ROOT/'apps/clock/viewport.c',ROOT/'apps/clock/capability_clients.c',ROOT/'apps/clock/quick_radios.c',ROOT/'apps/clock/nova/nova.c',ROOT/'apps/clock/points_projection.c',ROOT/'apps/clock/effects/divdi3.c',*[S/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')],effect]
+if a.automatic_provision:sources += [S/'lib/PortableApps/src/PortableAutomaticProvision.c',S/'lib/PortableApps/src/PortableNetworkSession.c']
 validator=out/'validate-elf'
 subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Wextra','-Werror','-I'+str(S/'test/native_apps/stubs'),'-I'+str(S/'lib/elf_loader/include'),str(S/'lib/elf_loader/src/esp_elf_validate.c'),str(S/'test/native_apps/validate_test.c'),'-o',str(validator)],check=True)
-records={'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':a.preferences,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
+records={'automatic_provision':a.automatic_provision,'provision_volume':a.provision_volume,'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':a.preferences,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
 for role in ['default','clock'] if a.role=='both' else [a.role]:
  target=out/(role+'.elf');mapping=out/(role+'.map');mapping.write_text('{ global: app_main; local: *; };\n')
  flags=[f for f in FLAGS if a.preferences=='atomic' or f not in ('-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES')] if role=='default' else []
+ if role=='default' and a.automatic_provision:
+  flags.append('-DWATCH_AUTOMATIC_PROVISION')
+  if a.provision_volume is not None:flags.append('-DWATCH_PROVISION_VOLUME='+str(a.provision_volume))
  if role=='default' and a.crash_volume is not None:flags.append('-DWATCH_CRASH_REPORT_VOLUME='+str(a.crash_volume))
  role_sources=sources if role=='default' else [ROOT/'apps/clock/return_to_default.c']
  command=[a.cc,'-std=c11',*common,'-nostdlib','-nostartfiles','-shared','-Wl,--gc-sections','-Wl,--no-relax','-Wl,--hash-style=sysv','-Wl,--version-script='+str(mapping),*flags,*incs,*map(str,role_sources),'-lgcc','-o',str(target)]
@@ -72,7 +78,8 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.15.4'
+  manifest['version']='0.15.5' if a.automatic_provision else '0.15.4'
+  if a.automatic_provision:manifest['requires'].append({'capability':'software.installed-apps','api':1})
   manifest['requires'].append({'capability':'storage.app-data','api':1})
   if a.crash_volume is not None:manifest['requires'].append({'capability':'storage.volume','api':1})
  if a.preferences=='nvs':manifest['requires']=[r for r in manifest.get('requires',[]) if r['capability']!='storage.key-value.atomic']

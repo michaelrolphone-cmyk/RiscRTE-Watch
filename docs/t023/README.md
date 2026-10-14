@@ -1,0 +1,5 @@
+# Automatic provisioning Home integration
+
+Explicit build option `--automatic-provision` selects Home0.15.5 and the pinned System foreground controller. Optional `--provision-volume` supplies SD; omission permits internal discovery. Core profile reconciliation follows first-frame and deferred service startup, respects saved Wi-Fi/airplane policy and reconciled RTC, pauses Contexts/broadcast while owning package work, and drains work before sleep or handoff. Existing builds remain opt-out.
+
+Actual Home tests pass normal and sanitized for native-height atomic and240px NVS variants. Attached logs cover first-frame ordering, no-SD discovery, radio fence, background pause/resume, crash presentation and RTC/sleep/wake regressions. Network transport and interrupted installs are separately qualified in pinned System tests. Product native support, feed/grants, target admission and hardware validation are pending; this source checkpoint is not a qualified firmware release.

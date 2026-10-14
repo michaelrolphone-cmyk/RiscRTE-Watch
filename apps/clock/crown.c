@@ -19,6 +19,10 @@ static watch_viewport clock_viewport;
 static char sleep_status[32];
 #ifdef WATCH_CRASH_REPORT
 static bool clock_crash_modal;
+#ifdef WATCH_AUTOMATIC_PROVISION
+static bool clock_provision_initialized,clock_provision_busy;
+static bool clock_provision_close(void);
+#endif
 #endif
 #ifdef WATCH_FAST_WAKE
 /* Selected only by the separately qualified clock-first product build. */
@@ -51,6 +55,9 @@ static bool clock_contexts_uncertain,clock_contexts_handoff;
 static char clock_context_message[33];
 static bool clock_contexts_capture_checkpoint(void *context) {
     (void)context;
+#ifdef WATCH_AUTOMATIC_PROVISION
+    if(clock_provision_busy)return true;
+#endif
     if(clock_contexts_uncertain)return false;
 #ifdef WATCH_RUNTIME_FEATURES
     if(native_clock.halted)return false;
@@ -105,6 +112,9 @@ static bool clock_broadcast_pause(void) {
 #endif
 #if defined(WATCH_CONTEXTS_CLIENT) || defined(WATCH_BLE_BROADCAST)
 static bool clock_background_pause(void) {
+#ifdef WATCH_AUTOMATIC_PROVISION
+    if(!clock_provision_close())return false;
+#endif
 #ifdef WATCH_CONTEXTS_CLIENT
     if(!clock_contexts_pause())return false;
 #endif
@@ -926,7 +936,11 @@ static void clock_launch_feedback(void) {
     rt->diagnostic(failure.application);rt->diagnostic(failure.detail);
 }
 #include "clock_crash.inc"
+#include "clock_provision.inc"
 __attribute__((visibility("default"))) void app_main(void) {
+#ifdef WATCH_AUTOMATIC_PROVISION
+    clock_provision_initialized=clock_provision_busy=false;
+#endif
     sleep_status[0]=0;clock_key_trace_left=24;rt=risc_runtime_get_api(1);
 #ifdef WATCH_FAST_WAKE
     clock_deferred_phase=0;clock_radios_pending=true;clock_input_reported=false;clock_wake_started=0;
@@ -1177,6 +1191,9 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef WATCH_CRASH_REPORT
     clock_crash_init();
 #endif
+#ifdef WATCH_AUTOMATIC_PROVISION
+    clock_provision_init();
+#endif
     rt->diagnostic("WATCH_CLOCK ready crown=enabled");
 #if defined(WATCH_CONTEXTS_CLIENT) && !defined(WATCH_FAST_WAKE)
     if(!clock_contexts_recover_export())goto done;
@@ -1289,6 +1306,9 @@ __attribute__((visibility("default"))) void app_main(void) {
         uint32_t quick_actions=pqa_take_action(&clock_quick.ui);bool volume_changed=false;
 #endif
 #ifdef WATCH_CONTEXTS_CLIENT
+#ifdef WATCH_AUTOMATIC_PROVISION
+        if(quick_actions&&!clock_provision_close())return;
+#endif
         if(quick_actions&&!clock_contexts_pause())return;
 #endif
         if(!pqa_session_apply(&clock_quick,rt,display,quick_actions,&volume_changed))break;
@@ -1311,6 +1331,9 @@ __attribute__((visibility("default"))) void app_main(void) {
         if(!clock_quick.ui.radio_controls && (quick_actions&PQA_WIFI)) {
             pqa_cancel(&clock_quick.ui);
             if(!pqa_session_restore(&clock_quick,display) || !launcher_touch_close(&touch))break;
+#ifdef WATCH_AUTOMATIC_PROVISION
+            if(!clock_provision_close())break;
+#endif
             if(rt->request_launch("wifi_settings.elf")) {
 #ifdef WATCH_BLE_BROADCAST
                 clock_handoff=true;
@@ -1366,6 +1389,9 @@ __attribute__((visibility("default"))) void app_main(void) {
              * Incoming Springboard owns the single blur/crossfade and adopts
              * the still-held contact as drag-only; never fade through black. */
             if(!launcher_touch_close(&touch)) break;
+#ifdef WATCH_AUTOMATIC_PROVISION
+            if(!clock_provision_close())break;
+#endif
             if(rt->request_launch("springboard.elf")) {
 #ifdef WATCH_BLE_BROADCAST
                 clock_handoff=true;
@@ -1441,12 +1467,18 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef WATCH_CRASH_REPORT
         if(!clock_crash_step())break;
 #endif
+#ifdef WATCH_AUTOMATIC_PROVISION
+        if(!clock_provision_step(now))break;
+#endif
 #ifdef WATCH_CONTEXTS_CLIENT
         if(clock_contexts_handoff)break;
 #endif
 #endif
     }
 done:
+#ifdef WATCH_AUTOMATIC_PROVISION
+    if(!clock_provision_close())return;
+#endif
 #ifdef WATCH_ATOMIC_PREFERENCES
     if(!clock_atomic_finish())return;
 #endif

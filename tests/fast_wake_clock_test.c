@@ -19,6 +19,23 @@
 #undef main
 
 
+#ifdef WATCH_AUTOMATIC_PROVISION
+static unsigned fixture_provision_mode,fixture_provision_scans;
+static int fp_refresh(void*p){(void)p;assert(clock_provision_busy);return 0;}
+static int fp_step(void*p,const risc_storage_volume_api_v1*v){(void)p;assert(!v&&clock_provision_busy&&!clock_contexts_started&&!clock_broadcast_started);return ++fixture_provision_scans<5?INSTALLED_APPS_WORKING:INSTALLED_APPS_OK;}
+static int fp_cancel(void*p){(void)p;return 0;}
+static int fp_begin(void*p,const char*s,uint64_t t){(void)p;(void)s;(void)t;assert(false);return 0;}
+static int fp_feed(void*p,uint64_t t){(void)p;(void)t;return 0;}
+static int fp_install(void*p,uint32_t i,uint32_t g){(void)p;(void)i;(void)g;return 0;}
+static int fp_descriptor(void*p,const char*s){(void)p;(void)s;return 0;}
+static uint32_t fp_count(void*p){(void)p;return 0;}
+static bool fp_get(void*p,uint32_t i,installed_app_v1*out){(void)p;(void)i;(void)out;return false;}
+static const installed_apps_automatic_v1 fixture_provision_api={
+ .base={.base={.base={.api_version=1,.struct_size=sizeof(fixture_provision_api),.refresh=fp_refresh,.step=fp_step,.cancel=fp_cancel},.provision_tag=INSTALLED_APPS_PROVISION_TAG,.provision_version=1,.install_descriptor=fp_descriptor},.feed_tag=INSTALLED_APPS_FEED_TAG,.feed_version=1,.refresh=fp_feed,.step=fp_cancel,.cancel=fp_cancel,.generation=fp_count,.count=fp_count,.get=fp_get,.install=fp_install},.automatic_tag=INSTALLED_APPS_AUTOMATIC_TAG,.automatic_version=1,.begin=fp_begin,.step=fp_step,.cancel=fp_cancel};
+#else
+#define fixture_provision_mode 0
+#endif
+
 #ifdef WATCH_CRASH_REPORT
 static unsigned fixture_crash_mode,fixture_crash_pages,fixture_crash_acks;
 static uint8_t fixture_crash_bytes[CRASH_REPORT_SPOOL_FILE_MAX];
@@ -183,7 +200,7 @@ static bool fast_diagnostic(const char*s){
  if(strstr(s,"stage=radios-begin")){radio_at=clock_ms;assert(input_stages>0);if(wake_count)assert(resume_input_at>=wake_began);assert(frame_at>=(wake_count?wake_began:first_at));}
  if(strstr(s,"stage=broadcast-begin"))broadcast_at=clock_ms;
  if(strstr(s,"stage=contexts-begin"))contexts_at=clock_ms;
- if(strstr(s,"stage=services-ready")){stage_calls++;if(wake_count+refused_cycles==requested_wakes&&!early_launch&&!wait_rtc_recovery&&!fixture_crash_mode)ended=true;}
+ if(strstr(s,"stage=services-ready")){stage_calls++;if(wake_count+refused_cycles==requested_wakes&&!early_launch&&!wait_rtc_recovery&&!fixture_crash_mode&&(!fixture_provision_mode||stage_calls>=2))ended=true;}
  return true;
 }
 static bool fast_status(void*c,uint64_t token,risc_display_present_status_v1*out){
@@ -271,6 +288,10 @@ static const portable_bluetooth_control_v1 fast_ble;
 static const risc_key_value_v1 fast_kv;
 static bool fast_acquire(const char*n,uint32_t version,uint64_t instance,risc_runtime_capability_v1*g){
  check_io();
+#ifdef WATCH_AUTOMATIC_PROVISION
+ if(!strcmp(n,INSTALLED_APPS_CAPABILITY)){assert(first_seen&&clock_deferred_phase==4);if(!fixture_provision_mode)return false;g->api=&fixture_provision_api;++grants;return true;}
+ if(fixture_provision_mode&&!strcmp(n,"storage.volume"))return false;
+#endif
 #ifdef WATCH_CRASH_REPORT
  if(fixture_crash_mode&&!strcmp(n,RISC_APP_DATA_CAPABILITY)){assert(instance==WATCH_CRASH_REPORT_NAMESPACE);g->api=&fixture_crash_api;++grants;return true;}
 #endif
@@ -344,6 +365,9 @@ static const risc_runtime_api_v1 fast_runtime={
 .api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
+#ifdef WATCH_AUTOMATIC_PROVISION
+ fixture_provision_mode=fixture_provision_scans=0;
+#endif
 #ifdef WATCH_CRASH_REPORT
  fixture_crash_mode=fixture_crash_pages=fixture_crash_acks=fixture_crash_size=0;fixture_crash_revision=0;clock_crash_modal=false;
 #endif
@@ -636,6 +660,11 @@ int main(void){
   assert(clock_crash.committed==(mode!=2));assert(clock_crash.presented==(mode!=3));
  }
  puts("Actual crash modal PASS: all pages complete before ack; exact displayed/spooled bytes; unavailable storage and failed presentation preserve native evidence");
+#endif
+#ifdef WATCH_AUTOMATIC_PROVISION
+ reset_case();fixture_provision_mode=1;saved_radio(0);app_main();check_clean();
+ assert(fixture_provision_scans==5&&stage_calls==2&&broadcast_starts==2&&contexts_starts==2&&!clock_provision_busy);
+ puts("Actual Home provisioning: first-frame admission, missing SD internal scan, saved-radio fence, paused Contexts/broadcast, resumed service phases and clean teardown PASS");
 #endif
  return 0;
 }
