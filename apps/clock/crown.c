@@ -445,7 +445,7 @@ static bool pace_frame(uint32_t began) {
 #endif
     return true;
 }
-#ifndef WATCH_FAST_WAKE
+#if !defined(WATCH_FAST_WAKE) || defined(WATCH_COLD_BOOT_ANIMATION)
 static bool hold_boot_frame(void) {
     uint32_t start,now;
     if (!alive(&start)) return false;
@@ -590,7 +590,7 @@ static bool clock_low_battery_poll(uint32_t now) {
     rt->diagnostic(result&PORTABLE_LOW_BATTERY_ERROR?"LOW_BATTERY crossing=partial-once":"LOW_BATTERY crossing=applied-once");return true;
 }
 #endif
-#ifndef WATCH_FAST_WAKE
+#if !defined(WATCH_FAST_WAKE) || defined(WATCH_COLD_BOOT_ANIMATION)
 static bool startup(void) {
     uint32_t start,now;
     if (!alive(&start)) return false;
@@ -1094,6 +1094,12 @@ __attribute__((visibility("default"))) void app_main(void) {
         !return_to_clock() ||
 #else
 #ifdef WATCH_FAST_WAKE
+#if defined(WATCH_COLD_BOOT_ANIMATION) && defined(WATCH_RUNTIME_FEATURES)
+        /* The runtime identifies first Home entry; retained-wake identifies
+         * cold vs deep boot. Never replay the intro on child return. */
+        ((rt->struct_size>=RISC_RUNTIME_INITIAL_DEFAULT_V1_SIZE && rt->initial_default &&
+          rt->initial_default() && native_clock.cause<RISC_BOOT_DEEP_TIMER) && !startup()) ||
+#endif
         !resume_from_deep() ||
 #elif defined(WATCH_RUNTIME_FEATURES)
         !(native_clock.resume?resume_from_deep():startup()) ||
