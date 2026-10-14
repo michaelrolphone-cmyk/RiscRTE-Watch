@@ -2,7 +2,9 @@
 /* Calendar + Time: exact owner-supplied layouts with wall-clock date arithmetic.
  * The RTC is already converted by the existing deployment. No host clock,
  * timezone conversion, calendar service, synthetic appointment, or allocation. */
+#ifndef WATCH_COMPRESSED_CALENDAR_ALPHA
 #include "calendar_assets.inc"
+#endif
 #define FC_TEXT(c,font,s,x,y,spacing,fit,color) ftext_alpha(c,&fc_f_##font,s,x,y,spacing,fit,color,0,calendar_alpha)
 #define FC_CAP FC(107,130,136)
 #define FC_PALE FC(207,233,238)

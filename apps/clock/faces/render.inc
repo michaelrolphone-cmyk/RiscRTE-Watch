@@ -19,6 +19,10 @@ typedef struct { const face_glyph *glyphs; unsigned count; } face_font;
 #else
 #include "assets_text.inc"
 #endif
+#ifdef WATCH_COMPRESSED_CALENDAR_ALPHA
+#include "calendar_packed.inc"
+#include "packed_calendar.inc"
+#endif
 #define FC(r,g,b) ((((r)>>3)<<11)|(((g)>>2)<<5)|((b)>>3))
 #define FWHITE 0xffffu
 #define FCYAN FC(25,227,255)
@@ -55,6 +59,13 @@ static void ftext_alpha(canvas *c,const face_font *font,const char *s,int cx,int
             unsigned count=(unsigned)g->width*g->height;
             if(count>sizeof(face_alpha_glyph) || !face_alpha_read(g->data,count,face_alpha_glyph))return;
             glyph_alpha=face_alpha_glyph;
+        } else
+#endif
+#ifdef WATCH_COMPRESSED_CALENDAR_ALPHA
+        if(alpha==calendar_alpha) {
+            unsigned count=(unsigned)g->width*g->height;
+            if(count>sizeof(calendar_alpha_glyph) || !calendar_alpha_read(g->data,count,calendar_alpha_glyph))return;
+            glyph_alpha=calendar_alpha_glyph;
         } else
 #endif
         glyph_alpha=alpha+g->data;

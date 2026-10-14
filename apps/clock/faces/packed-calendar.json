@@ -1,0 +1,11 @@
+{
+  "input": "calendar_assets.inc",
+  "input_sha256": "331c0f8205b547136772a63b82312e93401b7aef39b0224dfbbb2c5ed1d90821",
+  "raw_alpha_sha256": "4e4bcffdb5fc03f0addb2f6bc4b9b05bc6fa9bc9c32c09a939ccaae5796152f0",
+  "raw_bytes": 239208,
+  "packed_bytes": 116623,
+  "index_bytes": 3744,
+  "glyph_scratch_bytes": 9858,
+  "block_bytes": 256,
+  "lossless": true
+}
