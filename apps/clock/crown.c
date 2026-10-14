@@ -919,6 +919,7 @@ static void clock_launch_feedback(void) {
     rt->diagnostic("WATCH_CLOCK launch=failed action=visible-status");
     rt->diagnostic(failure.application);rt->diagnostic(failure.detail);
 }
+#include "clock_crash.inc"
 __attribute__((visibility("default"))) void app_main(void) {
     sleep_status[0]=0;clock_key_trace_left=24;rt=risc_runtime_get_api(1);
 #ifdef WATCH_FAST_WAKE
@@ -1166,6 +1167,9 @@ __attribute__((visibility("default"))) void app_main(void) {
 #endif
 #ifdef WATCH_FAST_WAKE
     if(!alive(&now))goto done;
+#endif
+#ifdef WATCH_CRASH_REPORT
+    clock_crash_init();
 #endif
     rt->diagnostic("WATCH_CLOCK ready crown=enabled");
 #if defined(WATCH_CONTEXTS_CLIENT) && !defined(WATCH_FAST_WAKE)
@@ -1428,6 +1432,9 @@ __attribute__((visibility("default"))) void app_main(void) {
         if(launcher_swipe_pending)continue;
 #endif
         if(!alive(&now) || !clock_deferred_step(now))break;
+#ifdef WATCH_CRASH_REPORT
+        if(!clock_crash_step())break;
+#endif
 #ifdef WATCH_CONTEXTS_CLIENT
         if(clock_contexts_handoff)break;
 #endif

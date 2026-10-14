@@ -251,3 +251,21 @@ bool nova_watch_context_message(risc_display_surface_v1*s,const char*message){
  centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),second,142+(int)watch_home_extra(s->height)/2,0,0xffff);
  centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),"TAP TO DISMISS",(int)s->height-50,0,MUTED);return CANVAS_OK(c);
 }
+#ifdef WATCH_CRASH_REPORT
+#include "../crash_text.h"
+#include "crash_font.inc"
+static void crash_literal(canvas *c,const char *s,unsigned y) {
+ for(unsigned i=0;s[i] && i<28;++i){unsigned ch=(unsigned char)s[i];if(ch<32 || ch>126)ch='?';
+  for(unsigned dy=0;dy<16 && y+dy<c->height;++dy)for(unsigned dx=0;dx<8;++dx)
+   if(crash_font[ch-32][dy]&(1u<<dx))put(at(c,8+i*8+dx,y+dy),0xffff);
+ }
+}
+bool nova_watch_crash_report(risc_display_surface_v1 *s,const char *report,uint32_t size,uint32_t offset,uint32_t *next) {
+ if(!home_surface_valid(s) || !report || !next || offset>size)return false;
+ const nova_watch_state *state=NULL;canvas c=CANVAS_INIT(s,state);CANVAS_CLEAR(c);
+ unsigned rows=(s->height-48)/16;char line[29];uint32_t at=offset;
+ for(unsigned row=0;row<rows && at<size;++row){at=crash_text_line(report,size,at,line);crash_literal(&c,line,8+row*16);}
+ crash_literal(&c,at<size?"Tap or key: next page":"Tap or key: continue",s->height-30);
+ *next=at;return CANVAS_OK(c);
+}
+#endif

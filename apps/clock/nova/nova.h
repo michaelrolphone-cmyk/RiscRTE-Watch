@@ -72,3 +72,6 @@ bool nova_watch_alarm_render(risc_display_surface_v1 *surface,bool countdown,boo
 #ifdef __cplusplus
 }
 #endif
+#ifdef WATCH_CRASH_REPORT
+bool nova_watch_crash_report(risc_display_surface_v1 *surface,const char *text,uint32_t size,uint32_t offset,uint32_t *next);
+#endif
