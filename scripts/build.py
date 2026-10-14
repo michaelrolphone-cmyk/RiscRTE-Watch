@@ -6,7 +6,7 @@ from compact_current_elf import compact
 from normalize_xtensa_relocations import normalize
 from build_inputs import file_manifest, verify_dependency
 ROOT=Path(__file__).resolve().parents[1]
-FLAGS=['-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
+FLAGS=['-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
  '-DWATCH_CLOCK_LAUNCHER','-DWATCH_CLOCK_ALARMS','-DWATCH_CLOCK_POINTS',
  '-DPORTABLE_RTC_UTC8_DENVER','-DWATCH_PAIRED_BOOT_CONFIRM','-DWATCH_QUICK_ACTIONS',
  '-DWATCH_QUICK_RADIOS','-DWATCH_MOTION_WAKE','-DWATCH_ALARM_SLEEP_RESUME','-DWATCH_CONTEXTS_CLIENT',
@@ -21,7 +21,7 @@ if not a.cc:p.error('Set WATCH_APP_CC or --cc to the pinned ESP32-S3 compiler')
 S=a.system.resolve();U=a.utilities.resolve();out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
 lock=json.loads((ROOT/'dependencies.lock.json').read_text())
 system_paths=['lib/PortableApps','lib/elf_loader','test/native_apps']
-utility_paths=['lib/Alarm/include','lib/Contexts/include']
+utility_paths=['Apps/alarm_writer.h','lib/Alarm/include','lib/Contexts/include']
 verified_dependencies={'system':verify_dependency(S,lock['system']['commit'],system_paths),
  'utilities':verify_dependency(U,lock['utilities']['commit'],utility_paths)}
 home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py','scripts/merged_sdk.py','scripts/compact_current_elf.py',
@@ -34,7 +34,7 @@ home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py
  'apps/clock/points_projection.c','apps/clock/points_projection.h','apps/clock/points_compat.h',
  'apps/clock/nova','apps/clock/faces','apps/clock/transitions','apps/clock/effects/boot.cpp',
  'apps/clock/effects/effects.h','apps/clock/effects/divdi3.c','apps/clock/clock_alarm.inc',
- 'apps/clock/clock_contexts.inc','apps/clock/launcher_touch.h','apps/clock/display_time.h',
+ 'apps/clock/clock_contexts.inc','apps/clock/clock_atomic.inc','apps/clock/launcher_touch.h','apps/clock/display_time.h',
  'apps/clock/PortableSleepPolicy.h','apps/clock/PortableTimeFormat.h','apps/clock/watch_sleep.h',
  'apps/clock/watch_alarm_sleep.h','apps/clock/watch_motion_client.h','apps/clock/runtime_boot_confirm.h',
  'apps/clock/return_to_default.c','apps/clock/default.json','apps/clock/clock.json']
@@ -42,7 +42,7 @@ home_inputs=file_manifest(ROOT,home_paths)
 compiler=subprocess.check_output([a.cc,'--version'],text=True).splitlines()[0]
 if '8.4.0' not in compiler:raise RuntimeError('Expected the deployed ESP32-S3 GCC 8.4.0 toolchain')
 from merged_sdk import headers
-includes=[headers(out,S,U,ROOT),ROOT/'include']
+includes=[headers(out,S,U,ROOT),ROOT/'include',S/'lib/PortableApps/src']
 incs=['-I'+str(x) for x in includes]
 common=['-Os','-fPIC','-mtext-section-literals','-mlongcalls','-fvisibility=hidden','-ffreestanding','-fno-builtin','-Wall','-Wextra','-Werror','-ffunction-sections','-fdata-sections']
 effect=out/'boot-effect.o'

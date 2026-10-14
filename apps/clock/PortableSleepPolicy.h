@@ -1,3 +1,6 @@
+#ifdef WATCH_ATOMIC_PREFERENCES
+#include <PortableSleepPolicy.h>
+#else
 #ifndef PORTABLE_SLEEP_POLICY_H
 #define PORTABLE_SLEEP_POLICY_H
 /* Shared ELF policy only. Runtime persists opaque bytes and knows no mode.
@@ -73,3 +76,5 @@ static inline bool portable_sleep_timer_save(const risc_key_value_v1 *kv,bool de
 }
 
 #endif /* PORTABLE_SLEEP_POLICY_H */
+
+#endif

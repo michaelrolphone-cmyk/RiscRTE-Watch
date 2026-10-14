@@ -9,9 +9,18 @@ static bool clock_context_rules(void){
  if(!fp->fingerprint(fp->base.context,CONTEXTS_FP_EVALUATE,&q))return false;
  if(q.result.changed){
   if(!clock_background_pause())return false;
-  risc_runtime_capability_v1 g={.struct_size=sizeof(g)};bool opened=rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,1,&g);uint16_t success=0;
-  for(unsigned f=0;f<CR_SETTINGS;f++)if(q.result.changed&(1u<<f))if(opened&&portable_context_setting(g.api,f,q.result.settings[f],clock_contexts.low_battery,watch_face_save))success|=1u<<f;
+  risc_runtime_capability_v1 g={.struct_size=sizeof(g)};uint16_t success=0;
+#ifdef WATCH_ATOMIC_PREFERENCES
+  bool opened=home_automatic_begin(PORTABLE_AUTOMATIC_HOME_RULES);const risc_key_value_v1 *settings=&home_automatic.view;
+#else
+  bool opened=rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,1,&g);const risc_key_value_v1 *settings=g.api;
+#endif
+  for(unsigned f=0;f<CR_SETTINGS;f++)if(q.result.changed&(1u<<f))if(opened&&portable_context_setting(settings,f,q.result.settings[f],clock_contexts.low_battery,watch_face_save))success|=1u<<f;
+#ifdef WATCH_ATOMIC_PREFERENCES
+  if(!home_automatic_close()){clock_atomic_retain();return false;}
+#else
   if(g.api&&!rt->release(&g))return false;
+#endif
   for(unsigned i=0;i<CR_RULES;i++){bool changed=false,complete=true;for(unsigned f=0;f<CR_SETTINGS;f++)if(q.result.winners[f]==(int)i&&(q.result.changed&(1u<<f))){changed=true;complete&=!!(success&(1u<<f));}if(changed){contexts_workflow_v1 report={.struct_size=sizeof(report),.rule=i,.result=complete?CR_APPLIED:CR_PARTIAL};if(!fp->fingerprint(fp->base.context,CONTEXTS_FP_WORKFLOW,&report))return false;}}
   if(opened){if(!pqa_session_load(&clock_quick,rt)||!pqa_session_restore(&clock_quick,display)||!pqa_radios_resume(&clock_radios,&clock_quick.ui,rt))return false;
    g=(risc_runtime_capability_v1){.struct_size=sizeof(g)};if(!rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,1,&g))return false;unsigned selected=picker.selected;(void)portable_sleep_load(g.api,&sleep_mode);if(watch_face_load(g.api,&selected)==RISC_KEY_VALUE_OK)picker.selected=(uint8_t)selected;if(!rt->release(&g))return false;
@@ -101,7 +110,11 @@ static bool clock_contexts_tick(void) {
     if(clock_alarm_modal||picker.open||pqa_visible(&clock_quick.ui)||pqa_capture(&clock_quick.ui))return true;
     if(clock_contexts.rules_available)return clock_context_rules();
     uint16_t applied=0;
+#ifdef WATCH_ATOMIC_PREFERENCES
+    if(!portable_contexts_apply_room_using(&clock_contexts,&applied,watch_face_save,home_automatic_preset))return clock_contexts_failure();
+#else
     if(!portable_contexts_apply_room(&clock_contexts,&applied,watch_face_save))return clock_contexts_failure();
+#endif
     if(applied) {
         if(!pqa_session_load(&clock_quick,rt)||!pqa_session_restore(&clock_quick,display))return false;
         if(applied&(PORTABLE_CONTEXT_VOLUME|PORTABLE_CONTEXT_DND|PORTABLE_CONTEXT_ALERT))

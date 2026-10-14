@@ -9,7 +9,9 @@
 #define WATCH_MOTION_WAKE
 #define WATCH_ALARM_SLEEP_RESUME
 #define WATCH_QUICK_RADIOS
+#ifndef PORTABLE_LOW_BATTERY
 #define PORTABLE_LOW_BATTERY
+#endif
 #define main inherited_quick_fixture_main
 #define WATCH_TEST_RUNTIME_EXTERN
 #include "quick_clock_test.c"
@@ -282,6 +284,12 @@ static bool fast_launch_failure(risc_runtime_launch_failure_v1 *out){
 static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
+#ifdef WATCH_ATOMIC_PREFERENCES
+ clock_atomic_retained=false;clock_quick_scope=false;quick_atomic_running=false;
+ quick_atomic_grant=(risc_runtime_capability_v1){0};quick_atomic_edit=(portable_preference_atomic){0};quick_atomic_discard();
+ home_automatic_grant=(risc_runtime_capability_v1){0};home_automatic=(portable_preference_automatic){0};
+ clock_face_grant=(risc_runtime_capability_v1){0};clock_face_edit=(portable_preference_atomic){0};atomic_token=0;
+#endif
  initial_default_entry=false;
  launch_failure_kind=launch_failure_reads=0;
  key_trace_count=key_acquire_cost=startup_events=0;repeated_hold=trace_manual=trace_discard=trace_long=false;
@@ -355,6 +363,12 @@ static void check_refusal_diagnostics(void){
  }
  watch_sleep_stage=0;watch_sleep_detail=0;sleep_status[0]=0;rt=saved;
 }
+#ifdef WATCH_ATOMIC_PREFERENCES
+/* Five copied low-battery mutations each yield once before terminal collect. */
+#define LOW_POLICY_WAIT_MS 5u
+#else
+#define LOW_POLICY_WAIT_MS 0u
+#endif
 static int regression_main(void){
  /* A transient external RTC read failure must recover in the same Home
   * invocation, whether native time began UNSET or valid/provisional. */
@@ -487,8 +501,8 @@ static int regression_main(void){
  }
  check_refusal_diagnostics();
  reset_case();contexts_enabled=true;early_sleep=true;requested_wakes=1;app_main();check_clean();assert(wake_count==1&&soft_frames==1&&stage_calls==1&&broadcast_starts==1&&contexts_starts==1&&confirmations==1);
- reset_case();low_percent=5;contexts_enabled=true;app_main();check_clean();assert(first_at==95&&input_at==95&&radio_at==190&&clock_quick.brightness==15&&hardware_brightness==15&&!clock_radios.flags&&low_writes[0]==1);
- reset_case();low_on_wake=true;contexts_enabled=true;requested_wakes=1;app_main();check_clean();assert(wake_count==1&&soft_latency==95&&resume_input_at==wake_began+95&&radio_at==resume_input_at+95&&clock_quick.brightness==15&&!clock_radios.flags&&low_writes[0]==1);
+ reset_case();low_percent=5;contexts_enabled=true;app_main();check_clean();assert(first_at==95&&input_at==95&&radio_at==190+LOW_POLICY_WAIT_MS&&clock_quick.brightness==15&&hardware_brightness==15&&!clock_radios.flags&&low_writes[0]==1);
+ reset_case();low_on_wake=true;contexts_enabled=true;requested_wakes=1;app_main();check_clean();assert(wake_count==1&&soft_latency==95&&resume_input_at==wake_began+95&&radio_at==resume_input_at+95+LOW_POLICY_WAIT_MS&&clock_quick.brightness==15&&!clock_radios.flags&&low_writes[0]==1);
  reset_case();alarm_on_wake=true;requested_wakes=1;app_main();check_clean();assert(wake_count==1&&alarm_frames&&soft_latency>95&&soft_frames==1);
  for(unsigned variant=0;variant<4;variant++){
   reset_case();contexts_enabled=true;

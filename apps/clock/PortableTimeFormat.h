@@ -1,3 +1,6 @@
+#ifdef WATCH_ATOMIC_PREFERENCES
+#include <PortableTimeFormat.h>
+#else
 #pragma once
 /* Shared app-owned display preference. Runtime stores opaque bytes only.
  * Namespace 1 is the existing explicit app-settings grant. Loading a missing,
@@ -41,3 +44,5 @@ static inline bool portable_time_format_save(const risc_key_value_v1 *kv,unsigne
     if(kv->put(kv->context,PORTABLE_TIME_FORMAT_KEY,data,sizeof(data))!=RISC_KEY_VALUE_OK)return false;
     return portable_time_format_load(kv,&current)==PORTABLE_TIME_FORMAT_LOADED && current==mode;
 }
+
+#endif

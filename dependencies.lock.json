@@ -6,11 +6,11 @@
   },
   "system": {
     "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
-    "commit": "46a6162341665c8649f52301a8a1c1a379394858"
+    "commit": "ce77aa646d06b430d78ee192b823b240f6d57d30"
   },
   "utilities": {
     "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
-    "commit": "fc0bdbbbc600ce891e60c44d091fce0586ade7d8"
+    "commit": "cc56de34f2a1c6efa9761b28d92ed1cb8e8240e5"
   },
   "generic_power_providers": {
     "repository": "michaelrolphone-cmyk/RiscRTE-Drivers",

@@ -1,3 +1,6 @@
+#ifdef WATCH_ATOMIC_PREFERENCES
+#define PORTABLE_HOME_AUTOMATIC_PREFERENCES
+#endif
 #if defined(WATCH_PAIRED_BOOT_CONFIRM) && !defined(WATCH_CLOCK_RETURN)
 #include "runtime_boot_confirm.h"
 #endif
@@ -554,6 +557,9 @@ static unsigned clock_brightness(void) {
     return 40;
 #endif
 }
+#ifdef WATCH_ATOMIC_PREFERENCES
+#include "clock_atomic.inc"
+#endif
 #ifdef PORTABLE_LOW_BATTERY
 static bool clock_low_battery_poll(uint32_t now) {
     if(held)return true;
@@ -568,7 +574,11 @@ static bool clock_low_battery_poll(uint32_t now) {
     if(portable_low_battery_sample_valid(&sample) && sample.percent<PORTABLE_LOW_BATTERY_THRESHOLD &&
        (!clock_low_battery.observed || !clock_low_battery.low) && !clock_background_pause())return false;
 #endif
+#ifdef WATCH_ATOMIC_PREFERENCES
+    unsigned result=home_automatic_low_battery(&sample);
+#else
     unsigned result=portable_low_battery_update(&clock_low_battery,rt,&sample);
+#endif
     if(result&PORTABLE_LOW_BATTERY_RETAINED) {
 #ifdef WATCH_RUNTIME_FEATURES
         watch_runtime_halt(&native_clock);
@@ -796,6 +806,9 @@ static bool clock_key_read(uint32_t *events,const char *stage) {
     return true;
 }
 static int sleep_cycle(void) {
+#ifdef WATCH_ATOMIC_PREFERENCES
+    if(!clock_atomic_finish())return WATCH_SLEEP_RETAINED;
+#endif
     if(!watch_capabilities_can_sleep(&device_clients))return clock_sleep_failure("CAPABILITY");
     sleep_status[0]=0;
 #if defined(WATCH_BLE_BROADCAST) || defined(WATCH_CONTEXTS_CLIENT)
@@ -930,6 +943,10 @@ __attribute__((visibility("default"))) void app_main(void) {
     touch=(watch_launcher_touch){0};
 #ifdef WATCH_QUICK_ACTIONS
     pqa_session_init(&clock_quick);
+#ifdef WATCH_ATOMIC_PREFERENCES
+    if(clock_atomic_retained)return;
+    clock_quick.save_user=quick_atomic_save;
+#endif
 #ifdef PORTABLE_LOW_BATTERY
     clock_low_battery=(portable_low_battery){0};clock_low_battery_sampled=false;clock_low_battery_at=0;
 #endif
@@ -1165,7 +1182,7 @@ __attribute__((visibility("default"))) void app_main(void) {
         if(!clock_alarm_foreground() || !alive(&now))break;
 #endif
 #endif
-#ifdef PORTABLE_LOW_BATTERY
+#if defined(PORTABLE_LOW_BATTERY) && !defined(WATCH_ATOMIC_PREFERENCES)
         if(!clock_low_battery_poll(now))break;
 #endif
 #ifdef WATCH_CONTEXTS_CLIENT
@@ -1185,6 +1202,10 @@ __attribute__((visibility("default"))) void app_main(void) {
         sample_launcher_touch(now,true);
 #ifdef WATCH_FAST_WAKE
         if(!clock_input_reported){clock_wake_stage("first-input-poll",now);clock_input_reported=true;}
+#endif
+#if defined(PORTABLE_LOW_BATTERY) && defined(WATCH_ATOMIC_PREFERENCES)
+        /* Service foreground input before a copied policy transaction yields. */
+        if(!clock_low_battery_poll(now)||!alive(&now))break;
 #endif
 #ifdef WATCH_CONTEXTS_CLIENT
         if(clock_contexts_uncertain)break;
@@ -1245,7 +1266,18 @@ __attribute__((visibility("default"))) void app_main(void) {
         launcher_activity_pending=false;
 #ifdef WATCH_QUICK_ACTIONS
         if(events&3u)pqa_close(&clock_quick.ui);
+#ifdef WATCH_ATOMIC_PREFERENCES
+        if(!clock_quick_scope&&(pqa_visible(&clock_quick.ui)||pqa_capture(&clock_quick.ui)||clock_quick.ui.pending)){
+            if(!quick_atomic_modal_begin())break;
+            clock_quick_scope=true;
+        }
+        ++quick_atomic_contact;
+        uint32_t quick_actions=quick_atomic_take_action();bool volume_changed=false;
+        if(!quick_atomic_capture(quick_actions))break;
+        quick_atomic_show_queue_error();
+#else
         uint32_t quick_actions=pqa_take_action(&clock_quick.ui);bool volume_changed=false;
+#endif
 #ifdef WATCH_CONTEXTS_CLIENT
         if(quick_actions&&!clock_contexts_pause())return;
 #endif
@@ -1257,7 +1289,11 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef WATCH_BLE_BROADCAST
         if((quick_actions&(PQA_WIFI|PQA_BLUETOOTH|PQA_AIRPLANE)) && !clock_broadcast_pause())return;
 #endif
+#ifdef WATCH_ATOMIC_PREFERENCES
+        if(!pqa_radios_apply_user(&clock_radios,&clock_quick.ui,rt,quick_actions,quick_atomic_save,NULL,quick_atomic_guard))break;
+#else
         if(!pqa_radios_apply(&clock_radios,&clock_quick.ui,rt,quick_actions))break;
+#endif
 #endif
 #ifdef WATCH_CLOCK_ALARMS
         if(volume_changed && clock_alarm.api)(void)clock_alarm.api->refresh(clock_alarm.api->context);
@@ -1275,8 +1311,17 @@ __attribute__((visibility("default"))) void app_main(void) {
             if(!launcher_touch_open(&touch))break;
         }
 #endif
+#ifdef WATCH_ATOMIC_PREFERENCES
+        if(clock_quick_scope&&!pqa_visible(&clock_quick.ui)&&!pqa_capture(&clock_quick.ui)){
+            if(!quick_atomic_close())break;
+            clock_quick_scope=false;
+        }
+#endif
         if(picker_open_pending) {
             picker_open_pending=false;
+#ifdef WATCH_ATOMIC_PREFERENCES
+            picker_save_failed=!clock_face_begin();if(clock_atomic_retained)break;
+#endif
             if(!picker_scratch){picker_scratch=malloc(sizeof(*picker_scratch));if(picker_scratch)picker_scratch->valid_mask=0;}
             if(!picker_scratch){watch_face_close(&picker);rt->diagnostic("WATCH_CLOCK picker=out-of-memory");}
         }
@@ -1285,11 +1330,15 @@ __attribute__((visibility("default"))) void app_main(void) {
         if(events&3u)picker_select_pending=false;
         if(picker_select_pending) {
             picker_select_pending=false;
+#ifdef WATCH_ATOMIC_PREFERENCES
+            bool saved=clock_face_save(picker_selection_pending);if(clock_atomic_retained)break;
+#else
             risc_runtime_capability_v1 setting={.struct_size=sizeof(setting)};bool saved=false;
             if(rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,WATCH_FACE_STORE_INSTANCE,&setting)) {
                 saved=watch_face_save(setting.api,picker_selection_pending);
                 if(!rt->release(&setting))break;
             }
+#endif
             if(saved) {
                 picker.selected=(uint8_t)picker_selection_pending;
                 watch_face_close(&picker);free(picker_scratch);picker_scratch=NULL;
@@ -1385,6 +1434,9 @@ __attribute__((visibility("default"))) void app_main(void) {
 #endif
     }
 done:
+#ifdef WATCH_ATOMIC_PREFERENCES
+    if(!clock_atomic_finish())return;
+#endif
 #if defined(WATCH_FAST_WAKE) && defined(WATCH_BLE_BROADCAST)
     /* Failed background cleanup has already raised the native retention
      * fence. Do not perform Contexts I/O before the later broadcast check. */

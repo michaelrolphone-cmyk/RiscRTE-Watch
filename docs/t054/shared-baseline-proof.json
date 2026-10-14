@@ -1,0 +1,7 @@
+{
+  "baseline_commit": "b62a0e5f53de250526fe68aec84c9146bded8356",
+  "source_files_matched": 133,
+  "source_build_receipt": "../task-2/watch-builds/combined-ui/home-build.json",
+  "published_t053_home_sha256": "ecb9cdb78efed72d475b929255f50a96b3da4f8516c020a54fd9b6a30008c328",
+  "all_home_source_bytes_match": true
+}

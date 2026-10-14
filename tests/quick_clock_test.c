@@ -165,7 +165,13 @@ int low=low_key(k);if(low>=0){*z=low_lengths[low];if(!*z)return RISC_KEY_VALUE_N
 if(!strcmp(k,PORTABLE_RADIO_KEY)){assert(n>=4);if(!radio_saved)return RISC_KEY_VALUE_NOT_FOUND;memcpy(b,radio_bytes,4);*z=4;return 0;}
 #endif
 int qi=quick_key(k);if(qi>=0){assert(n==1);if(!quick_saved[qi])return RISC_KEY_VALUE_NOT_FOUND;*(uint8_t*)b=quick_values[qi];*z=1;return 0;}if(!strcmp(k,PORTABLE_TIME_FORMAT_KEY)){if(scenario==17||scenario==18){assert(n==4);uint8_t f[]={0x54,1,1,scenario==17?0xa4:0};memcpy(b,f,4);*z=4;return 0;}return RISC_KEY_VALUE_NOT_FOUND;}if(strcmp(k,WATCH_FACE_KEY))return RISC_KEY_VALUE_NOT_FOUND;face_reads++;if(scenario==15&&face_writes)return RISC_KEY_VALUE_IO;if(!saved_face)return RISC_KEY_VALUE_NOT_FOUND;assert(n==4);memcpy(b,saved_blob,4);*z=4;return 0;}
+#ifdef WATCH_ATOMIC_PREFERENCES
+static bool atomic_publishing;
+#endif
 static int32_t face_put(void*c,const char*k,const void*b,uint32_t n){(void)c;
+#ifdef WATCH_ATOMIC_PREFERENCES
+assert(atomic_publishing);
+#endif
 #ifdef PORTABLE_LOW_BATTERY
 int low=low_key(k);if(low>=0){assert(n<=5);low_writes[low]++;low_lengths[low]=n;memcpy(low_bytes[low],b,n);return RISC_KEY_VALUE_OK;}
 #endif
@@ -177,7 +183,38 @@ static const risc_key_value_v1 face_kv={1,sizeof(face_kv),NULL,face_get,face_put
 static risc_power_sleep_api_v1 test_power;
 static risc_power_key_api_v1 test_key;
 static risc_display_power_api_v1 test_display_power;
+#ifdef WATCH_ATOMIC_PREFERENCES
+static uint64_t atomic_revision=7,atomic_token;
+static uint32_t atomic_count;static char atomic_keys[2][16];static uint8_t atomic_values[2][64];static uint32_t atomic_sizes[2];
+static int32_t atomic_state(void*c,risc_key_value_atomic_state_v1*s){(void)c;assert(!owned&&!pending);*s=(risc_key_value_atomic_state_v1){sizeof(*s),3,1,16,64,4096,1024,0,atomic_revision};return RISC_ATOMIC_OK;}
+static int32_t atomic_get(void*c,uint64_t rev,const char*k,void*out,uint32_t cap,uint32_t*size){
+ assert(!owned&&!pending);*size=0;if(rev!=atomic_revision)return RISC_ATOMIC_STALE;
+ uint8_t data[64];uint32_t n=0;int rc=face_get(c,k,data,quick_key(k)>=0?1:!strcmp(k,WATCH_FACE_KEY)||!strcmp(k,PORTABLE_TIME_FORMAT_KEY)?4:sizeof(data),&n);
+ if(rc==RISC_KEY_VALUE_NOT_FOUND)return RISC_ATOMIC_NOT_FOUND;
+ if(rc)return RISC_ATOMIC_IO;
+ *size=n;if(cap<n)return RISC_ATOMIC_BUFFER_SMALL;memcpy(out,data,n);return RISC_ATOMIC_OK;
+}
+static int32_t atomic_submit(void*c,uint64_t rev,const risc_key_value_atomic_mutation_v1*m,uint32_t count,const void*intent,uint32_t bytes,uint64_t*token){
+ (void)c;assert(!owned&&!pending&&!atomic_token&&count&&count<=2&&bytes==176);*token=0;
+ const uint8_t*p=intent;assert(((!memcmp(p,"PFI0001",8)&&p[8]==PORTABLE_PREFERENCE_USER)||(!memcmp(p,"PFA0001",8)&&p[8]==PORTABLE_PREFERENCE_AUTOMATIC))&&!strcmp((const char*)p+12,m[0].key));
+ if(rev!=atomic_revision)return RISC_ATOMIC_STALE;
+ if(scenario==23)return RISC_ATOMIC_IO;
+ for(unsigned i=0;i<count;i++){assert(m[i].kind==RISC_ATOMIC_PUT&&strlen(m[i].key)<16&&m[i].size<=64);strcpy(atomic_keys[i],m[i].key);memcpy(atomic_values[i],m[i].value,m[i].size);atomic_sizes[i]=m[i].size;}
+ atomic_count=count;*token=atomic_token=1;return RISC_ATOMIC_OK;
+}
+static int32_t atomic_collect(void*c,uint64_t token,risc_key_value_atomic_receipt_v1*r){
+ (void)c;assert(!owned&&!pending&&token==atomic_token&&token);atomic_publishing=true;
+ for(unsigned i=0;i<atomic_count;i++)assert(!face_put(NULL,atomic_keys[i],atomic_values[i],atomic_sizes[i]));
+ atomic_publishing=false;atomic_token=0;
+ *r=(risc_key_value_atomic_receipt_v1){sizeof(*r),RISC_ATOMIC_OK,++atomic_revision,atomic_revision};return RISC_ATOMIC_OK;
+}
+static int32_t atomic_cancel(void*c,uint64_t t){(void)c;assert(t==atomic_token);return RISC_ATOMIC_OK;}
+static const risc_key_value_atomic_v1 atomic_api={1,sizeof(atomic_api),NULL,atomic_state,atomic_get,atomic_submit,atomic_collect,atomic_cancel};
+#endif
 static bool acquire_cap(const char*n,uint32_t v,uint64_t id,risc_runtime_capability_v1*g){(void)v;
+#ifdef WATCH_ATOMIC_PREFERENCES
+if(!strcmp(n,RISC_KEY_VALUE_ATOMIC_CAPABILITY)){assert(id==1);g->api=&atomic_api;g->slot=1;g->generation=1;grants++;return true;}
+#endif
 if(!strcmp(n,"power.sleep")){test_power=(risc_power_sleep_api_v1){1,sizeof(test_power),pa.base.context,pa.prepare_sleep,pa.resume,pa.light_sleep,pa.deep_sleep,pa.light_sleep_for,pa.sleep_wake_pending,pa.deep_sleep_for,pa.light_sleep_set,pa.deep_sleep_set};g->api=&test_power;grants++;return true;}
 if(!strcmp(n,"input.power-key")){test_key=(risc_power_key_api_v1){1,sizeof(test_key),pa.base.context,pa.key_events};g->api=&test_key;grants++;return true;}
 if(!strcmp(n,"display.power")){test_display_power=(risc_display_power_api_v1){1,sizeof(test_display_power),da.base.context,da.prepare_sleep,da.resume,da.prepare_deep_sleep,da.resume_status};g->api=&test_display_power;grants++;return true;}
@@ -187,7 +224,7 @@ if(!strcmp(n,"net.wifi")){assert(id==0);g->api=&qa_wifi;grants++;return true;}
 if(!strcmp(n,"bluetooth.hci")){assert(id==0);g->api=&qa_ble;grants++;return true;}
 #endif
 if(!strcmp(n,RISC_KEY_VALUE_CAPABILITY)){if(scenario<8)return false;assert(id==1);grants++;g->api=&face_kv;return true;}assert(!id);grants++;if(!strcmp(n,"display.output"))g->api=&da;else if(!strcmp(n,"board.battery"))g->api=&pa;else if(!strcmp(n,"rtc.clock"))g->api=&ra;else{assert(!strcmp(n,"input.touch.raw"));g->api=&ta;}return true;}
-static bool release_cap(risc_runtime_capability_v1*g){assert(g->api&&!owned&&!pending);g->api=NULL;ungrants++;return true;}
+static bool release_cap(risc_runtime_capability_v1*g){assert(g->api&&!owned&&!pending);g->api=NULL;g->slot=0;g->generation=0;ungrants++;return true;}
 static bool launch(const char*p){assert(!strcmp(p,"springboard.elf")&&!owned&&!pending&&!touch.subscription);assert(submitted==last_complete&&submitted==swipe_submitted&&clock_ms==swipe_time);
  assert(!memcmp(completed_pixels,pixels,sizeof(pixels)));
  fixture_expected_face(true);
