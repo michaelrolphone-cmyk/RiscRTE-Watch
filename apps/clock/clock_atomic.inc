@@ -74,7 +74,7 @@ static bool clock_face_close(void) {
 static bool clock_face_begin(void) {
  if(!clock_face_close())return false;
  clock_face_grant=(risc_runtime_capability_v1){.struct_size=sizeof(clock_face_grant)};
- bool got=rt->acquire(RISC_KEY_VALUE_ATOMIC_CAPABILITY,1,1,&clock_face_grant);
+ bool got=rt->acquire(PORTABLE_PREFERENCE_CAPABILITY,1,1,&clock_face_grant);
  if(!got){if(clock_face_grant.api||clock_face_grant.slot||clock_face_grant.generation)clock_atomic_retain();return false;}
  if(clock_face_grant.struct_size!=sizeof(clock_face_grant)||!clock_face_grant.slot||!clock_face_grant.generation||!portable_preference_atomic_api_valid(clock_face_grant.api)){clock_atomic_retain();return false;}
  int rc=portable_preference_atomic_begin(&clock_face_edit,clock_face_grant.api,WATCH_FACE_KEY,PORTABLE_PREFERENCE_USER,quick_atomic_guard,NULL);
