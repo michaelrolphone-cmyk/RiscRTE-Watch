@@ -62,14 +62,15 @@ static uint16_t fc_dim(uint16_t color,unsigned a) {
 }
 /* Q4 rounded rectangle, clipped before coverage evaluation. */
 static void fc_round_rect(canvas*c,int x,int y,int w,int h,int r,uint16_t color) {
+    x=native_q(c,x);y=native_q(c,y);w=native_q(c,w);h=native_q(c,h);r=native_q(c,r);
     if(w<=0||h<=0)return;
     if(r>w/2)r=w/2;
     if(r>h/2)r=h/2;
     int left=x/16-1,top=y/16-1,right=(x+w+15)/16,bottom=(y+h+15)/16;
     if(left<0)left=0;
     if(top<0)top=0;
-    if(right>239)right=239;
-    if(bottom>239)bottom=239;
+    if(right>=(int)c->width)right=(int)c->width-1;
+    if(bottom>=(int)c->height)bottom=(int)c->height-1;
     for(int yy=top;yy<=bottom;yy++)for(int xx=left;xx<=right;xx++) {
         unsigned a=0;
         for(int sy=4;sy<16;sy+=8)for(int sx=4;sx<16;sx+=8) {
@@ -88,17 +89,15 @@ static void fc_battery(canvas*c,const nova_watch_state*s,const nova_watch_labels
 }
 static void fc_arc(canvas*c,const fc_ring_pixel*ring,unsigned count,int radius,int width,int start,int end,uint16_t color) {
     if(end<=start)return;
+    if(c->width!=240u){f2arc(c,radius,start,end,120,120,width*16,color);return;}
     for(unsigned i=0;i<count;i++)if(ring[i].angle*2u>=(unsigned)start&&ring[i].angle*2u<=(unsigned)end)
         blend(indexed(c,ring[i].pixel),color,ring[i].alpha);
     if(end-start<360*256){int x,y;fpoint(start,radius,120,120,&x,&y);fcirc(c,x,y,width*8,0,color);fpoint(end,radius,120,120,&x,&y);fcirc(c,x,y,width*8,0,color);}
 }
-static unsigned fc_edge(int x) {
-    int distance=x<120?x*2+1:479-x*2;return distance<96?(unsigned)distance*255/96:255;
-}
 static void fc_fade(canvas*c) {
-    for(int y=0;y<240;y++)for(int x=0;x<240;x++)if(x<48||x>=192||y<48||y>=192){
+    for(unsigned y=0;y<c->height;y++)for(unsigned x=0;x<c->width;x++){
         uint8_t*p=at(c,(unsigned)x,(unsigned)y);uint16_t color=(uint16_t)(p[0]|p[1]<<8);
-        if(color)put(p,fc_dim(color,fc_edge(x)*fc_edge(y)/255));
+        if(color)put(p,fc_dim(color,f2edge_native(x,c->width)*f2edge_native(y,c->width)/255));
     }
 }
 static void fcalendar_collection(canvas*c,const nova_watch_state*state,const nova_watch_labels*l,unsigned id,int sec,int min,int hour,unsigned sub) {
@@ -181,7 +180,7 @@ static void fcalendar_collection(canvas*c,const nova_watch_state*state,const nov
         FC_TEXT(c,r11_halo,l->date,120,148,768,0,0);FC_TEXT(c,r11,l->date,120,148,768,0,FC(232,246,255));
         if(valid){char total[12];fc_number(number,doy);fc_number(total,days);unsigned n=fc_join(label,sizeof(label),"DAY ",number," / ");fc_join(label+n,sizeof(label)-n,total,"","");}else memcpy(label,"DAY -- / --",12);
         FC_TEXT(c,r10_halo,label,120,164,768,0,0);FC_TEXT(c,r10,label,120,164,768,0,FCYAN);
-        for(unsigned y=176;y<190;y++)for(unsigned x=72;x<168;x++)blend(at(c,x,y),0,179);
+        for(unsigned y=(unsigned)native_q(c,176);y<(unsigned)native_q(c,190);y++)for(unsigned x=(unsigned)native_q(c,72);x<(unsigned)native_q(c,168);x++)blend(at(c,x,y),0,179);
         fc_battery(c,state,l,120,181,7,FGREEN);
     } else { /* PROGRESS: Sunday-start week matches the reference. */
         FC_TEXT(c,o40,l->hour_minute,120,46,0,120,FWHITE);FC_TEXT(c,r10,l->date,120,64,768,0,FC_CAP);

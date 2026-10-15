@@ -6,7 +6,7 @@ Canonical shared Home application for ESP32-S3 watches. Device repositories supp
 
 ## One build, independent capabilities
 
-Home 0.13.0 builds `default.elf` and its `clock.elf` return-to-Home companion without board or resolution defines. These are roles, not board variants. Each board consumes the same bytes for each role.
+Home 0.16.0 builds `default.elf` and its `clock.elf` return-to-Home companion without board or resolution defines. These are roles, not board variants. Each board consumes the same bytes for each role.
 
 Capabilities describe functions, never device models. Battery (`board.battery`), power key (`input.power-key`), system sleep (`power.sleep`), frame output (`display.output`) and display sleep (`display.power`) have independent interfaces. Home no longer casts a battery to a private T-Watch PMU table or a framebuffer to panel-specific power methods. Generic contracts and their compatibility adapters are pinned from RiscRTE-Drivers; the adapters, not the application, interpret legacy combined driver tables.
 
@@ -16,19 +16,19 @@ See `docs/CAPABILITY_BOUNDARIES.md` for API and provisioning details.
 
 ## Display and input
 
-The app queries physical dimensions and uses a 240-wide, width-scaled logical
-canvas: 410x502 provides 240x294 layout units. Both axes use the same scale,
-including touch and the final partial row. There are no gesture gutters. The
-240x240 path remains direct and preserves the baseline pixels exactly.
+Home renders and hit-tests directly in the dimensions reported by display and
+touch capabilities. The 240x240 T-Watch and 410x502 Waveshare use the same Home
+source and native geometry; there is no completed 240-wide viewport expansion.
 
-Proportional face artwork keeps its square core. Extra height adds the selected
-face name and a live next-Point summary (or date/battery when no valid upcoming
-Point exists). Picker headings stay at the top while its fixed-size cards move
-with the flexible middle and its labels/dots anchor at the bottom. Quick Actions
-uses its qualified full-height layout; alarms and status controls anchor to the
-bottom with matching hit bands. Sleep clearing and retained transitions cover
-the complete canvas. See `docs/HOME_NATIVE_HEIGHT.md` for exact qualification and
-remaining device-integration limits.
+All 34 face styles retain their artwork, RTC formatting and Points In Time
+behavior. Geometry and glyph coverage are evaluated at destination resolution.
+Circular faces use the smaller display axis, centered without distortion; tall
+screens retain the face title and live next-Point summary. Picker previews are
+rendered at their physical card dimensions and touch uses the same geometry.
+Quick controls, alarms, boot effects, sleep blanking and return snapshots share
+the native frame. Existing 240px golden images remain unchanged.
+
+See `docs/NATIVE_FACES.md` for coverage and device-validation limits.
 
 ## Build and test
 
@@ -40,6 +40,8 @@ python3 scripts/test_capabilities.py
 python3 scripts/test_capabilities.py --sanitize
 python3 scripts/test_viewport.py
 python3 scripts/test_home_native_height.py
+python3 scripts/test_native_faces.py
+python3 scripts/test_native_effects.py
 python3 scripts/check_capability_boundaries.py
 python3 scripts/build.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities --cc /path/to/xtensa-esp32s3-elf-gcc
 ```

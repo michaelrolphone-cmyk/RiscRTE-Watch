@@ -72,7 +72,7 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.15.4'
+  manifest['version']='0.16.0'
   manifest['requires'].append({'capability':'storage.app-data','api':1})
   if a.crash_volume is not None:manifest['requires'].append({'capability':'storage.volume','api':1})
  if a.preferences=='nvs':manifest['requires']=[r for r in manifest.get('requires',[]) if r['capability']!='storage.key-value.atomic']

@@ -2,8 +2,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-static void *test_picker_malloc(size_t n);
-static void test_picker_free(void*p);
+#include "apps/clock/nova/nova.h"
+static nova_watch_picker_cache *test_cache_create(unsigned width,unsigned height);
+static void test_cache_destroy(nova_watch_picker_cache *cache);
+#define nova_watch_picker_cache_create test_cache_create
+#define nova_watch_picker_cache_destroy test_cache_destroy
+static inline void *test_picker_malloc(size_t n);
+static inline void test_picker_free(void*p);
 #define malloc test_picker_malloc
 #define free test_picker_free
 #define WATCH_CLOCK_LAUNCHER 1
@@ -12,6 +17,8 @@ static void test_picker_free(void*p);
 #include "apps/clock/crown.c"
 #undef malloc
 #undef free
+#undef nova_watch_picker_cache_create
+#undef nova_watch_picker_cache_destroy
 #ifndef TEST_WIDTH
 #define TEST_WIDTH 240u
 #define TEST_HEIGHT 240u
@@ -19,24 +26,29 @@ static void test_picker_free(void*p);
 #define TEST_LOGICAL_HEIGHT ((TEST_HEIGHT*240u+TEST_WIDTH-1u)/TEST_WIDTH)
 static unsigned allocations,cache_allocations;
 static uint16_t pixels[TEST_WIDTH*TEST_HEIGHT],completed_pixels[TEST_WIDTH*TEST_HEIGHT],expected_pixels[TEST_WIDTH*TEST_HEIGHT];
-static uint16_t expected_logical_pixels[240*TEST_LOGICAL_HEIGHT];
 static void fixture_expected_face(bool with_status) {
- risc_display_surface_v1 expected={0,expected_logical_pixels,240,TEST_LOGICAL_HEIGHT,480,sizeof(expected_logical_pixels),5};
+ risc_display_surface_v1 expected={0,expected_pixels,TEST_WIDTH,TEST_HEIGHT,TEST_WIDTH*2,sizeof(expected_pixels),5};
  assert(nova_watch_face_render(&expected,&face,picker.selected));
  if(with_status&&sleep_status[0])assert(nova_watch_sleep_status(&expected,sleep_status));
- for(unsigned y=0;y<TEST_HEIGHT;y++)for(unsigned x=0;x<TEST_WIDTH;x++)
-  expected_pixels[y*TEST_WIDTH+x]=expected_logical_pixels[(y*240/TEST_WIDTH)*240+x*240/TEST_WIDTH];
 }
 static unsigned last_complete,swipe_submitted,swipe_time;
 static unsigned clock_ms,submitted,released,grants,ungrants,subscribed,unsubscribed,polls,launches,sleeps,scenario;
 static bool ready,owned,pending,launched;
 static unsigned touch_step,ready_time,face_writes,face_reads,frame_started;
-static void*test_picker_malloc(size_t n){
- if(n==sizeof(nova_watch_picker_cache)){cache_allocations++;if(scenario==16)return NULL;}
- else assert(n==240u*TEST_LOGICAL_HEIGHT*2u);
+static inline void*test_picker_malloc(size_t n){
+ assert(n==TEST_WIDTH*TEST_HEIGHT*2u);
  void*p=malloc(n);if(p){allocations++;memset(p,0xa5,n);}return p;
 }
-static void test_picker_free(void*p){if(p){assert(allocations);allocations--;}free(p);}
+static inline void test_picker_free(void*p){if(p){assert(allocations);allocations--;}free(p);}
+static nova_watch_picker_cache *test_cache_create(unsigned width,unsigned height){
+ cache_allocations++;if(scenario==16)return NULL;
+ nova_watch_picker_cache *p=nova_watch_picker_cache_create(width,height);
+ if(p)allocations++;
+ return p;
+}
+static void test_cache_destroy(nova_watch_picker_cache *p){
+ if(p){assert(allocations);allocations--;}nova_watch_picker_cache_destroy(p);
+}
 static unsigned hardware_brightness,quick_writes;
 static bool quick_saved[3];static uint8_t quick_values[3];
 static int quick_key(const char*k){return !strcmp(k,"brightness")?0:!strcmp(k,"alarm_volume")?1:!strcmp(k,"quick_volume")?2:-1;}

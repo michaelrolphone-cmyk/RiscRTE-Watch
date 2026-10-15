@@ -3,15 +3,17 @@
 from pathlib import Path
 import argparse, os, subprocess
 root=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('--system-apps',type=Path,required=True);p.add_argument('--utilities',type=Path,required=True);p.add_argument('--native',action='store_true');p.add_argument('--atomic',action='store_true');p.add_argument('--crash-report',action='store_true');a=p.parse_args()
-out=root/(('dist/fast-wake-clock-native' if a.native else 'dist/fast-wake-clock')+('-atomic' if a.atomic else ''));out.mkdir(parents=True,exist_ok=True)
+p=argparse.ArgumentParser();p.add_argument('--system-apps',type=Path,required=True);p.add_argument('--utilities',type=Path,required=True);p.add_argument('--native',action='store_true');p.add_argument('--width',type=int);p.add_argument('--height',type=int);p.add_argument('--atomic',action='store_true');p.add_argument('--crash-report',action='store_true');a=p.parse_args()
+assert (a.width is None)==(a.height is None), '--width and --height must be specified together'
+out=root/(('dist/fast-wake-clock-native' if a.native else 'dist/fast-wake-clock')+('-atomic' if a.atomic else '')+(f'-{a.width}x{a.height}' if a.width else ''));out.mkdir(parents=True,exist_ok=True)
 from merged_sdk import headers
 sdk=headers(out,a.system_apps,a.utilities,root)
 for sanitize in (False,True):
  flags=['-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_LOW_BATTERY','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_RTC_UTC8_DENVER','-O1','-g','-Wall','-Wextra','-Werror',*['-I'+str(x) for x in (sdk,root/'include',root)]]
  if a.crash_report:flags += ['-DWATCH_CRASH_REPORT','-DWATCH_CRASH_REPORT_NAMESPACE=62']
  if a.atomic:flags+=['-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-I'+str(a.system_apps/'lib/PortableApps/src')]
- if a.native:flags+=['-DTEST_WIDTH=410u','-DTEST_HEIGHT=502u']
+ if a.width:flags += [f'-DTEST_WIDTH={a.width}u',f'-DTEST_HEIGHT={a.height}u']
+ elif a.native:flags+=['-DTEST_WIDTH=410u','-DTEST_HEIGHT=502u']
  if sanitize:flags+=['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer','-no-pie']
  objects=[]
  for i,source in enumerate([root/'tests/fast_wake_clock_test.c',root/'apps/clock/nova/nova.c',root/'apps/clock/points_projection.c',root/'apps/clock/viewport.c',root/'apps/clock/capability_clients.c',root/'apps/clock/quick_radios.c',*[a.system_apps/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')]]):

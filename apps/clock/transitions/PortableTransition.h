@@ -8,7 +8,7 @@
 
 #define PORTABLE_TRANSITION_DURATION_MS 180u
 #define PORTABLE_TRANSITION_MAX_RADIUS 6u
-#define PORTABLE_TRANSITION_MAX_SIDE 320u
+#define PORTABLE_TRANSITION_MAX_SIDE 2048u
 
 /* One shared elapsed-time endpoint for opacity and sharpness. */
 static inline unsigned portable_transition_alpha(uint32_t elapsed_ms) {
@@ -124,7 +124,7 @@ static inline bool pt_ranges_overlap(uintptr_t a_begin, uintptr_t a_end,
  * in bytes. Each image must have at least (height - 1) * stride + width * 2
  * accessible bytes; this API cannot verify the caller's allocation sizes.
  * Scratch is packed and requires exactly width * height * 2 usable bytes, at
- * most 204800 bytes. No other frame-sized storage is used.
+ * most 8388608 bytes. No other frame-sized storage is used.
  *
  * All three buffers must be 2-byte aligned and their used byte envelopes must
  * be disjoint, including image padding between rows. Adjacent disjoint slices

@@ -1,7 +1,8 @@
 #pragma once
-/* Width-scaled watch layout, independent of device and provider identity.
- * Both axes use physical_width / 240. Extra height is layout space, never a
- * vertical stretch of the old square. This module owns no surface or memory.
+/* Watch geometry, independent of device and provider identity.
+ * Native clients opt into physical coordinates. Existing width-based clients
+ * retain physical_width / 240 for both axes and flexible content height.
+ * This module owns no surface or memory.
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,6 +17,7 @@ typedef struct {
     uint32_t physical_width, physical_height;
     uint32_t width, height;
     watch_layout_rect safe;
+    bool native; /* Native clients use physical coordinates throughout. */
 } watch_layout;
 typedef struct {
     watch_layout_rect header, content, footer;
@@ -43,16 +45,34 @@ static inline bool watch_layout_open(watch_layout *out, uint32_t width,
     uint32_t bottom = s->bottom ? (height - s->bottom) * WATCH_LAYOUT_WIDTH / width : logical_height;
     if (left >= right || top >= bottom) return false;
     watch_layout value = {width, height, WATCH_LAYOUT_WIDTH, logical_height,
-        {(int32_t)left, (int32_t)top, right - left, bottom - top}};
+        {(int32_t)left, (int32_t)top, right - left, bottom - top}, false};
     *out = value;
+    return true;
+}
+
+/* Opt-in native layout for clients with resolution-aware raster primitives.
+ * Legacy width-based clients retain watch_layout_open behavior. */
+static inline bool watch_layout_native_open(watch_layout *out, uint32_t width,
+        uint32_t height, const watch_layout_insets *insets) {
+    if (!out || !width || !height || width > WATCH_LAYOUT_MAX_SIDE ||
+            height > WATCH_LAYOUT_MAX_SIDE) return false;
+    const watch_layout_insets zero = {0, 0, 0, 0};
+    const watch_layout_insets *s = insets ? insets : &zero;
+    if ((uint32_t)s->left + s->right >= width ||
+            (uint32_t)s->top + s->bottom >= height) return false;
+    *out = (watch_layout){width, height, width, height,
+        {s->left, s->top, width - s->left - s->right,
+         height - s->top - s->bottom}, true};
     return true;
 }
 
 static inline bool watch_layout_valid(const watch_layout *l) {
     return l && l->physical_width && l->physical_width <= WATCH_LAYOUT_MAX_SIDE &&
         l->physical_height && l->physical_height <= WATCH_LAYOUT_MAX_SIDE &&
-        l->width == WATCH_LAYOUT_WIDTH && l->height && l->height <= WATCH_LAYOUT_MAX_SIDE &&
-        l->height == watch_layout_ceil(l->physical_height * WATCH_LAYOUT_WIDTH, l->physical_width);
+        l->height && l->height <= WATCH_LAYOUT_MAX_SIDE &&
+        (l->native ? (l->width == l->physical_width && l->height == l->physical_height) :
+         (l->width == WATCH_LAYOUT_WIDTH &&
+          l->height == watch_layout_ceil(l->physical_height * WATCH_LAYOUT_WIDTH, l->physical_width)));
 }
 
 /* The same inverse used by the renderer's physical-pixel lookup. Never clamp
@@ -61,8 +81,8 @@ static inline bool watch_layout_touch(const watch_layout *l, uint32_t x, uint32_
         uint16_t *logical_x, uint16_t *logical_y) {
     if (!watch_layout_valid(l) || !logical_x || !logical_y ||
             x >= l->physical_width || y >= l->physical_height) return false;
-    *logical_x = (uint16_t)(x * WATCH_LAYOUT_WIDTH / l->physical_width);
-    *logical_y = (uint16_t)(y * WATCH_LAYOUT_WIDTH / l->physical_width);
+    *logical_x = (uint16_t)(l->native ? x : x * WATCH_LAYOUT_WIDTH / l->physical_width);
+    *logical_y = (uint16_t)(l->native ? y : y * WATCH_LAYOUT_WIDTH / l->physical_width);
     return true;
 }
 
@@ -79,6 +99,11 @@ static inline bool watch_layout_native_rect(const watch_layout *l,
     if (right > l->width) right = l->width;
     if (bottom > l->height) bottom = l->height;
     if (left >= right || top >= bottom) return false;
+    if (l->native) {
+        *out = (watch_layout_rect){(int32_t)left, (int32_t)top,
+            (uint32_t)(right - left), (uint32_t)(bottom - top)};
+        return true;
+    }
     uint32_t x0 = watch_layout_ceil((uint32_t)left * l->physical_width, WATCH_LAYOUT_WIDTH);
     uint32_t y0 = watch_layout_ceil((uint32_t)top * l->physical_width, WATCH_LAYOUT_WIDTH);
     uint32_t x1 = watch_layout_ceil((uint32_t)right * l->physical_width, WATCH_LAYOUT_WIDTH);

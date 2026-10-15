@@ -1,7 +1,7 @@
 #pragma once
-/* App-side logical layout adapter. Hardware providers continue to expose their
- * real dimensions. Uniform scaling keeps existing faces circular; touch uses
- * the inverse transform. The same binary runs on every admitted display. */
+/* Native display lease validation. Home draws directly into the capability's
+ * physical raster surface and consumes the same native touch coordinates.
+ * The adapter owns no image buffer, scaling map, or retained framebuffer. */
 #include "RiscDisplayOutputV1.h"
 #include "RiscTouchV1.h"
 #include "WatchLayout.h"
@@ -14,10 +14,8 @@ typedef struct {
     risc_display_output_api_v1 display;
     const risc_display_output_api_v1 *native;
     risc_display_surface_v1 lease;
-    uint16_t *canvas, *columns;
     uint32_t width,height;
     watch_layout layout;
-    bool scaled;
 } watch_viewport;
 
 typedef struct {

@@ -134,8 +134,26 @@ static void refusals(void) {
     }
 }
 
+static void native_layout(void) {
+    const unsigned sizes[][2]={{240,240},{410,502},{502,410},{120,150},{1,2048},{2048,1}};
+    for(unsigned n=0;n<sizeof(sizes)/sizeof(*sizes);n++) {
+        unsigned w=sizes[n][0],h=sizes[n][1];watch_layout l;
+        assert(watch_layout_native_open(&l,w,h,NULL)&&l.native&&watch_layout_valid(&l));
+        assert(l.width==w&&l.height==h);
+        for(unsigned y=0;y<h;y++)for(unsigned x=0;x<w;x++) {
+            uint16_t xx,yy;assert(watch_layout_touch(&l,x,y,&xx,&yy)&&xx==x&&yy==y);
+        }
+        watch_layout_rect r={-1,-2,w+1,h+2},out;
+        assert(watch_layout_native_rect(&l,&r,&out));
+        assert(!out.x&&!out.y&&out.width==w&&out.height==h);
+    }
+    watch_layout l;watch_layout_insets insets={3,9,7,5};
+    assert(watch_layout_native_open(&l,410,502,&insets));
+    assert(l.safe.x==5&&l.safe.y==3&&l.safe.width==396&&l.safe.height==492);
+}
+
 int main(void) {
-    identity(); tall_reflow(); rect_hit_agreement(); safe_insets(); refusals();
+    native_layout(); identity(); tall_reflow(); rect_hit_agreement(); safe_insets(); refusals();
     const unsigned sizes[][2] = {{240,240},{410,502},{502,410},{239,501},
         {240,294},{320,480},{160,160},{1,1},{1,8},{2048,2048}};
     for (unsigned n = 0; n < sizeof(sizes) / sizeof(*sizes); ++n) full_surface(sizes[n][0], sizes[n][1]);

@@ -49,7 +49,7 @@ static watch_launcher_observation launcher_touch_capture(watch_launcher_touch *t
         if(count<=0){if(count<0)ok=false;break;}o.activity=true;
     }
     risc_touch_snapshot_v1 s={0};
-    o.valid=t->api->snapshot(t->api->context,&s)&&ok&&s.width==240&&s.height==watch_home_height(clock_viewport.layout.height);
+    o.valid=t->api->snapshot(t->api->context,&s)&&ok&&s.width==clock_viewport.width&&s.height==clock_viewport.height;
     o.count=s.contact_count;o.id=s.contacts[0].id;o.x=s.contacts[0].x;o.y=s.contacts[0].y;
     if(o.count)o.activity=true;
     return o;

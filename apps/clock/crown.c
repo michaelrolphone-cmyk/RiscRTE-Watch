@@ -275,6 +275,13 @@ static bool alive(uint32_t *ms) {
     *ms=h.uptime_ms; return true;
 }
 #if defined(WATCH_CONTEXTS_CLIENT) && defined(WATCH_CLOCK_LAUNCHER)
+/* Keep both endpoints of an unchanged input run. Native high-detail faces may
+ * span many capture intervals; redundant neutral/held snapshots must not fill
+ * the journal and discard a complete gesture already observed in that frame. */
+static bool clock_same_observation(const watch_launcher_observation *a,const watch_launcher_observation *b) {
+    return a->valid==b->valid && a->count==b->count &&
+        (!a->count || (a->id==b->id && a->x==b->x && a->y==b->y));
+}
 static bool clock_render_checkpoint(void *context) {
     if(!clock_contexts_capture_checkpoint(context))return false;
     if(!clock_rendering||!touch.subscription||launcher_swipe_pending)return true;
@@ -287,7 +294,11 @@ static bool clock_render_checkpoint(void *context) {
     launcher_sampled_at=now;
     watch_launcher_observation o=launcher_touch_capture(&touch,now);
     clock_raster_activity|=o.activity;
-    if(clock_raster_count<CLOCK_RASTER_OBSERVATIONS)
+    if(clock_raster_count>=2 &&
+       clock_same_observation(&clock_raster_observations[clock_raster_count-1],&o) &&
+       clock_same_observation(&clock_raster_observations[clock_raster_count-2],&o))
+        clock_raster_observations[clock_raster_count-1]=o;
+    else if(clock_raster_count<CLOCK_RASTER_OBSERVATIONS)
         clock_raster_observations[clock_raster_count++]=o;
     else clock_raster_overflow=true;
     return true;
@@ -473,16 +484,17 @@ static bool hold_boot_frame(void) {
  * across submit, sleep, or an application switch. Allocation failure preserves
  * the normal sharp clock path instead of making Clock unavailable. */
 static bool logo_to_clock(void) {
-    const unsigned height=clock_viewport.layout.height;
-    const size_t bytes=240u*height*sizeof(uint16_t);
+    const unsigned width=clock_viewport.width,height=clock_viewport.height;
+    const uint32_t stride=width*sizeof(uint16_t);
+    const size_t bytes=(size_t)stride*height;
     uint16_t *old=malloc(bytes),*scratch=old?malloc(bytes):NULL;
     bool ok=false;
-    if (!old || !scratch || height>PORTABLE_TRANSITION_MAX_SIDE) {
+    if (!old || !scratch || width>PORTABLE_TRANSITION_MAX_SIDE || height>PORTABLE_TRANSITION_MAX_SIDE) {
         risc_display_surface_v1 s={0};uint32_t now;
         free(scratch);free(old);
         return alive(&now) && frame(&s) && draw_clock(now,&s) && present() && pace_frame(now);
     }
-    risc_display_surface_v1 logo={0,old,240,height,480,bytes,RISC_DISPLAY_FORMAT_RGB565};
+    risc_display_surface_v1 logo={0,old,width,height,stride,bytes,RISC_DISPLAY_FORMAT_RGB565};
     uint32_t start,now;
     if (!watch_boot_render(&logo,1800) || !alive(&start)) goto done;
     for(unsigned count=0;count<100;count++) {
@@ -490,8 +502,8 @@ static bool logo_to_clock(void) {
         if (!alive(&now) || !frame(&s) || !draw_clock(now,&s)) goto done;
         if (!count) start=now;
         unsigned alpha=portable_transition_alpha(now-start);
-        if (!portable_transition_rgb565(s.pixels,s.stride_bytes,old,480,
-                scratch,bytes,240,height,alpha) || !present() || !pace_frame(now)) goto done;
+        if (!portable_transition_rgb565(s.pixels,s.stride_bytes,old,stride,
+                scratch,bytes,width,height,alpha) || !present() || !pace_frame(now)) goto done;
         if (alpha==256u) {ok=true;break;}
     }
 done:
@@ -510,24 +522,25 @@ done:
  * Capture it before drawing, preserve its light level, and never play the boot
  * intro. Actual successful wake below still uses startup() in both variants. */
 static bool return_to_clock(void) {
-    const unsigned height=clock_viewport.layout.height;
-    const size_t bytes=240u*height*sizeof(uint16_t);
+    const unsigned width=clock_viewport.width,height=clock_viewport.height;
+    const uint32_t stride=width*sizeof(uint16_t);
+    const size_t bytes=(size_t)stride*height;
     uint16_t *old=malloc(bytes),*scratch=old?malloc(bytes):NULL;
     bool ok=false;
     uint32_t start,now;
     risc_display_surface_v1 retained={0};
-    if (!old || !scratch || height>PORTABLE_TRANSITION_MAX_SIDE) {
+    if (!old || !scratch || width>PORTABLE_TRANSITION_MAX_SIDE || height>PORTABLE_TRANSITION_MAX_SIDE) {
         free(scratch);free(old);
         return alive(&now) && frame(&retained) && draw_clock(now,&retained) && present();
     }
     if (!frame(&retained)) goto done;
     size_t span;
     if (!retained.pixels || retained.pixel_format!=RISC_DISPLAY_FORMAT_RGB565 ||
-        retained.width!=240u || retained.height!=height || retained.stride_bytes<480u ||
+        retained.width!=width || retained.height!=height || retained.stride_bytes<stride ||
         retained.stride_bytes%sizeof(uint16_t) ||
-        !pt_image_span(retained.stride_bytes,480u,height,&span) || span>retained.size_bytes) goto done;
+        !pt_image_span(retained.stride_bytes,stride,height,&span) || span>retained.size_bytes) goto done;
     for(unsigned y=0;y<height;y++)
-        memcpy(old+y*240u,(const uint8_t *)retained.pixels+(size_t)y*retained.stride_bytes,480u);
+        memcpy(old+(size_t)y*width,(const uint8_t *)retained.pixels+(size_t)y*retained.stride_bytes,stride);
     display->release(display->context,held);held=0;
     if (!alive(&start)) goto done;
     /* Alpha zero is already on the panel. Do not render or transfer a duplicate
@@ -541,8 +554,8 @@ static bool return_to_clock(void) {
         if (!frame(&s) || !draw_clock(now,&s) || !alive(&painted)) goto done;
         age=painted-start; /* Rendering time belongs to the same 60ms budget. */
         unsigned alpha=age>=60u?256u:age*256u/60u;
-        if (!portable_transition_rgb565(s.pixels,s.stride_bytes,old,480,
-                scratch,bytes,240,height,alpha) || !present()) goto done;
+        if (!portable_transition_rgb565(s.pixels,s.stride_bytes,old,stride,
+                scratch,bytes,width,height,alpha) || !present()) goto done;
         if (alpha==256u) {ok=true;break;}
         if (!pace_frame(now)) goto done;
     }
@@ -842,10 +855,10 @@ static int sleep_cycle(void) {
     if (!frame(&blank))return clock_sleep_failure("BLANK-ACQUIRE");
     if (
         !blank.pixels || blank.pixel_format!=RISC_DISPLAY_FORMAT_RGB565 ||
-        blank.width!=240u || blank.height!=clock_viewport.layout.height || blank.stride_bytes<480u ||
+        blank.width!=clock_viewport.width || blank.height!=clock_viewport.height || blank.stride_bytes<blank.width*2u ||
         blank.stride_bytes%sizeof(uint16_t) ||
-        !pt_image_span(blank.stride_bytes,480u,blank.height,&span) || span>blank.size_bytes) return clock_sleep_failure("BLANK-SURFACE");
-    for(unsigned y=0;y<blank.height;y++) memset((uint8_t *)blank.pixels+(size_t)y*blank.stride_bytes,0,480u);
+        !pt_image_span(blank.stride_bytes,blank.width*2u,blank.height,&span) || span>blank.size_bytes) return clock_sleep_failure("BLANK-SURFACE");
+    for(unsigned y=0;y<blank.height;y++) memset((uint8_t *)blank.pixels+(size_t)y*blank.stride_bytes,0,blank.width*2u);
     if (!present()) return clock_sleep_failure("BLANK-PRESENT");
     /* Every preparation attempt is paired with resume, including partial
      * preparation and platform refusal. No framebuffer lease survives here. */
@@ -1017,10 +1030,10 @@ __attribute__((visibility("default"))) void app_main(void) {
     }
     display=&clock_viewport.display;
 #ifdef WATCH_CLOCK_LAUNCHER
-    if(!watch_face_set_height(&picker,clock_viewport.layout.height))goto done;
+    if(!watch_face_set_size(&picker,clock_viewport.width,clock_viewport.height))goto done;
 #endif
 #ifdef WATCH_QUICK_ACTIONS
-    if(!pqa_set_height(&clock_quick.ui,clock_viewport.layout.height))goto done;
+    if(!pqa_set_dimensions(&clock_quick.ui,clock_viewport.width,clock_viewport.height))goto done;
 #endif
 #ifndef WATCH_CLOCK_RETURN
     if (!display->set_brightness(display->context,0,100)) goto done;
@@ -1332,7 +1345,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef WATCH_ATOMIC_PREFERENCES
             picker_save_failed=!clock_face_begin();if(clock_atomic_retained)break;
 #endif
-            if(!picker_scratch){picker_scratch=malloc(sizeof(*picker_scratch));if(picker_scratch)picker_scratch->valid_mask=0;}
+            if(!picker_scratch)picker_scratch=nova_watch_picker_cache_create(clock_viewport.width,clock_viewport.height);
             if(!picker_scratch){watch_face_close(&picker);rt->diagnostic("WATCH_CLOCK picker=out-of-memory");}
         }
         /* Crown close/sleep supersedes any contact action sampled while an
@@ -1351,7 +1364,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 #endif
             if(saved) {
                 picker.selected=(uint8_t)picker_selection_pending;
-                watch_face_close(&picker);free(picker_scratch);picker_scratch=NULL;
+                watch_face_close(&picker);nova_watch_picker_cache_destroy(picker_scratch);picker_scratch=NULL;
                 picker_open_pending=launcher_swipe_pending=false;
             }
             picker_save_failed=!saved;
@@ -1359,7 +1372,7 @@ __attribute__((visibility("default"))) void app_main(void) {
         }
         /* A long-held crown gesture dismisses the picker without changing
          * selection; short-release manual sleep is evaluated below. */
-        if(picker.open&&(events&1u)){watch_face_close(&picker);free(picker_scratch);picker_scratch=NULL;picker_save_failed=false;}
+        if(picker.open&&(events&1u)){watch_face_close(&picker);nova_watch_picker_cache_destroy(picker_scratch);picker_scratch=NULL;picker_save_failed=false;}
         if(launcher_swipe_pending) {
             launcher_swipe_pending=false;
             /* The completed sharp Clock remains in provider-owned storage.
@@ -1402,7 +1415,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 #endif
             /* Retained input subscriptions must not veto platform sleep. */
             if(!launcher_touch_close(&touch)) {clock_sleep_failure("TOUCH-CLOSE");break;}
-            watch_face_close(&picker);free(picker_scratch);picker_scratch=NULL;
+            watch_face_close(&picker);nova_watch_picker_cache_destroy(picker_scratch);picker_scratch=NULL;
             picker_open_pending=picker_select_pending=picker_save_failed=false;
 #endif
 #ifdef WATCH_RUNTIME_FEATURES
@@ -1488,7 +1501,7 @@ done:
     clock_alarm_finish();
 #endif
 #ifdef WATCH_CLOCK_LAUNCHER
-    free(picker_scratch);picker_scratch=NULL;
+    nova_watch_picker_cache_destroy(picker_scratch);picker_scratch=NULL;
     if(!launcher_touch_close(&touch)) rt->diagnostic("WATCH_CLOCK error=touch-release");
 #endif
     if (held && display && display->release) display->release(display->context,held);

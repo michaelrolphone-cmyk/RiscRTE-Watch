@@ -17,7 +17,9 @@
 #define WATCH_MOTION_WAKE
 #define WATCH_ALARM_SLEEP_RESUME
 #define WATCH_QUICK_RADIOS
+#ifndef PORTABLE_LOW_BATTERY
 #define PORTABLE_LOW_BATTERY
+#endif
 #define main inherited_quick_fixture_main
 #define WATCH_TEST_RUNTIME_EXTERN
 #include <tests/quick_clock_test.c>
@@ -53,11 +55,13 @@ static bool sleep_failure_armed;
 static void check_refusal_pixels(void){
  fixture_expected_face(false);
  if(sleep_status[0]){
-  for(unsigned y=0;y<TEST_HEIGHT;y++)for(unsigned x=0;x<TEST_WIDTH;x++) {
-   unsigned ly=y*240/TEST_WIDTH,lx=x*240/TEST_WIDTH;
-   if(ly<TEST_LOGICAL_HEIGHT-37||ly>=TEST_LOGICAL_HEIGHT-9||lx<10||lx>=230)
+  unsigned side=watch_home_side(TEST_WIDTH,TEST_HEIGHT),ui_height=TEST_HEIGHT*240u/side;
+  unsigned x0=watch_home_left(TEST_WIDTH,TEST_HEIGHT)+10u*side/240u;
+  unsigned x1=watch_home_left(TEST_WIDTH,TEST_HEIGHT)+230u*side/240u;
+  unsigned y0=(ui_height-37u)*side/240u,y1=(ui_height-9u)*side/240u;
+  for(unsigned y=0;y<TEST_HEIGHT;y++)for(unsigned x=0;x<TEST_WIDTH;x++)
+   if(y<y0||y>=y1||x<x0||x>=x1)
     assert(completed_pixels[y*TEST_WIDTH+x]==expected_pixels[y*TEST_WIDTH+x]);
-  }
   assert(memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
   fixture_expected_face(true);
  }
@@ -125,7 +129,7 @@ static bool fast_status(void*c,uint64_t token,risc_display_present_status_v1*out
  check_io();(void)c;assert(token==submitted&&pending);
 
  if(clock_ms-frame_started<transfer_cost){out->state=RISC_DISPLAY_PRESENT_ACTIVE;return true;}
- pending=false;if(probe_began && clock_ms-probe_began>=1000)ended=true;out->state=fail_display?RISC_DISPLAY_PRESENT_FAILED:RISC_DISPLAY_PRESENT_COMPLETE;
+ pending=false;if(probe_began && clock_ms-probe_began>=1000 && !launcher_swipe_pending)ended=true;out->state=fail_display?RISC_DISPLAY_PRESENT_FAILED:RISC_DISPLAY_PRESENT_COMPLETE;
  if(!fail_display){memcpy(completed_pixels,pixels,sizeof(pixels));last_complete=submitted;frame_at=clock_ms;if(clock_alarm_modal)alarm_frames++;
   if(refused_restores&&hardware_brightness){
    check_refusal_pixels();clean_refusal_frames++;
@@ -309,6 +313,7 @@ static void run_matrix(void) {
   raster_cost=raster_probes=max_poll_gap=last_poll_at=0;requested_wakes=wake;ta.poll=probe_poll;
   app_main();check_clean();
   bool correct=probe_trajectory?(probe_quick_open&&launches==0):(launches==1);
+  if(!correct)fprintf(stderr,"gesture failure: wake=%u duration=%u cost=%u gesture=%u launch=%u quick=%u probes=%u raster_cost=%u\n",wake,probe_duration,raster_delay,probe_trajectory,launches,probe_quick_open,raster_probes,raster_cost);
   if(!raster_delay){assert(correct);}
   recognized+=correct;total++;
 #ifndef WATCH_RASTER_EXPECT_LOSS
@@ -352,19 +357,19 @@ static bool boundary_snapshot(void*c,risc_touch_snapshot_v1*out){(void)c;*out=bo
 static bool boundary_poll(void*c,size_t n){(void)c;assert(n==1);return boundary_poll_ok;}
 static int32_t boundary_next(void*c,uint64_t s,risc_touch_event_v1*out){(void)c;(void)s;(void)out;return boundary_next_result;}
 static void boundary_reset(void) {
- reset_case();clock_viewport.layout.height=TEST_LOGICAL_HEIGHT;rt=&fast_runtime;native_clock=(watch_clock_runtime){0};
+ reset_case();clock_viewport.width=TEST_WIDTH;clock_viewport.height=TEST_HEIGHT;assert(watch_layout_native_open(&clock_viewport.layout,TEST_WIDTH,TEST_HEIGHT,NULL));rt=&fast_runtime;native_clock=(watch_clock_runtime){0};
  clock_contexts=(portable_contexts_client){0};clock_contexts_uncertain=false;clock_alarm_modal=false;
- pqa_session_init(&clock_quick);assert(pqa_set_height(&clock_quick.ui,TEST_LOGICAL_HEIGHT));picker=(watch_face_picker){0};assert(watch_face_set_height(&picker,TEST_LOGICAL_HEIGHT));picker_scratch=NULL;
+ pqa_session_init(&clock_quick);assert(pqa_set_dimensions(&clock_quick.ui,TEST_WIDTH,TEST_HEIGHT));picker=(watch_face_picker){0};assert(watch_face_set_size(&picker,TEST_WIDTH,TEST_HEIGHT));picker_scratch=NULL;
  launcher_swipe_pending=launcher_activity_pending=picker_open_pending=picker_select_pending=false;
  launcher_sampled_at=0;clock_raster_count=0;clock_raster_overflow=clock_raster_activity=false;
  clock_rendering=true;clock_display_settled=false;held=1;
  touch=(watch_launcher_touch){.api=&ta,.subscription=1};
  ta.snapshot=boundary_snapshot;ta.poll=boundary_poll;ta.next=boundary_next;
  boundary_snapshot_ok=boundary_poll_ok=true;boundary_next_result=0;
- boundary_state=(risc_touch_snapshot_v1){.width=240,.height=TEST_LOGICAL_HEIGHT};
+ boundary_state=(risc_touch_snapshot_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT};
 }
 static void boundary_capture(unsigned ms,unsigned count,unsigned id,unsigned x,unsigned y) {
- clock_ms=ms;boundary_state.contact_count=count;boundary_state.contacts[0]=(risc_touch_contact_v1){id,0,x,y};
+ clock_ms=ms;boundary_state.contact_count=count;boundary_state.contacts[0]=(risc_touch_contact_v1){id,0,watch_layout_ceil(x*TEST_WIDTH,240),watch_layout_ceil(y*TEST_WIDTH,240)};
  watch_face_picker prior_picker=picker;pqa_session prior_quick=clock_quick;
  bool launch=launcher_swipe_pending,open=picker_open_pending,select=picker_select_pending;
  assert(clock_render_checkpoint(NULL));
@@ -373,7 +378,7 @@ static void boundary_capture(unsigned ms,unsigned count,unsigned id,unsigned x,u
  assert(!launches&&!allocations); /* Raw capture cannot launch, allocate or mutate UI. */
 }
 static void boundary_direct(unsigned ms,unsigned count,unsigned id,unsigned x,unsigned y) {
- clock_ms=ms;boundary_state.contact_count=count;boundary_state.contacts[0]=(risc_touch_contact_v1){id,0,x,y};
+ clock_ms=ms;boundary_state.contact_count=count;boundary_state.contacts[0]=(risc_touch_contact_v1){id,0,watch_layout_ceil(x*TEST_WIDTH,240),watch_layout_ceil(y*TEST_WIDTH,240)};
  clock_rendering=false;sample_launcher_touch(ms,true);clock_rendering=true;
  assert(!launches&&!allocations);
 }
@@ -382,6 +387,10 @@ static void boundary_neutral(unsigned ms){boundary_capture(ms,0,0,0,0);boundary_
 static void boundary_idle(void){assert(!launcher_swipe_pending&&!picker_open_pending&&!picker_select_pending&&!picker.open&&!pqa_visible(&clock_quick.ui));}
 static void boundary_done(const char *name){printf("BOUNDARY PASS %s\n",name);boundary_cases++;held=0;clock_rendering=false;}
 static void run_boundaries(void){
+ boundary_reset();boundary_neutral(8);
+ for(unsigned ms=24;ms<2400;ms+=8)boundary_capture(ms,1,1,120,120);
+ assert(!clock_raster_overflow&&clock_raster_count<=4);boundary_flush();
+ assert(picker.open&&picker_open_pending);boundary_done("unchanged long-held snapshots preserve timing without exhausting native raster journal");
  boundary_reset();boundary_neutral(8);boundary_capture(24,1,1,120,120);boundary_capture(80,0,0,0,0);boundary_flush();boundary_idle();boundary_done("tap-only remains inert");
  boundary_reset();boundary_neutral(8);for(unsigned ms=24;ms<=824;ms+=8)boundary_capture(ms,1,1,120,120);boundary_capture(832,0,0,0,0);boundary_flush();assert(picker.open&&picker_open_pending&&!picker_scratch&&!launcher_swipe_pending);boundary_done("800ms hold opens picker only after raster, with no allocation");
  for(unsigned fault=0;fault<6;fault++) {
@@ -389,15 +398,15 @@ static void run_boundaries(void){
   if(fault==0)boundary_poll_ok=false;
   if(fault==1)boundary_snapshot_ok=false;
   if(fault==2)boundary_next_result=-1;
-  if(fault==3)boundary_state.width=239;
+  if(fault==3)boundary_state.width=TEST_WIDTH-1;
   boundary_capture(32,fault==4?2:1,fault==5?2:1,120,120);
-  boundary_poll_ok=boundary_snapshot_ok=true;boundary_next_result=0;boundary_state.width=240;
+  boundary_poll_ok=boundary_snapshot_ok=true;boundary_next_result=0;boundary_state.width=TEST_WIDTH;
   boundary_capture(40,1,fault==5?2:1,60,120);boundary_flush();boundary_idle();
   boundary_neutral(48);boundary_capture(64,1,3,120,120);boundary_capture(80,1,3,60,120);boundary_flush();assert(launcher_swipe_pending);
   const char *names[]={"poll failure cancels then fresh gesture recovers","snapshot failure cancels then recovers","queue GAP cancels then recovers","invalid geometry cancels then recovers","multitouch cancels then recovers","contact replacement cancels then recovers"};boundary_done(names[fault]);
  }
  boundary_reset();boundary_neutral(8);boundary_capture(24,1,1,200,120);boundary_capture(32,1,1,100,120);
- for(unsigned ms=40;ms<1200;ms+=8)boundary_capture(ms,1,1,100,120);
+ for(unsigned ms=40;ms<1200;ms+=8)boundary_capture(ms,1,1,100+(ms/8u)%2u,120);
  assert(clock_raster_overflow);boundary_flush();boundary_idle();
  boundary_capture(1200,1,1,40,120);boundary_flush();boundary_idle();
  boundary_neutral(1208);boundary_capture(1224,1,2,120,120);boundary_capture(1240,1,2,60,120);boundary_flush();assert(launcher_swipe_pending);boundary_done("overflow discards queued swipe and requires fresh neutral");
@@ -419,7 +428,7 @@ static void run_boundaries(void){
 }
 
 #endif
-int main(void){run_matrix();
+int main(void){setbuf(stdout,NULL);run_matrix();
 #ifndef WATCH_RASTER_EXPECT_LOSS
 run_all_faces();run_boundaries();
 #endif

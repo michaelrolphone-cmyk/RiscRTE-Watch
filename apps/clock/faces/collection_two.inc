@@ -9,10 +9,15 @@ static unsigned f2edge(int x) {
     int d=x<120?2*x+1:479-2*x;
     return d<96?(unsigned)(d*255/96):255u;
 }
+static unsigned f2edge_native(int x,unsigned side) {
+    int d=x<(int)side/2?2*x+1:(int)(2*side)-1-2*x;
+    unsigned edge=side*96u/240u;if(!edge)edge=1;
+    return d<(int)edge?(unsigned)d*255u/edge:255u;
+}
 static void f2fade(canvas*c) {
-    for(int y=0;y<240;y++)for(int x=0;x<240;x++)if(x<48||x>=192||y<48||y>=192) {
+    for(unsigned y=0;y<c->height;y++)for(unsigned x=0;x<c->width;x++) {
         uint8_t*p=at(c,(unsigned)x,(unsigned)y);uint16_t col=(uint16_t)(p[0]|p[1]<<8);
-        if(col)put(p,f2dim(col,f2edge(x)*f2edge(y)/255));
+        if(col)put(p,f2dim(col,f2edge_native(x,c->width)*f2edge_native(y,c->width)/255));
     }
 }
 /* Ordered quantization keeps the source's smooth glows from breaking into
@@ -26,22 +31,24 @@ static void f2gradient_pixel(canvas*c,int x,int y,uint16_t color,unsigned alpha)
     put(p,(uint16_t)((((r+t)/16)<<11)|(((g+t)/16)<<5)|((b+t)/16)));
 }
 static void f2band(canvas*c,int yq8,int heightq8) {
+    yq8=native_q(c,yq8);heightq8=native_q(c,heightq8);
     int end=yq8+heightq8;
     for(int y=yq8/256;y<(end+255)/256;y++) {
         int lo=y*256>yq8?y*256:yq8,hi=(y+1)*256<end?(y+1)*256:end;
-        if(y>=0&&y<240)for(int x=60;x<180;x++)blend(at(c,(unsigned)x,(unsigned)y),0,(unsigned)(hi-lo)*255/256);
+        if(y>=0&&y<(int)c->height)for(int x=native_q(c,60);x<native_q(c,180);x++)blend(at(c,(unsigned)x,(unsigned)y),0,(unsigned)(hi-lo)*255/256);
     }
 }
 static void f2blob(canvas*c,int cx,int cy,int radius,uint16_t color) {
+    cx=native_q(c,cx);cy=native_q(c,cy);radius=native_q(c,radius);if(radius<1)return;
     int left=cx-radius,top=cy-radius,right=cx+radius,bottom=cy+radius;
     if(left<0)left=0;
     if(top<0)top=0;
-    if(right>239)right=239;
-    if(bottom>239)bottom=239;
+    if(right>=(int)c->width)right=(int)c->width-1;
+    if(bottom>=(int)c->height)bottom=(int)c->height-1;
     unsigned rr=(unsigned)(radius*radius);
     for(int y=top;y<=bottom;y++)for(int x=left;x<=right;x++) {
         int dx=x-cx,dy=y-cy;unsigned d=(unsigned)(dx*dx+dy*dy);
-        if(d<rr)f2gradient_pixel(c,x,y,color,f2_radial_alpha[d*1024u/rr]);
+        if(d<rr)f2gradient_pixel(c,x,y,color,f2_radial_alpha[(unsigned)((uint64_t)d*1024u/rr)]);
     }
 }
 static void f2battery(canvas*c,const nova_watch_state*s,const nova_watch_labels*l,int y,int width,uint16_t color) {
@@ -85,13 +92,13 @@ static unsigned f2sqrt(unsigned n) {
 }
 static void f2moon(canvas*c,unsigned phase) {
     int k=sine(phase+90*256);bool wax=phase<180*256;
-    const int r=36*16;
-    for(int y=48;y<120;y++) {
-        int limb[2];for(int sy=0;sy<2;sy++){int yy=y*16+4+sy*8-84*16;limb[sy]=(int)f2sqrt((unsigned)(r*r-yy*yy));}
-        for(int x=84;x<156;x++) {
+    const int r=native_q(c,36*16),cx=native_q(c,120*16),cy=native_q(c,84*16);
+    for(int y=native_q(c,48);y<native_q(c,120);y++) {
+        int limb[2];for(int sy=0;sy<2;sy++){int yy=y*16+4+sy*8-cy;int d=r*r-yy*yy;limb[sy]=d>0?(int)f2sqrt((unsigned)d):0;}
+        for(int x=native_q(c,84);x<native_q(c,156);x++) {
             unsigned a=0;
             for(int sy=0;sy<2;sy++)for(int sx=4;sx<16;sx+=8) {
-                int xx=x*16+sx-120*16,edge=limb[sy],term=k*edge/32767;
+                int xx=x*16+sx-cx,edge=limb[sy],term=k*edge/32767;
                 if(xx>=-edge&&xx<=edge&&(wax?xx>=term:xx<=-term))a++;
             }
             if(a)blend(at(c,(unsigned)x,(unsigned)y),FC(235,231,214),a*255/4);
@@ -163,10 +170,10 @@ static void f2roundrect(canvas*c,int x,int y,int w,int h,int radius,uint16_t col
 static void f2giant(canvas*c,const char*digits,int y) {
     ftext(c,&ff_f2_o104,digits,120,y,0,196,FWHITE,0);
     /* Source objectBoundingBox vertical gradient, separately for each row. */
-    int top=y-76,bottom=y+1;
-    for(int yy=top;yy<=bottom;yy++)if(yy>=0&&yy<240) {
+    int top=native_q(c,y-76),bottom=native_q(c,y+1);
+    for(int yy=top;yy<=bottom;yy++)if(yy>=0&&yy<(int)c->height) {
         int f=(yy-top)*256/(bottom-top);uint16_t col=FC(255,61+115*f/256,110-78*f/256);
-        for(int x=0;x<240;x++){uint8_t*p=at(c,(unsigned)x,(unsigned)yy);unsigned a=(unsigned)(p[0]|p[1]<<8);if(a)put(p,f2dim(col,((a>>5)&63)*255/63));}
+        for(unsigned x=0;x<c->width;x++){uint8_t*p=at(c,x,(unsigned)yy);unsigned a=(unsigned)(p[0]|p[1]<<8);if(a)put(p,f2dim(col,((a>>5)&63)*255/63));}
     }
 }
 static void fcollection_two(canvas*c,const nova_watch_state*state,const nova_watch_labels*l,unsigned id,int sec,int min,int hour,unsigned sub) {
@@ -181,11 +188,13 @@ static void fcollection_two(canvas*c,const nova_watch_state*state,const nova_wat
         f2fade(c);ftext(c,&ff_r12,l->date,120,62,768,0,FC(197,209,217),0);
         ftext(c,&ff_f2_r62,l->hour_minute,120,140,0,150,FWHITE,0);f2battery(c,state,l,180,7,FWHITE);
     } else if(id==1) {
-        for(int y=30;y<122;y++)for(int x=74;x<166;x++) {
-            int dx=x*16+8-1920,dy=y*16+8-76*16;unsigned count=0;
-            if(dx*dx+dy*dy>(46*16+12)*(46*16+12))continue;
-            for(int sy=4;sy<16;sy+=8)for(int sx=4;sx<16;sx+=8){int xx=x*16+sx-1920,yy=y*16+sy-76*16;count+=xx*xx+yy*yy<=46*16*46*16;}
-            if(count){int f=(y-30)*256/92;blend(at(c,(unsigned)x,(unsigned)y),FC(255,210-165*f/256,74+64*f/256),count*255/4);}
+        const int cx=native_q(c,1920),cy=native_q(c,76*16),radius=native_q(c,46*16);
+        int top=native_q(c,30),bottom=native_q(c,122),span=bottom-top;if(span<1)span=1;
+        for(int y=top;y<bottom;y++)for(int x=native_q(c,74);x<native_q(c,166);x++) {
+            int dx=x*16+8-cx,dy=y*16+8-cy;unsigned count=0;
+            if(dx*dx+dy*dy>(radius+12)*(radius+12))continue;
+            for(int sy=4;sy<16;sy+=8)for(int sx=4;sx<16;sx+=8){int xx=x*16+sx-cx,yy=y*16+sy-cy;count+=xx*xx+yy*yy<=radius*radius;}
+            if(count){int f=(y-top)*256/span;blend(at(c,(unsigned)x,(unsigned)y),FC(255,210-165*f/256,74+64*f/256),count*255/4);}
         }
         for(int i=0;i<5;i++)f2band(c,(84+i*8)*256+i*i*154,384+i*230);
         fline(c,40*16,130*16,200*16,130*16,19,FC(255,45,138));f2fade(c);
@@ -194,7 +203,7 @@ static void fcollection_two(canvas*c,const nova_watch_state*state,const nova_wat
         char hh[3]={l->hour_minute[0],l->hour_minute[1],0};f2giant(c,hh,114);f2giant(c,l->hour_minute+3,196);
         frect(c,22,118,196,2,FC(42,42,42));if(l->time_valid)frect(c,22,118,196*sec/(360*256),2,FWHITE);
         /* SVG scanline pattern repeats every4px:2.4px clear then1.6px black. */
-        for(int y=36;y<206;y++){unsigned a=y%4==2?153:y%4==3?255:0;if(a)for(int x=0;x<240;x++)blend(at(c,(unsigned)x,(unsigned)y),0,a);}
+        for(int y=native_q(c,36);y<native_q(c,206);y++){unsigned phase=(unsigned)y*240u/c->width%4u;unsigned a=phase==2?153:phase==3?255:0;if(a)for(unsigned x=0;x<c->width;x++)blend(at(c,(unsigned)x,(unsigned)y),0,a);}
         f2fade(c);ftext(c,&ff_r11,l->date,120,30,768,0,FC(191,191,191),0);f2battery(c,state,l,208,7,FC(255,122,61));
     } else if(id==3) {
         for(unsigned i=0;i<46;i++){int v=sine((unsigned)((int64_t)sec*7*14668/(60*256)+i*14668));if(v<0)v=-v;unsigned a=51+(unsigned)v*127/32767;fcirc(c,f2_stars[i*3]*16,f2_stars[i*3+1]*16,f2_stars[i*3+2],0,f2dim(FWHITE,a));}
@@ -209,7 +218,7 @@ static void fcollection_two(canvas*c,const nova_watch_state*state,const nova_wat
         f2outlined(c,&ff_r10,"DECORATIVE MAP",46,768,0,2,FC(125,232,196));
         f2outlined(c,&ff_f2_o48,l->hour_minute,124,0,130,3,FWHITE);f2outlined(c,&ff_r11,l->date,148,768,0,2,FC(232,255,217));
         f2outlined(c,&ff_r10,"SYNTHETIC TERRAIN",165,512,0,2,FC(125,232,196));
-        for(int y=173;y<187;y++)for(int x=72;x<168;x++)blend(at(c,(unsigned)x,(unsigned)y),0,166);
+        for(int y=native_q(c,173);y<native_q(c,187);y++)for(int x=native_q(c,72);x<native_q(c,168);x++)blend(at(c,(unsigned)x,(unsigned)y),0,166);
         f2battery(c,state,l,178,7,FC(125,232,196));
     } else if(id==5) {
         f2blob(c,120,92,36,FAMBER);for(int r=26;r<=70;r+=22)fcirc(c,1920,92*16,r*16,16,FC(42,58,82));fcirc(c,1920,92*16,7*16,0,FAMBER);

@@ -9,6 +9,7 @@ from pathlib import Path
 import argparse
 import os
 import subprocess
+from merged_sdk import headers
 
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
@@ -26,13 +27,14 @@ for sanitize in ((False, True) if a.mode == 'both' else (a.mode == 'sanitized',)
     label = 'sanitized' if sanitize else 'normal'
     out = a.output / label
     out.mkdir(parents=True, exist_ok=True)
-    flags = ['-DWATCH_FAST_WAKE','-DPORTABLE_WATCH_NATIVE_HEIGHT', '-DPORTABLE_RTC_UTC8_DENVER', '-O1', '-g',
+    sdk=headers(out,a.system_apps,a.utilities,source_root)
+    flags = ['-DPORTABLE_LOW_BATTERY','-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_SHARED_PREFERENCE_HEADERS','-DWATCH_FAST_WAKE','-DPORTABLE_WATCH_NATIVE_HEIGHT', '-DPORTABLE_RTC_UTC8_DENVER', '-O1', '-g',
              '-Wall', '-Wextra', '-Werror']
     if a.native:
         flags += ['-DTEST_WIDTH=410u', '-DTEST_HEIGHT=502u']
     if a.expect_loss:
         flags += ['-DWATCH_RASTER_EXPECT_LOSS']
-    for include in (a.system_apps / 'lib/PortableApps/include',
+    for include in (sdk,a.system_apps / 'lib/PortableApps/include',
                     a.utilities / 'lib/Contexts/include',
                     a.utilities / 'lib/Alarm/include', source_root / 'sdk/app',
                     source_root / 'sdk/driver', source_root / 'include', source_root):

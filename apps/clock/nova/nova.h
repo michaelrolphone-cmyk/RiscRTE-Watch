@@ -35,29 +35,33 @@ typedef struct {
 bool nova_watch_context_message(risc_display_surface_v1 *surface,const char *message);
 bool nova_watch_sleep_status(risc_display_surface_v1 *surface,const char *label);
 void nova_watch_format(const nova_watch_state *state, nova_watch_labels *labels);
-/* Bounded 240-wide little-endian RGB565 output, height 240..2048. Face cores
- * retain exact 240x240 geometry; additional height hosts independent header /
- * live Point-summary content. With a NULL capture
+/* Bounded capability-native little-endian RGB565 output, each axis <=2048.
+ * Face cores resolve square geometry before rasterization; extra height hosts
+ * face titles and live Point-summary content. With a NULL capture
  * callback this is pure. The opt-in owner callback may only drain already-owned
- * audio or journal raw input without UI mutation; false stops frame writes and propagates failure. No allocation,
- * mutable globals, floating point, trig, or runtime SVG/font engine. The picker
- * alone uses its explicit caller-owned cache below.
+ * audio or journal raw input without UI mutation; false stops frame writes and
+ * propagates failure. Face rasterization allocates no memory and uses integer
+ * geometry and fixed glyph masks. The picker uses its explicit lifetime cache.
  * Writes only active pixels. Stride padding and caller guards are preserved. */
 bool nova_watch_render(risc_display_surface_v1 *surface, const nova_watch_state *state);
 const char *nova_watch_face_name(unsigned id);
 bool nova_watch_face_render(risc_display_surface_v1 *surface, const nova_watch_state *state, unsigned face_id);
 unsigned nova_watch_picker_pulse(uint32_t elapsed_ms);
-/* Caller-owned, picker-lifetime cache. Two translated rows need at most six
- * visible cards; exactly one focused face is live across both collections.
+/* Caller-owned, picker-lifetime cache. Two translated rows use six slots on
+ * portrait displays, with more slots for wide displays. One focused face is live.
  * Only visible cards occupy these slots;
  * focused pixels are live, neighbors freeze between meaningful data changes. */
 typedef struct {
-    uint8_t valid_mask,face_ids[6];
+    uint64_t valid_mask;
+    uint8_t slots,face_ids[WATCH_FACE_COUNT];
     nova_watch_state stamp;
     uint32_t points_revision, points_next_rtc;
     uint8_t points_status, points_phase;
-    uint16_t pixels[6][240*240];
+    uint16_t capacity, sizes[WATCH_FACE_COUNT];
+    uint16_t pixels[];
 } nova_watch_picker_cache;
+nova_watch_picker_cache *nova_watch_picker_cache_create(unsigned width,unsigned height);
+void nova_watch_picker_cache_destroy(nova_watch_picker_cache *cache);
 bool nova_watch_picker_render(risc_display_surface_v1 *surface, const nova_watch_state *state,
     unsigned selected, int position_q8, const watch_face_page *page, const char *status, unsigned pulse_face, unsigned pulse_scale_q8, nova_watch_picker_cache *cache);
 bool nova_watch_picker_collections_render(risc_display_surface_v1 *surface, const nova_watch_state *state,

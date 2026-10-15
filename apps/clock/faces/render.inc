@@ -72,6 +72,12 @@ static void ftext_alpha(canvas *c,const face_font *font,const char *s,int cx,int
         } else
 #endif
         glyph_alpha=alpha+g->data;
+        if(c->width!=240u) {
+            native_alpha(c,glyph_alpha,g->width,g->height,native_q(c,pen+g->left*scale),
+                native_q(c,(y+g->top)*256),native_q(c,scale),native_q(c,256),
+                *s==':'&&colon?colon:color,255);
+            pen+=(g->advance+spacing)*scale/256;continue;
+        }
         int left=pen+g->left*scale,first=left>=0?left/256:(left-255)/256,last=(left+g->width*scale+255)/256;
         for(int dx=first;dx<last;dx++)if(dx>=0&&dx<240) {
             int src=((dx*256+128-left)*256)/scale-128,sx=src>=0?src/256:(src-255)/256;
@@ -90,19 +96,26 @@ static void ftext(canvas*c,const face_font*font,const char*s,int cx,int y,int sp
     ftext_alpha(c,font,s,cx,y,spacing,fit,color,colon,face_alpha);
 }
 static void frect(canvas*c,int x,int y,int w,int h,uint16_t color) {
-    for(int j=y;j<y+h;j++)if(j>=0&&j<(int)CANVAS_HEIGHT(c))for(int i=x;i<x+w;i++)if(i>=0&&i<240)put(at(c,i,j),color);
+    int right=native_q(c,x+w),bottom=native_q(c,y+h);
+    x=native_q(c,x);y=native_q(c,y);
+    if(x<0)x=0;
+    if(y<0)y=0;
+    if(right>(int)c->width)right=(int)c->width;
+    if(bottom>(int)c->height)bottom=(int)c->height;
+    for(int j=y;j<bottom;j++)for(int i=x;i<right;i++)put(at(c,i,j),color);
 }
 /* Q4 round strokes, with four coverage samples per destination pixel. */
 #ifdef WATCH_FACE_RENDER_TEST
 static unsigned face_test_calls,face_test_line_pixels;static uint64_t face_test_mask;
 #endif
 static void fline(canvas*c,int x1,int y1,int x2,int y2,int width,uint16_t color) {
-    int dx=x2-x1,dy=y2-y1,len=dx*dx+dy*dy,r=width/2;
+    x1=native_q(c,x1);y1=native_q(c,y1);x2=native_q(c,x2);y2=native_q(c,y2);width=native_q(c,width);
+    int dx=x2-x1,dy=y2-y1,r=width/2;int64_t len=(int64_t)dx*dx+(int64_t)dy*dy;
     int minx=((x1<x2?x1:x2)-r-16)/16,maxx=((x1>x2?x1:x2)+r+16)/16;
     int miny=((y1<y2?y1:y2)-r-16)/16,maxy=((y1>y2?y1:y2)+r+16)/16;
     if(minx<0)minx=0;
     if(miny<0)miny=0;
-    if(maxx>239)maxx=239;
+    if(maxx>=(int)c->width)maxx=(int)c->width-1;
     if(maxy>=(int)CANVAS_HEIGHT(c))maxy=(int)CANVAS_HEIGHT(c)-1;
     /* Every covered sample lies within r of a point on the segment. Limit
      * each row to the segment's x range for that row's y +/- r, then expand
@@ -129,20 +142,21 @@ static void fline(canvas*c,int x1,int y1,int x2,int y2,int width,uint16_t color)
 #endif
         unsigned a=0;
         for(int sy=4;sy<16;sy+=8)for(int sx=4;sx<16;sx+=8) {
-            int xx=x*16+sx-x1,yy=y*16+sy-y1,dot=xx*dx+yy*dy;
+            int xx=x*16+sx-x1,yy=y*16+sy-y1;int64_t dot=(int64_t)xx*dx+(int64_t)yy*dy;
             if(!len||dot<=0)a+=xx*xx+yy*yy<=r*r;
             else if(dot>=len){xx-=dx;yy-=dy;a+=xx*xx+yy*yy<=r*r;}
-            else{int cross=xx*dy-yy*dx;a+=(int64_t)cross*cross<=(int64_t)r*r*len;}
+            else{int64_t cross=(int64_t)xx*dy-(int64_t)yy*dx;a+=cross*cross<=(int64_t)r*r*len;}
         }
         if(a)blend(at(c,x,y),color,a*255/4);
         }
     }
 }
 static void fcirc(canvas*c,int cx,int cy,int radius,int width,uint16_t color) {
+    cx=native_q(c,cx);cy=native_q(c,cy);radius=native_q(c,radius);width=native_q(c,width);
     int outer=radius+width/2,inner=radius-width/2;
     if(!width){outer=radius;inner=0;}
     for(int y=(cy-outer-16)/16;y<=(cy+outer+16)/16;y++)if(y>=0&&y<(int)CANVAS_HEIGHT(c))
-    for(int x=(cx-outer-16)/16;x<=(cx+outer+16)/16;x++)if(x>=0&&x<240) {
+    for(int x=(cx-outer-16)/16;x<=(cx+outer+16)/16;x++)if(x>=0&&x<(int)c->width) {
         int tx=x*16+8-cx,ty=y*16+8-cy,dist=tx*tx+ty*ty;
         if(dist>(outer+12)*(outer+12)||(inner>12&&dist<(inner-12)*(inner-12)))continue;
         unsigned a=0;
@@ -177,7 +191,7 @@ static void fbattery(canvas*c,const nova_watch_state*s,const nova_watch_labels*l
 #include "points_collection.inc"
 #endif
 static bool face_surface_valid(const risc_display_surface_v1*s) {
-    return s&&s->pixels&&s->pixel_format==5&&s->width==240&&s->height==240&&s->stride_bytes>=480&&s->stride_bytes<=UINT32_MAX/240&&s->size_bytes>=s->stride_bytes*240;
+    return s&&s->pixels&&s->pixel_format==5&&s->width>0&&s->width<=WATCH_LAYOUT_MAX_SIDE&&s->height==s->width&&s->stride_bytes>=s->width*2u&&!(s->stride_bytes&1u)&&s->stride_bytes<=UINT32_MAX/s->height&&s->size_bytes>=s->stride_bytes*(s->height-1u)+s->width*2u;
 }
 #ifdef WATCH_CONTEXTS_CLIENT
 static const char *fcontext_text(const char value[17],char out[17],const char *missing) {
@@ -212,7 +226,7 @@ static void fcontexts(canvas *c,const nova_watch_state *state,const nova_watch_l
 }
 #endif
 bool nova_watch_face_render(risc_display_surface_v1*s,const nova_watch_state*state,unsigned id) {
-    if(s && s->height!=240)return home_face_render(s,state,id,nova_watch_face_render);
+    if(s && s->height!=s->width)return home_face_render(s,state,id,nova_watch_face_render);
     if(!face_surface_valid(s))return false;
 #ifdef WATCH_FACE_RENDER_TEST
     face_test_calls++;
@@ -298,13 +312,34 @@ bool nova_watch_face_render(risc_display_surface_v1*s,const nova_watch_state*sta
 /* Rendered previews are the exact same production face function. Scratch is
  * app-owned, allocated only while browsing, and never a provider frame lease.
  * Three full-resolution slots preserve sampling at every card scale. */
+nova_watch_picker_cache *nova_watch_picker_cache_create(unsigned width,unsigned height) {
+    if(!width||!height||width>WATCH_LAYOUT_MAX_SIDE||height>WATCH_LAYOUT_MAX_SIDE)return NULL;
+    unsigned side=width<height?width:height,capacity=(side*143u+239u)/240u;
+    if(capacity<240u)capacity=240u;
+    unsigned slots=width<=height?6u:2u*(width/(side*108u/240u?side*108u/240u:1u)+2u);
+    if(slots>WATCH_FACE_COUNT)slots=WATCH_FACE_COUNT;
+    size_t bytes=sizeof(nova_watch_picker_cache)+slots*capacity*capacity*sizeof(uint16_t);
+    nova_watch_picker_cache *cache=malloc(bytes);
+    if(cache){memset(cache,0,sizeof(*cache));cache->capacity=(uint16_t)capacity;cache->slots=(uint8_t)slots;}
+    return cache;
+}
+void nova_watch_picker_cache_destroy(nova_watch_picker_cache *cache) { free(cache); }
+static int picker_pitch(unsigned side) { int pitch=(int)(side*108u/240u);return (pitch?pitch:1)*256; }
+static canvas home_ui_canvas(canvas c) {
+    unsigned side=c.width<c.height?c.width:c.height;
+    c.pixels+=((c.width-side)/2u)*2u;c.width=side;return c;
+}
+static int ui_y(const canvas *c,int y) { return y*240/(int)c->width; }
 unsigned nova_watch_picker_pulse(uint32_t age_ms) {
     if(age_ms>=334u)return 256u;
     return 256u+(unsigned)(sine(age_ms*180u*256u/334u)*5243/(32767*256));
 }
 typedef struct { const watch_face_page*page; int position,y,near; } picker_layer;
 static bool picker_layers_render(risc_display_surface_v1*s,const nova_watch_state*state,unsigned selected,picker_layer*layers,unsigned layer_count,unsigned live_face,const char*status,unsigned pulse_face,unsigned pulse_scale,nova_watch_picker_cache*cache) {
-    if(!cache||!layer_count||layer_count>2||!home_surface_valid(s))return false;
+    if(!cache||!cache->capacity||!layer_count||layer_count>2||!home_surface_valid(s))return false;
+    const unsigned side=s->width<s->height?s->width:s->height;
+    const int pitch=picker_pitch(side);
+    const bool legacy=s->width==240u&&s->height>=240u;
     for(unsigned l=0;l<layer_count;l++) {
         const watch_face_page*page=layers[l].page;
         if(!page||!page->ids||!page->count||page->count>WATCH_FACE_COUNT)return false;
@@ -321,7 +356,7 @@ static bool picker_layers_render(risc_display_surface_v1*s,const nova_watch_stat
         old->time.hour!=state->time.hour||old->time.minute!=state->time.minute))cache->valid_mask=0;
 #ifdef WATCH_CONTEXTS_CLIENT
     if(memcmp(&old->contexts,&state->contexts,sizeof(state->contexts)))
-        for(unsigned k=0;k<6;k++)if(cache->face_ids[k]==33)cache->valid_mask&=(uint8_t)~(1u<<k);
+        for(unsigned k=0;k<cache->slots;k++)if(cache->face_ids[k]==33)cache->valid_mask&=(uint64_t)~(UINT64_C(1)<<k);
 #endif
     /* Capture schedule keys by value: state->points may refer to the same
      * mutable caller object as the previous frame. Countdown seconds remain
@@ -331,23 +366,24 @@ static bool picker_layers_render(risc_display_surface_v1*s,const nova_watch_stat
     uint32_t next_rtc=points&&points->next_count?points->next[0].at_rtc:0;
     uint8_t points_status=points?(uint8_t)points->status:0,phase=points?(uint8_t)points->phase:0;
     if(cache->points_revision!=revision||cache->points_next_rtc!=next_rtc||cache->points_status!=points_status||cache->points_phase!=phase)
-        for(unsigned k=0;k<6;k++)if(cache->face_ids[k]>=24)cache->valid_mask&=(uint8_t)~(1u<<k);
+        for(unsigned k=0;k<cache->slots;k++)if(cache->face_ids[k]>=24)cache->valid_mask&=(uint64_t)~(UINT64_C(1)<<k);
     cache->points_revision=revision;cache->points_next_rtc=next_rtc;cache->points_status=points_status;cache->points_phase=phase;
     cache->stamp=*state;
-    canvas c=CANVAS_INIT(s,state);CANVAS_CLEAR(c);
+    canvas c=CANVAS_INIT(s,state);CANVAS_CLEAR(c);canvas ui=home_ui_canvas(c);
 
     struct card { int size,x,y,scale; bool visible; } cards[WATCH_FACE_COUNT]={0};
     for(unsigned l=0;l<layer_count;l++) {
         const watch_face_page*page=layers[l].page;int position=layers[l].position;
-        int near=(-position+54*256)/(108*256);if(near<0)near=0;if(near>=(int)page->count)near=(int)page->count-1;
+        int near=(-position+pitch/2)/pitch;if(near<0)near=0;if(near>=(int)page->count)near=(int)page->count-1;
         layers[l].near=near;
         for(unsigned index=0;index<page->count;index++) {
             unsigned id=page->ids[index];
-            int offset=(int)index*108*256+position,abs=offset<0?-offset:offset;
-            int scale=256-(abs<135*256?abs:135*256)*102/(108*256);
+            int offset=(int)index*pitch+position,abs=offset<0?-offset:offset;
+            int limit=pitch*5/4;int scale=256-(abs<limit?abs:limit)*102/pitch;
             if(id==pulse_face&&pulse_scale>=256&&pulse_scale<=277)scale=scale*(int)pulse_scale/256;
-            int size=132*scale/256,x=120+offset/256-size/2,y=(int)watch_home_picker_center(s->height)-size/2+layers[l].y;
-            cards[id]=(struct card){size,x,y,scale,x<240&&x+size>0&&y<(int)s->height&&y+size>0};
+            int size=(int)((int64_t)132*side*scale/(240*256));if(size<1)size=1;
+            int x=(int)s->width/2+offset/256-size/2,y=(int)s->height/2-(int)(28*side/240)-size/2+layers[l].y;
+            cards[id]=(struct card){size,x,y,scale,x<(int)s->width&&x+size>0&&y<(int)s->height&&y+size>0};
         }
     }
     for(unsigned l=0;l<layer_count;l++) {
@@ -355,43 +391,49 @@ static bool picker_layers_render(risc_display_surface_v1*s,const nova_watch_stat
     /* Far cards first, center card last, as in the source z-index. */
     for(int pass=(int)page->count-1;pass>=0;pass--)for(unsigned index=0;index<page->count;index++) {
         unsigned id=page->ids[index];
-        int offset=(int)index*108*256+position,abs=offset<0?-offset:offset;
+        int offset=(int)index*pitch+position,abs=offset<0?-offset:offset;
         if((int)index!=near-pass&&(int)index!=near+pass)continue;
         if(!pass&&index!=(unsigned)near)continue;
         if(!cards[id].visible)continue;
         int scale=cards[id].scale,size=cards[id].size,x0=cards[id].x,y0=cards[id].y;
-        unsigned slot=6;
-        for(unsigned k=0;k<6;k++)if((cache->valid_mask&(1u<<k))&&cache->face_ids[k]==id){slot=k;break;}
-        bool cached=slot<6;
-        if(!cached)for(unsigned k=0;k<6;k++)if(!(cache->valid_mask&(1u<<k))||!cards[cache->face_ids[k]].visible){slot=k;break;}
-        if(slot==6)return false; /* At most three cards per visible collection. */
-        uint16_t*scratch=cache->pixels[slot];
-        if(!cached||id==live_face) {
-            risc_display_surface_v1 tmp={0,scratch,240,240,480,240*240*2,5};
+        unsigned slot=cache->slots;
+        for(unsigned k=0;k<cache->slots;k++)if((cache->valid_mask&(UINT64_C(1)<<k))&&cache->face_ids[k]==id){slot=k;break;}
+        bool cached=slot<cache->slots;
+        if(!cached)for(unsigned k=0;k<cache->slots;k++)if(!(cache->valid_mask&(UINT64_C(1)<<k))||!cards[cache->face_ids[k]].visible){slot=k;break;}
+        if(slot==cache->slots)return false; /* At most three cards per visible collection. */
+        unsigned render_size=legacy?240u:(unsigned)size;
+        if(render_size>cache->capacity)return false;
+        uint16_t*scratch=cache->pixels+slot*cache->capacity*cache->capacity;
+        if(!cached||id==live_face||cache->sizes[slot]!=render_size) {
+            risc_display_surface_v1 tmp={0,scratch,render_size,render_size,render_size*2,render_size*render_size*2,5};
             if(!nova_watch_face_render(&tmp,state,id))return false;
-            cache->face_ids[slot]=(uint8_t)id;cache->valid_mask|=(uint8_t)(1u<<slot);
+            cache->face_ids[slot]=(uint8_t)id;cache->sizes[slot]=(uint16_t)render_size;cache->valid_mask|=(UINT64_C(1)<<slot);
         }
-        int radius=14*scale/256,border=id==selected?2*scale/256:scale/256;if(border<1)border=1;
-        unsigned opacity=255-(unsigned)(abs<108*256?abs:108*256)*128/(108*256);
-        for(int y=0;y<size;y++)for(int x=0;x<size;x++)if(x+x0>=0&&x+x0<240&&y+y0>=0&&y+y0<(int)s->height){
+        int radius=(int)((int64_t)14*side*scale/(240*256)),border=(int)((int64_t)(id==selected?2:1)*side*scale/(240*256));if(border<1)border=1;
+        unsigned opacity=255-(unsigned)(abs<pitch?abs:pitch)*128/(unsigned)pitch;
+        for(int y=0;y<size;y++)for(int x=0;x<size;x++)if(x+x0>=0&&x+x0<(int)s->width&&y+y0>=0&&y+y0<(int)s->height){
             int edge=x<radius?radius-x:x>=size-radius?x-(size-radius-1):0,ey=y<radius?radius-y:y>=size-radius?y-(size-radius-1):0;
             if(edge&&ey&&edge*edge+ey*ey>radius*radius)continue;
-            uint16_t col=scratch[(y*240/size)*240+x*240/size];unsigned mask=x+x0<46?(unsigned)(x+x0)*255/46:x+x0>194?(unsigned)(239-x-x0)*255/45:255;
+            uint16_t col=scratch[legacy?(y*240/size)*240+x*240/size:y*size+x];
+            unsigned fade=s->width*46u/240u;if(!fade)fade=1;
+            int xx=x+x0;unsigned mask=(unsigned)xx<fade?(unsigned)xx*255/fade:
+                xx>(int)(s->width-fade)?(s->width-1u-(unsigned)xx)*255/(fade>1?fade-1:1):255;
             blend(at(&c,x+x0,y+y0),col,opacity*mask/255);
             if(x<border||x>=size-border||y<border||y>=size-border||(edge&&ey&&edge*edge+ey*ey>=(radius-border)*(radius-border)))blend(at(&c,x+x0,y+y0),id==selected?FCYAN:FC(34,48,52),opacity*mask/255);
         }
     }
-    ftext(&c,&ff_o13,face_names[page->ids[near]],120,(int)s->height-57+dy,532,0,FWHITE,0);
-    ftext(&c,&ff_rp11,status?status:(page->ids[near]==selected?"CURRENT":"TAP TO SET"),120,(int)s->height-39+dy,563,0,status?FORANGE:page->ids[near]==selected?FGREEN:FC(107,130,136),0);
-    for(unsigned i=0;i<page->count;i++)fcirc(&c,(240-(int)(page->count-1)*11+(int)i*22)*8,((int)s->height-18+dy)*16+8,40,0,(int)i==near?FCYAN:FC(31,42,45));
-    if(page->name){ftext(&c,&ff_rp11,page->name,120,15+dy,384,0,FMUTED,0);fline(&c,36*16,(12+dy)*16,39*16,(9+dy)*16,16,FMUTED);fline(&c,39*16,(9+dy)*16,42*16,(12+dy)*16,16,FMUTED);fline(&c,198*16,(9+dy)*16,201*16,(12+dy)*16,16,FMUTED);fline(&c,201*16,(12+dy)*16,204*16,(9+dy)*16,16,FMUTED);}
+    ftext(&ui,&ff_o13,face_names[page->ids[near]],120,ui_y(&ui,(int)s->height+dy)-57,532,0,FWHITE,0);
+    ftext(&ui,&ff_rp11,status?status:(page->ids[near]==selected?"CURRENT":"TAP TO SET"),120,ui_y(&ui,(int)s->height+dy)-39,563,0,status?FORANGE:page->ids[near]==selected?FGREEN:FC(107,130,136),0);
+    for(unsigned i=0;i<page->count;i++)fcirc(&ui,(240-(int)(page->count-1)*11+(int)i*22)*8,(ui_y(&ui,(int)s->height+dy)-18)*16+8,40,0,(int)i==near?FCYAN:FC(31,42,45));
+    if(page->name){int yd=ui_y(&ui,dy);ftext(&ui,&ff_rp11,page->name,120,15+yd,384,0,FMUTED,0);fline(&ui,36*16,(12+yd)*16,39*16,(9+yd)*16,16,FMUTED);fline(&ui,39*16,(9+yd)*16,42*16,(12+yd)*16,16,FMUTED);fline(&ui,198*16,(9+yd)*16,201*16,(12+yd)*16,16,FMUTED);fline(&ui,201*16,(12+yd)*16,204*16,(9+yd)*16,16,FMUTED);}
     }
-    return CANVAS_OK(c);
+    return CANVAS_OK(c)&&CANVAS_OK(ui);
 }
 
 bool nova_watch_picker_render(risc_display_surface_v1*s,const nova_watch_state*state,unsigned selected,int position,const watch_face_page*page,const char*status,unsigned pulse_face,unsigned pulse_scale,nova_watch_picker_cache*cache) {
-    if(!page||!page->ids||!page->count||page->count>WATCH_FACE_COUNT)return false;
-    int near=(-position+54*256)/(108*256);if(near<0)near=0;if(near>=(int)page->count)near=(int)page->count-1;
+    if(!page||!page->ids||!page->count||page->count>WATCH_FACE_COUNT||!home_surface_valid(s))return false;
+    const int pitch=picker_pitch(s->width<s->height?s->width:s->height);
+    int near=(-position+pitch/2)/pitch;if(near<0)near=0;if(near>=(int)page->count)near=(int)page->count-1;
     picker_layer layer={page,position,0,near};
     return picker_layers_render(s,state,selected,&layer,1,page->ids[near],status,pulse_face,pulse_scale,cache);
 }
@@ -399,11 +441,12 @@ bool nova_watch_picker_collections_render(risc_display_surface_v1*s,const nova_w
     if(!positions)return false;
     picker_layer layers[2];unsigned count=0;
     if(!home_surface_valid(s))return false;
+    const int pitch=picker_pitch(s->width<s->height?s->width:s->height);
     const int height=(int)s->height,period=(int)WATCH_FACE_CATEGORY_COUNT*height;
     category_position%=period*256;if(category_position>0)category_position-=period*256;
     unsigned focus=(unsigned)((-category_position+height*128)/(height*256))%WATCH_FACE_CATEGORY_COUNT;
     const watch_face_page*focused=watch_face_page_for((unsigned)focus);
-    int near=(-positions[focus]+54*256)/(108*256);if(near<0)near=0;if(near>=(int)focused->count)near=(int)focused->count-1;
+    int near=(-positions[focus]+pitch/2)/pitch;if(near<0)near=0;if(near>=(int)focused->count)near=(int)focused->count-1;
     for(unsigned c=0;c<WATCH_FACE_CATEGORY_COUNT;c++) {
         int y=(category_position<0?(category_position-255)/256:category_position/256)+(int)c*height;
         if(y>period/2)y-=period;
@@ -420,7 +463,8 @@ bool nova_watch_alarm_label_render(risc_display_surface_v1*s,const char*label,bo
         bool rtc_error,bool dismissing,bool uncertain,bool occurrence) {
     if(!home_surface_valid(s))return false;
     canvas c=CANVAS_INIT(s,((const nova_watch_state*)NULL));
-    CANVAS_CLEAR(c);
+    CANVAS_CLEAR(c);c=home_ui_canvas(c);
+    const int ui_height=ui_y(&c,(int)s->height);
     char title[24];unsigned title_length=0;
     if(label)while(title_length<23&&label[title_length]){char ch=label[title_length];title[title_length++]=ch>='a'&&ch<='z'?(char)(ch-'a'+'A'):ch;}
     title[title_length]=0;
@@ -428,9 +472,9 @@ bool nova_watch_alarm_label_render(risc_display_surface_v1*s,const char*label,bo
     else ftext(&c,&ff_o13,countdown?"COUNTDOWN":"ALARM",120,52,256,0,FCYAN,0);
     ftext(&c,&ff_r12,blocked?(rtc_error?"RTC ERROR":"SERVICE ERROR"):dismissing?"STOPPING / SAVING":"TIME IS UP",120,94,0,0,blocked?FORANGE:FWHITE,0);
     if(uncertain)ftext(&c,&ff_r10,"OUTPUT STOP UNCONFIRMED",120,121,0,0,FORANGE,0);
-    frect(&c,24,(int)s->height-86,192,1,FCYAN);frect(&c,24,(int)s->height-47,192,1,FCYAN);
-    ftext(&c,&ff_o13,occurrence?"DISMISS":"BACK",120,(int)s->height-61,256,0,FWHITE,0);
-    if(blocked)ftext(&c,&ff_r12,"RETRY",120,(int)s->height-20,256,0,FCYAN,0);
+    frect(&c,24,ui_height-86,192,1,FCYAN);frect(&c,24,ui_height-47,192,1,FCYAN);
+    ftext(&c,&ff_o13,occurrence?"DISMISS":"BACK",120,ui_height-61,256,0,FWHITE,0);
+    if(blocked)ftext(&c,&ff_r12,"RETRY",120,ui_height-20,256,0,FCYAN,0);
     return CANVAS_OK(c);
 }
 
@@ -439,31 +483,32 @@ bool nova_watch_alarm_render(risc_display_surface_v1*s,bool countdown,bool block
     return nova_watch_alarm_label_render(s,NULL,countdown,blocked,rtc_error,dismissing,uncertain,occurrence);
 }
 
-/* Circular/precomposed faces keep their exact square geometry. The independent
- * native-height surround shows the selected face and a live next-point summary
- * (or truthful date/battery status), rather than magnifying the old square. */
+/* The face occupies a capability-sized square. Additional native rows retain
+ * the selected name and live next-Point summary without distorting the dial. */
 static bool home_face_render(risc_display_surface_v1 *s,const nova_watch_state *state,unsigned id,home_square_renderer render_square) {
     if(!home_surface_valid(s))return false;
     nova_watch_state empty={0};if(!state)state=&empty;
     canvas c=CANVAS_INIT(s,state);
-    unsigned top=watch_home_face_top(s->height);
-    /* The square renderer clears its own body. Clear only the surrounding
-     * rows here, retaining bounded capture points without doubling body work. */
-    for(unsigned y=0;y<s->height;y++)if(y<top || y>=top+240u) {
+    unsigned side=s->width<s->height?s->width:s->height;
+    unsigned left=(s->width-side)/2,top=(s->height-side)/2;
+    /* The square renderer owns its core. Clear only the remaining native
+     * pixels, avoiding a redundant full-frame write on every tall frame. */
+    for(unsigned y=0;y<s->height;y++) {
 #ifdef WATCH_CONTEXTS_CLIENT
         if(!(y&7u)&&!canvas_checkpoint(&c))return false;
 #endif
-        memset(c.pixels+y*c.stride,0,480);
+        uint8_t *row=c.pixels+y*c.stride;
+        if(y<top||y>=top+side)memset(row,0,s->width*2u);
+        else {memset(row,0,left*2u);memset(row+(left+side)*2u,0,(s->width-left-side)*2u);}
     }
     risc_display_surface_v1 square=*s;
-    square.pixels=(uint8_t*)s->pixels+top*s->stride_bytes;
-    square.height=240;square.size_bytes=s->size_bytes-top*s->stride_bytes;
+    square.pixels=(uint8_t*)s->pixels+top*s->stride_bytes+left*2u;
+    square.width=square.height=side;
+    square.size_bytes=s->size_bytes-top*s->stride_bytes-left*2u;
     if(!render_square(&square,state,id))return false;
-    if(top>=20u) {
+    if(top>=20u*s->width/240u) {
         const char *name=nova_watch_face_name(id);
         ftext(&c,&ff_r10,name,120,16,256,ps_fit(&ff_r10,name,256,216),FMUTED,0);
-    }
-    if(s->height-top-240u>=20u) {
         nova_watch_labels labels;nova_watch_format(state,&labels);
         char line[64];const char *problem=ps_problem(state,&labels);
         if(!problem && state->points->next_count) {
@@ -471,7 +516,7 @@ static bool home_face_render(risc_display_surface_v1 *s,const nova_watch_state *
             char when[24];ps_event_clock(when,next,state->hour_24,true);
             fc_join(line,sizeof(line),ps_event_name(next,false),"  ",when);
         } else fc_join(line,sizeof(line),labels.date,"  BAT ",labels.battery);
-        ftext(&c,&ff_r10,line,120,(int)s->height-10,0,ps_fit(&ff_r10,line,0,220),FCYAN,0);
+        ftext(&c,&ff_r10,line,120,(int)(s->height*240u/s->width)-10,0,ps_fit(&ff_r10,line,0,220),FCYAN,0);
     }
     return CANVAS_OK(c);
 }

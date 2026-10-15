@@ -1,5 +1,6 @@
 // Adapted from pinned T5S3 StartupScreen.cpp. See SOURCES.json and reference/LICENSE.
-// Output mapping: portrait logical 320x320 -> RGB565 240x240, light ink on black.
+// Resolve logo geometry to the native square before rasterization. The pinned
+// 240px raster path remains byte-exact; no completed framebuffer is resampled.
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
@@ -7,11 +8,14 @@
 namespace {
 constexpr int kLogoSize=240,kFrameHeight=320;
 constexpr uint8_t kLogoLayerCount=4,kFullCoverage=64;
-static uint32_t visualTimeMs,visualStride;
+static uint32_t visualTimeMs,visualStride,visualSide;
+static bool nativeRaster;
+static int nativeCoordinate(int value) {return static_cast<int>(static_cast<int64_t>(value)*visualSide/320);}
 static const struct {int width,height;} videoSurface={320,320};
 static void setPhysicalPixel(uint8_t* buffer,size_t bytes,int x,int y,bool ink) {
-  if(x<0 || y<0 || x>=320 || y>=320) return;
-  const size_t offset=(size_t)(y*3/4)*visualStride+(unsigned)(x*3/4)*2;
+  const int extent=nativeRaster?static_cast<int>(visualSide):320;
+  if(x<0 || y<0 || x>=extent || y>=extent) return;
+  const size_t offset=(size_t)(nativeRaster?y:y*3/4)*visualStride+(unsigned)(nativeRaster?x:x*3/4)*2;
   if(offset+2>bytes) return;
   uint16_t value=ink?0xffff:0;memcpy(buffer+offset,&value,2);
 }
@@ -75,6 +79,11 @@ bool insideRoundedRect(int px, int py, int width, int height, int radius) {
 void drawDitheredRoundedRect(uint8_t* buffer, size_t bufferSize, int x, int y,
                              int width, int height, int radius,
                              uint8_t coverage) {
+  if(nativeRaster) {
+    const int right=nativeCoordinate(x+width),bottom=nativeCoordinate(y+height);
+    x=nativeCoordinate(x);y=nativeCoordinate(y);width=right-x;height=bottom-y;
+    radius=nativeCoordinate(radius);
+  }
   for (int py = 0; py < height; ++py) {
     for (int px = 0; px < width; ++px) {
       const int screenX = x + px;
@@ -94,10 +103,16 @@ struct InkPoint { int x; int y; };
 // ribbons use 32 strips each and never allocate a path or framebuffer.
 void inkQuad(uint8_t* buffer,size_t size,const InkPoint* p,uint8_t coverage) {
   if(!coverage) return;
+  InkPoint native[4];
+  if(nativeRaster) {
+    for(unsigned i=0;i<4;i++)native[i]={nativeCoordinate(p[i].x),nativeCoordinate(p[i].y)};
+    p=native;
+  }
+  const int extent=nativeRaster?static_cast<int>(visualSide):320;
   int top=p[0].y,bottom=top;
   for(int i=1;i<4;++i) {if(p[i].y<top) top=p[i].y;if(p[i].y>bottom) bottom=p[i].y;}
   if(top<0) top=0;
-  if(bottom>=static_cast<int>(videoSurface.width)) bottom=videoSurface.width-1;
+  if(bottom>=extent) bottom=extent-1;
   for(int y=top;y<=bottom;++y) {
     int left=32767,right=-32768;
     for(int i=0;i<4;++i) {
@@ -109,7 +124,7 @@ void inkQuad(uint8_t* buffer,size_t size,const InkPoint* p,uint8_t coverage) {
       if(x>right) right=x;
     }
     if(left<0) left=0;
-    if(right>=static_cast<int>(videoSurface.height)) right=videoSurface.height-1;
+    if(right>=extent) right=extent-1;
     for(int x=left;x<=right;++x)
       if(ditherPixel(x,y,coverage)) setPhysicalPixel(buffer,size,x,y,true);
   }
@@ -164,11 +179,15 @@ void drawFormingBlock(uint8_t* buffer,size_t size,int x,int y,int width,int heig
   // A restrained ease-out-back gives the ink weight and a soft pressure release.
   const int ease=1000+static_cast<int>((2400LL*q*q*q/1000+1400LL*q*q)/1000000);
   const int growth=ease<0?0:ease;
-  const int w=2+(width-2)*growth/1000,h=2+(height-2)*growth/1000;
-  const int cx=x+width/2+side*30*(1000-ease)/1000;
-  const int cy=y+height/2+45*(1000-ease)/1000;
-  const int bend=side*w*22*(1000-t)/200000;
-  const int radius=4+(h/2-4)*(1000-t)/1000;
+  int w=2+(width-2)*growth/1000,h=2+(height-2)*growth/1000;
+  int cx=x+width/2+side*30*(1000-ease)/1000;
+  int cy=y+height/2+45*(1000-ease)/1000;
+  int bend=side*w*22*(1000-t)/200000;
+  int radius=4+(h/2-4)*(1000-t)/1000;
+  if(nativeRaster) {
+    w=nativeCoordinate(w);h=nativeCoordinate(h);cx=nativeCoordinate(cx);cy=nativeCoordinate(cy);
+    bend=nativeCoordinate(bend);radius=nativeCoordinate(radius);
+  }
   for(int px=0;px<w;++px) {
     const int u=px*1000/(w>1?w-1:1);
     const int curl=bend*4*u*(1000-u)/1000000;
@@ -208,13 +227,18 @@ void drawBootWordmark(uint8_t* buffer,size_t size,int centerX,int y,uint8_t cove
         const int unfold=age>=360?1000:(age-130)*1000/230;
         const int eased=unfold*unfold*(3000-2*unfold)/1000000;
         const int drawnWidth=6+(width-6)*eased/1000;
-        for(int py=0;py<32;++py) {
-          if(letter==1 && py<5) continue; // dot arrives independently below
-          for(int dx=0;dx<drawnWidth;++dx) {
-            const int sourceX=dx*width/drawnWidth;
-            const int px=x+(width-drawnWidth)/2+dx;
-            if((kWordmarkRows[letter][py]&(1u<<sourceX)) && ditherPixel(px,y+py,coverage))
-              setPhysicalPixel(buffer,size,px,y+py,true);
+        const int rasterHeight=nativeRaster?nativeCoordinate(32):32;
+        const int rasterWidth=nativeRaster?nativeCoordinate(drawnWidth):drawnWidth;
+        const int rasterX=nativeRaster?nativeCoordinate(x+(width-drawnWidth)/2):x+(width-drawnWidth)/2;
+        const int rasterY=nativeRaster?nativeCoordinate(y):y;
+        for(int py=0;py<rasterHeight;++py) {
+          const int sourceY=py*32/rasterHeight;
+          if(letter==1 && sourceY<5) continue; // dot arrives independently below
+          for(int dx=0;dx<rasterWidth;++dx) {
+            const int sourceX=dx*width/rasterWidth;
+            const int px=rasterX+dx;
+            if((kWordmarkRows[letter][sourceY]&(1u<<sourceX)) && ditherPixel(px,rasterY+py,coverage))
+              setPhysicalPixel(buffer,size,px,rasterY+py,true);
           }
         }
       }
@@ -225,9 +249,14 @@ void drawBootWordmark(uint8_t* buffer,size_t size,int centerX,int y,uint8_t cove
           const int bounce=(age-340)*1000/110;
           offset=-4*4*bounce*(1000-bounce)/1000000;
         }
-        for(int py=0;py<5;++py) for(int px=0;px<width;++px)
-          if((kWordmarkRows[letter][py]&(1u<<px)) && ditherPixel(x+px,y+py+offset,coverage))
-            setPhysicalPixel(buffer,size,x+px,y+py+offset,true);
+        const int rasterHeight=nativeRaster?nativeCoordinate(5):5;
+        const int rasterWidth=nativeRaster?nativeCoordinate(width):width;
+        const int rasterX=nativeRaster?nativeCoordinate(x):x;
+        const int rasterY=nativeRaster?nativeCoordinate(y+offset):y+offset;
+        for(int py=0;py<rasterHeight;++py) for(int px=0;px<rasterWidth;++px)
+          if((kWordmarkRows[letter][py*5/rasterHeight]&(1u<<(px*width/rasterWidth))) &&
+              ditherPixel(rasterX+px,rasterY+py,coverage))
+            setPhysicalPixel(buffer,size,rasterX+px,rasterY+py,true);
       }
     }
     x+=width;
@@ -262,10 +291,12 @@ void drawVideoLogo(uint8_t* buffer, size_t bufferSize, uint8_t visibleBlocks,
     // A quiet three-dot loading beat begins after the wordmark settles.
     if(visualTimeMs>=1510u) for(int dot=0;dot<3;++dot) {
       const int phase=static_cast<int>((visualTimeMs/180u)%3u);
-      const int radius=dot==phase?3:2;
+      int radius=dot==phase?3:2;
+      int centerX=logicalWidth/2+(dot-1)*13,centerY=frameY+297;
+      if(nativeRaster){radius=nativeCoordinate(radius);centerX=nativeCoordinate(centerX);centerY=nativeCoordinate(centerY);}
       for(int py=-radius;py<=radius;++py) for(int px=-radius;px<=radius;++px) {
         if(px*px+py*py>radius*radius) continue;
-        const int x=logicalWidth/2+(dot-1)*13+px,y=frameY+297+py;
+        const int x=centerX+px,y=centerY+py;
         if(ditherPixel(x,y,textCoverage)) setPhysicalPixel(buffer,bufferSize,x,y,true);
       }
     }
@@ -276,10 +307,16 @@ void drawVideoLogo(uint8_t* buffer, size_t bufferSize, uint8_t visibleBlocks,
 
 }
 extern "C" bool watch_boot_render(const risc_display_surface_v1* s,uint32_t ms) {
- if(!s || !s->pixels || s->width!=240 || s->height<240 || s->height>2048 || (s->stride_bytes&1u) || s->stride_bytes<480 || s->stride_bytes>UINT32_MAX/s->height || s->size_bytes<s->stride_bytes*s->height || s->pixel_format!=5) return false;
- for(unsigned y=0;y<s->height;y++)memset((uint8_t*)s->pixels+y*s->stride_bytes,0,480);
- visualTimeMs=ms;visualStride=s->stride_bytes;
- unsigned top=(s->height-240)/2;
- drawVideoLogo((uint8_t*)s->pixels+top*s->stride_bytes,240*s->stride_bytes,9,64,ms>1000?64:0);
+ if(!s || !s->pixels || !s->width || !s->height || s->width>2048 || s->height>2048 ||
+    (s->stride_bytes&1u) || s->stride_bytes<s->width*2u ||
+    s->stride_bytes>SIZE_MAX/s->height ||
+    s->size_bytes<(size_t)s->stride_bytes*(s->height-1u)+s->width*2u ||
+    s->pixel_format!=RISC_DISPLAY_FORMAT_RGB565) return false;
+ for(unsigned y=0;y<s->height;y++)memset((uint8_t*)s->pixels+(size_t)y*s->stride_bytes,0,s->width*2u);
+ visualTimeMs=ms;visualStride=s->stride_bytes;visualSide=s->width<s->height?s->width:s->height;
+ nativeRaster=visualSide!=240u;
+ unsigned top=(s->height-visualSide)/2u,left=(s->width-visualSide)/2u;
+ size_t offset=(size_t)top*s->stride_bytes+left*2u;
+ drawVideoLogo((uint8_t*)s->pixels+offset,s->size_bytes-offset,9,64,ms>1000?64:0);
  return true;
 }

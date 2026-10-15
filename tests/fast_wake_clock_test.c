@@ -54,14 +54,18 @@ static char failure_stage[80];
 static bool fail_frame_acquire,fail_unblank,fail_marker_sample,fail_next_health;
 static unsigned fail_sleep_acquire,refused_cycles,refused_restores,clean_refusal_frames,sleep_acquire_errors;
 static bool sleep_failure_armed;
+static bool alarm_touch_test;
+static unsigned alarm_touch_phase,alarm_touch_wrong_y;
 static void check_refusal_pixels(void){
  fixture_expected_face(false);
  if(sleep_status[0]){
-  for(unsigned y=0;y<TEST_HEIGHT;y++)for(unsigned x=0;x<TEST_WIDTH;x++) {
-   unsigned ly=y*240/TEST_WIDTH,lx=x*240/TEST_WIDTH;
-   if(ly<TEST_LOGICAL_HEIGHT-37||ly>=TEST_LOGICAL_HEIGHT-9||lx<10||lx>=230)
+  unsigned side=watch_home_side(TEST_WIDTH,TEST_HEIGHT),ui_height=TEST_HEIGHT*240u/side;
+  unsigned x0=watch_home_left(TEST_WIDTH,TEST_HEIGHT)+10u*side/240u;
+  unsigned x1=watch_home_left(TEST_WIDTH,TEST_HEIGHT)+230u*side/240u;
+  unsigned y0=(ui_height-37u)*side/240u,y1=(ui_height-9u)*side/240u;
+  for(unsigned y=0;y<TEST_HEIGHT;y++)for(unsigned x=0;x<TEST_WIDTH;x++)
+   if(y<y0||y>=y1||x<x0||x>=x1)
     assert(completed_pixels[y*TEST_WIDTH+x]==expected_pixels[y*TEST_WIDTH+x]);
-  }
   assert(memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
   fixture_expected_face(true);
  }
@@ -170,7 +174,7 @@ static bool fast_key(void*c,uint32_t*out){check_io();(void)c;*out=0;
  if(startup_events){*out=startup_events;startup_events=0;return true;}
  if(repeated_hold&&ready&&clock_ms-ready_time>300){*out=1;return true;}
  if(crown_before_alarm&&ready&&!alarm_acquires){*out=2;crown_before_alarm=false;prealarm_crown_events++;}
- else if(clock_alarm_modal&&alarm_view.occurrence.generation&&alarm_frames)*out=1;
+ else if(clock_alarm_modal&&alarm_view.occurrence.generation&&alarm_frames&&!alarm_touch_test)*out=1;
  else if(first_seen&&(clock_deferred_phase==4||(early_sleep&&clock_deferred_phase==1))&&wake_count+refused_cycles<requested_wakes&&clock_ms-ready_time>300){*out=2;sleep_failure_armed=fail_sleep_acquire!=0&&refused_cycles<2;}
  return true;}
 static int32_t fast_sleep(void*c,risc_light_sleep_result_v1*out){check_io();(void)c;(void)out;assert(!touch.subscription&&!ble_state&&!pending&&!owned);assert(!broadcast_live&&!contexts_live);sleeps++;wake_count++;clock_ms+=500;native_time.epoch_seconds+=light_wake_drift;if(wake_count==rtc_refusal_wake)fail_late_rtc_read=true;if(wake_count==rtc_recovery_wake)fail_late_rtc_read=false;if(low_on_wake){low_percent=5;clock_low_battery_sampled=false;}if(alarm_on_wake){alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;}return RISC_LIGHT_SLEEP_OK;}
@@ -179,7 +183,7 @@ static bool fast_rtc(void*c,twatch_rtc_time_v1*out){check_io();assert(rtc_read_c
 static int32_t alarm_status(void*c,alarm_status_v1*out){check_io();(void)c;*out=alarm_view;return 0;}
 static int32_t alarm_step(void*c){check_io();(void)c;return 0;}
 static int32_t alarm_refresh(void*c){check_io();(void)c;return 0;}
-static int32_t alarm_ack(void*c,const alarm_token_v1*token){check_io();(void)c;assert(token->generation);alarm_view.state=ALARM_STATE_READY;alarm_view.occurrence.generation=0;return 0;}
+static int32_t alarm_ack(void*c,const alarm_token_v1*token){check_io();(void)c;assert(token->generation);if(alarm_touch_test)assert(alarm_touch_phase==4);alarm_view.state=ALARM_STATE_READY;alarm_view.occurrence.generation=0;return 0;}
 static int32_t alarm_prepare(void*c,alarm_sleep_v1*out){check_io();(void)c;*out=(alarm_sleep_v1){.struct_size=sizeof(*out)};return 0;}
 static int32_t alarm_resume(void*c,const alarm_sleep_v1*plan){check_io();(void)c;assert(plan->struct_size==sizeof(*plan));alarm_resumes++;return ALARM_OK;}
 static const alarm_service_sleep_v1 alarm_api={{1,sizeof(alarm_api),NULL,alarm_status,alarm_step,alarm_refresh,alarm_ack,alarm_prepare,alarm_refresh},alarm_resume};
@@ -264,7 +268,24 @@ static bool fast_launch(const char*path){check_io();assert(!held&&!pending);
  if(expect_context_handoff){assert(!strcmp(path,"waterfall.elf")&&!queued_context_handoff);queued_context_handoff=true;}
  else{assert(!strcmp(path,"springboard.elf")&&!touch.subscription);ended=true;}
  launches++;return true;}
-static bool fast_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();(void)c;*out=(risc_touch_snapshot_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT};return true;}
+static unsigned alarm_touch_y(void) {
+ return alarm_touch_phase<=2?alarm_touch_wrong_y:watch_home_alarm_dismiss_at(TEST_WIDTH,TEST_HEIGHT);
+}
+static bool fast_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();(void)c;
+ *out=(risc_touch_snapshot_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT};
+ if(alarm_touch_test){
+  out->sequence=alarm_touch_phase;
+  if(alarm_touch_phase&1u){out->contact_count=1;out->contacts[0]=(risc_touch_contact_v1){1,0,TEST_WIDTH/2u,alarm_touch_y()};}
+ }
+ return true;
+}
+static int32_t fast_touch_next(void*c,uint64_t id,risc_touch_event_v1*out){
+ if(!alarm_touch_test)return next(c,id,out);
+ if(!clock_alarm_modal||!alarm_frames||alarm_touch_phase>=4)return 0;
+ ++alarm_touch_phase;
+ *out=(risc_touch_event_v1){.sequence=alarm_touch_phase,.kind=(alarm_touch_phase&1u)?RISC_TOUCH_EVENT_DOWN:RISC_TOUCH_EVENT_UP,.id=1,.x=TEST_WIDTH/2u,.y=alarm_touch_y()};
+ return 1;
+}
 static bool fast_ble_enable(void*c,bool enabled){check_io();radio_apply_count++;if(fail_ble_enable)return false;return ble_enable(c,enabled);}
 static bool fast_ble_status(void*c,uint8_t*out){check_io();return ble_status(c,out);}
 static const portable_bluetooth_control_v1 fast_ble={.api_version=1,.struct_size=sizeof(fast_ble),.set_enabled=fast_ble_enable,.status=fast_ble_status};
@@ -290,7 +311,7 @@ static void reset_case(void){
  home_automatic_grant=(risc_runtime_capability_v1){0};home_automatic=(portable_preference_automatic){0};
  clock_face_grant=(risc_runtime_capability_v1){0};clock_face_edit=(portable_preference_atomic){0};atomic_token=0;
 #endif
- initial_default_entry=false;
+ initial_default_entry=false;alarm_touch_test=false;alarm_touch_phase=alarm_touch_wrong_y=0;
  launch_failure_kind=launch_failure_reads=0;
  key_trace_count=key_acquire_cost=startup_events=0;repeated_hold=trace_manual=trace_discard=trace_long=false;
  (void)runtime;
@@ -318,7 +339,7 @@ static void reset_case(void){
  saved_face=radio_saved=false;ble_state=0;face_writes=face_reads=0;memset(quick_saved,0,sizeof(quick_saved));
  da.base.present_status=fast_status;pa.key_events=fast_key;pa.light_sleep=fast_sleep;pa.light_sleep_for=fast_sleep_timed;ra.read=fast_rtc;
  da.base.acquire=fast_frame_acquire;da.base.set_brightness=fast_brightness;
- pa.light_sleep_set=motion_sleep;pa.deep_sleep_set=motion_deep;ta.snapshot=fast_snapshot;
+ pa.light_sleep_set=motion_sleep;pa.deep_sleep_set=motion_deep;ta.snapshot=fast_snapshot;ta.next=fast_touch_next;
  native_time=(risc_realtime_snapshot_v1){.struct_size=sizeof(native_time),.validity=RISC_REALTIME_VALID,.epoch_seconds=1791074400};
  alarm_view=(alarm_status_v1){.api_version=1,.struct_size=sizeof(alarm_view),.state=ALARM_STATE_READY};
  contexts_view=(contexts_status_v1){.struct_size=sizeof(contexts_view)};
@@ -538,6 +559,13 @@ int main(void){
  puts("Cold first-default intro; deep wake and subsequent Home remain fast PASS");
 
  regression_main();
+ for(unsigned boundary=0;boundary<2;boundary++) {
+  reset_case();alarm_touch_test=true;
+  alarm_touch_wrong_y=boundary?watch_home_alarm_retry_at(TEST_WIDTH,TEST_HEIGHT):watch_home_alarm_dismiss_at(TEST_WIDTH,TEST_HEIGHT)-1u;
+  alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;
+  app_main();check_clean();assert(alarm_touch_phase==4&&!alarm_view.occurrence.generation&&alarm_frames);
+ }
+ puts("Alarm native touch: just-above-dismiss and retry-row taps stay inert; exact dismiss boundary acknowledges through raw event queue PASS");
  for(unsigned kind=1;kind<=2;kind++){
   reset_case();launch_failure_kind=kind;app_main();check_clean();
   assert(first_seen&&launch_failure_reads==1&&!launch_failure_kind);

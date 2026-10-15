@@ -55,7 +55,7 @@ static void golden(const risc_display_surface_v1 *s) {
 static void test_goldens(void) {
     uint16_t *pixels=calloc(240*240,2);assert(pixels);
     risc_display_surface_v1 s={0,pixels,240,240,480,240*240*2,5};
-    nova_watch_picker_cache *cache=calloc(1,sizeof(*cache));assert(cache);
+    nova_watch_picker_cache *cache=nova_watch_picker_cache_create(240,294);assert(cache);
     for(unsigned n=0;n<6;n++) {
         nova_watch_state state=state_for(n);
         for(unsigned id=0;id<WATCH_FACE_COUNT;id++) {assert(nova_watch_face_render(&s,&state,id));golden(&s);}
@@ -73,7 +73,7 @@ static void test_goldens(void) {
     assert(nova_watch_sleep_status(&s,"SLEEP ERR MOTION"));golden(&s);
     for(unsigned age=0;age<=1800;age+=300){assert(watch_boot_render(&s,age));golden(&s);}
     for(unsigned scan=0;scan<19;scan++){assert(watch_ripple_render(&s,scan));golden(&s);}
-    free(cache);free(pixels);
+    nova_watch_picker_cache_destroy(cache);free(pixels);
 #ifndef HOME_WRITE_GOLDENS
     assert(golden_index==sizeof(home_240_goldens)/sizeof(*home_240_goldens));
 #endif
@@ -98,7 +98,7 @@ static void test_native_render(void) {
     memset(storage,0xa5,(height*stride+32)*2);
     risc_display_surface_v1 tall={0,storage+16,240,height,stride*2,height*stride*2,5};
     risc_display_surface_v1 square={0,square_pixels,240,240,480,240*240*2,5};
-    nova_watch_picker_cache *cache=calloc(1,sizeof(*cache));assert(cache);
+    nova_watch_picker_cache *cache=nova_watch_picker_cache_create(240,294);assert(cache);
     for(unsigned n=0;n<6;n++) {
         nova_watch_state state=state_for(n);state.capture_audio=count_capture;
         for(unsigned id=0;id<WATCH_FACE_COUNT;id++) {
@@ -140,11 +140,11 @@ static void test_native_render(void) {
     }
     for(unsigned scan=0;scan<19;scan++){assert(watch_ripple_render(&tall,scan));check_guards(storage,height,stride);}
     assert(!ink_in(&tall,0,height));
-    risc_display_surface_v1 invalid=tall;invalid.height=239;assert(!nova_watch_face_render(&invalid,&state,0));
+    risc_display_surface_v1 invalid=tall;invalid.height=0;assert(!nova_watch_face_render(&invalid,&state,0));
     invalid=tall;invalid.height=2049;assert(!nova_watch_face_render(&invalid,&state,0));
     invalid=tall;invalid.size_bytes--;assert(!nova_watch_face_render(&invalid,&state,0));
     invalid=tall;invalid.stride_bytes=UINT32_MAX-1;assert(!nova_watch_face_render(&invalid,&state,0));
-    free(cache);free(square_pixels);free(storage);
+    nova_watch_picker_cache_destroy(cache);free(square_pixels);free(storage);
     puts("Home native render: every face/core parity, live added Point summary, picker collections, bottom-anchored alerts/status, proportional effects, padded guards PASS");
 }
 static void test_native_input(void) {

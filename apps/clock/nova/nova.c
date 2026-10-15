@@ -1,6 +1,7 @@
 #include "nova.h"
 #include "WatchHomeLayout.h"
 #include <string.h>
+#include <stdlib.h>
 
 typedef struct { uint16_t pixel, count, data; } nova_span;
 typedef struct { uint16_t pixel, angle, color; } nova_ring_pixel;
@@ -40,13 +41,13 @@ static bool prepare_compact_assets(void){return true;}
 #define MUTED 0x6bf0u
 #define ORANGE 0xfce3u
 
-typedef struct { uint8_t *pixels; uint32_t stride,height;
+typedef struct { uint8_t *pixels; uint32_t stride,height,width;
 #ifdef WATCH_CONTEXTS_CLIENT
     bool (*capture)(void *);void *context;unsigned operations;bool failed;uint8_t sink[2];
 #endif
 } canvas;
 #ifdef WATCH_CONTEXTS_CLIENT
-#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height,(state)?(state)->capture_audio:NULL,(state)?(state)->capture_context:NULL,0,false,{0,0}}
+#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height,(s)->width,(state)?(state)->capture_audio:NULL,(state)?(state)->capture_context:NULL,0,false,{0,0}}
 #define CANVAS_OK(c) (!(c).failed)
 static bool canvas_checkpoint(canvas*c) {
     if(c->failed)return false;
@@ -56,21 +57,26 @@ static bool canvas_checkpoint(canvas*c) {
 static bool canvas_clear(canvas*c) {
     for(unsigned y=0;y<c->height;y++){
         if(!(y&7u)&&!canvas_checkpoint(c))return false;
-        memset(c->pixels+y*c->stride,0,480);
+        memset(c->pixels+y*c->stride,0,c->width*2u);
     }
     return true;
 }
 #define CANVAS_CLEAR(c) do {if(!canvas_clear(&(c)))return false;}while(0)
 #else
-#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height}
+#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height,(s)->width}
 #define CANVAS_OK(c) true
-#define CANVAS_CLEAR(c) for(unsigned y=0;y<(c).height;y++)memset(at(&(c),0,y),0,480)
+#define CANVAS_CLEAR(c) for(unsigned y=0;y<(c).height;y++)memset(at(&(c),0,y),0,(c).width*2u)
 #endif
 #define CANVAS_HEIGHT(c) ((c)->height)
+#define CANVAS_WIDTH(c) ((c)->width)
+/* Design geometry is resolved before rasterization. The canvas and every
+ * destination pixel remain native; there is no completed-view resampling. */
+static int native_q(const canvas *c,int value) { return (int)((int64_t)value*c->width/240); }
+static int floor_q8(int value) { return value>=0?value/256:(value-255)/256; }
 static bool home_surface_valid(const risc_display_surface_v1 *s) {
     return s && s->pixels && s->pixel_format==RISC_DISPLAY_FORMAT_RGB565 &&
-        s->width==240 && s->height>=240 && s->height<=WATCH_LAYOUT_MAX_SIDE &&
-        !(s->stride_bytes&1u) && s->stride_bytes>=480 &&
+        s->width>0 && s->width<=WATCH_LAYOUT_MAX_SIDE && s->height>0 && s->height<=WATCH_LAYOUT_MAX_SIDE &&
+        !(s->stride_bytes&1u) && s->stride_bytes>=s->width*2u &&
         s->stride_bytes<=UINT32_MAX/s->height && s->size_bytes>=s->stride_bytes*s->height;
 }
 typedef bool (*home_square_renderer)(risc_display_surface_v1 *,const nova_watch_state *,unsigned);
@@ -129,6 +135,39 @@ static void blend(uint8_t *p, uint16_t color, unsigned alpha) {
     unsigned b=(((old&31)*inv+(color&31)*alpha+127)/255);
     put(p,(uint16_t)((r<<11)|(g<<5)|b));
 }
+/* Reconstruct each glyph's coverage directly at its physical destination.
+ * This operates on a glyph mask, never on a rendered application framebuffer. */
+static void native_alpha(canvas *c,const uint8_t *mask,unsigned w,unsigned h,
+        int left,int top,int sx,int sy,uint16_t color,unsigned opacity) {
+    if(sx<=0 || sy<=0 || !w || !h)return;
+    int x0=floor_q8(left),x1=floor_q8(left+(int)w*sx+255);
+    int y0=floor_q8(top),y1=floor_q8(top+(int)h*sy+255);
+    if(x0<0)x0=0;
+    if(y0<0)y0=0;
+    if(x1>(int)c->width)x1=(int)c->width;
+    if(y1>(int)c->height)y1=(int)c->height;
+    for(int y=y0;y<y1;y++) {
+        int v=(int)(((int64_t)y*256+128-top)*256/sy)-128;
+        int iy=floor_q8(v);unsigned fy=(unsigned)(v-iy*256);
+        for(int x=x0;x<x1;x++) {
+            int u=(int)(((int64_t)x*256+128-left)*256/sx)-128;
+            int ix=floor_q8(u);unsigned fx=(unsigned)(u-ix*256);
+            unsigned a=0,b=0,d=0,e=0;
+            if(iy>=0 && iy<(int)h) {
+                if(ix>=0 && ix<(int)w)a=mask[iy*w+ix];
+                if(ix+1>=0 && ix+1<(int)w)b=mask[iy*w+ix+1];
+            }
+            if(iy+1>=0 && iy+1<(int)h) {
+                if(ix>=0 && ix<(int)w)d=mask[(iy+1)*w+ix];
+                if(ix+1>=0 && ix+1<(int)w)e=mask[(iy+1)*w+ix+1];
+            }
+            unsigned hi=(a*(256-fx)+b*fx+128)>>8;
+            unsigned lo=(d*(256-fx)+e*fx+128)>>8;
+            unsigned coverage=((hi*(256-fy)+lo*fy+128)>>8)*opacity/255;
+            if(coverage)blend(at(c,(unsigned)x,(unsigned)y),color,coverage);
+        }
+    }
+}
 static const nova_glyph *glyph(const nova_glyph *set, unsigned count, char ch) {
     for (unsigned i=0;i<count;i++) if (set[i].character==(uint8_t)ch) return &set[i];
     return NULL;
@@ -152,6 +191,11 @@ static void text(canvas *c,const nova_glyph *set,unsigned count,const char *s,
         int last=(left+g->width*(int)scale+255)/256;
         uint16_t ink=colon && *s==':'?CYAN:color;
         unsigned opacity=colon && *s==':'?alpha:255;
+        if(c->width!=240u) {
+            native_alpha(c,nova_glyph_alpha+g->data,g->width,g->height,native_q(c,left),
+                native_q(c,(baseline+g->top)*256),native_q(c,(int)scale),native_q(c,256),ink,opacity);
+            pen+=((int)g->advance+spacing)*(int)scale/256;continue;
+        }
         for (int dx=first;dx<last;dx++) {
             if (dx<0 || dx>=240) continue;
             int source=((dx*256+128-left)*256)/(int)scale-128;
@@ -209,6 +253,7 @@ static void seconds(canvas *c,unsigned milliseconds) {
 }
 bool nova_watch_render(risc_display_surface_v1 *s,const nova_watch_state *state) {
     if(!prepare_compact_assets())return false;
+    if(s && s->width!=240)return nova_watch_face_render(s,state,0);
     if(s && s->height!=240)return home_face_render(s,state,0,home_classic_render);
     if (!s || !s->pixels || s->pixel_format!=RISC_DISPLAY_FORMAT_RGB565 ||
         s->width!=240 || s->height!=240 || s->stride_bytes<480 ||
@@ -262,19 +307,20 @@ bool nova_watch_render(risc_display_surface_v1 *s,const nova_watch_state *state)
 bool nova_watch_sleep_status(risc_display_surface_v1 *s,const char *label){
     if(!home_surface_valid(s)||!label)return false;
     for(unsigned n=0;label[n];n++)if(n==31)return false;
-    canvas c=CANVAS_INIT(s,((const nova_watch_state*)NULL));
-    for(unsigned y=s->height-37;y<s->height-9;y++)for(unsigned x=10;x<230;x++)put(at(&c,x,y),0);
-    centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),label,(int)s->height-18,128,ORANGE);return true;
+    canvas full=CANVAS_INIT(s,((const nova_watch_state*)NULL));canvas c=home_ui_canvas(full);
+    frect(&c,10,ui_y(&c,(int)s->height)-37,220,28,0);
+    centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),label,ui_y(&c,(int)s->height)-18,128,ORANGE);return true;
 }
 
 bool nova_watch_context_message(risc_display_surface_v1*s,const char*message){
  if(!home_surface_valid(s)||!message)return false;
- canvas c=CANVAS_INIT(s,((const nova_watch_state*)NULL));CANVAS_CLEAR(c);
+ canvas c=CANVAS_INIT(s,((const nova_watch_state*)NULL));CANVAS_CLEAR(c);c=home_ui_canvas(c);
+ int extra=ui_y(&c,(int)s->height)-240;
  char first[17]={0},second[17]={0};unsigned n=0;while(message[n]&&n<16){first[n]=message[n];n++;}unsigned j=0;while(message[n]&&j<16)second[j++]=message[n++];
  centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),"CONTEXT",65,256,CYAN);
- centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),first,112+(int)watch_home_extra(s->height)/2,0,0xffff);
- centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),second,142+(int)watch_home_extra(s->height)/2,0,0xffff);
- centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),"TAP TO DISMISS",(int)s->height-50,0,MUTED);return CANVAS_OK(c);
+ centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),first,112+extra/2,0,0xffff);
+ centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),second,142+extra/2,0,0xffff);
+ centered(&c,nova_date_glyphs,COUNT(nova_date_glyphs),"TAP TO DISMISS",ui_y(&c,(int)s->height)-50,0,MUTED);return CANVAS_OK(c);
 }
 #ifdef WATCH_CRASH_REPORT
 #include "../crash_text.h"
@@ -282,15 +328,15 @@ bool nova_watch_context_message(risc_display_surface_v1*s,const char*message){
 static void crash_literal(canvas *c,const char *s,unsigned y) {
  for(unsigned i=0;s[i] && i<28;++i){unsigned ch=(unsigned char)s[i];if(ch<32 || ch>126)ch='?';
   for(unsigned dy=0;dy<16 && y+dy<c->height;++dy)for(unsigned dx=0;dx<8;++dx)
-   if(crash_font[ch-32][dy]&(1u<<dx))put(at(c,8+i*8+dx,y+dy),0xffff);
+   if(8+i*8+dx<c->width && (crash_font[ch-32][dy]&(1u<<dx)))put(at(c,8+i*8+dx,y+dy),0xffff);
  }
 }
 bool nova_watch_crash_report(risc_display_surface_v1 *s,const char *report,uint32_t size,uint32_t offset,uint32_t *next) {
  if(!home_surface_valid(s) || !report || !next || offset>size)return false;
  const nova_watch_state *state=NULL;canvas c=CANVAS_INIT(s,state);CANVAS_CLEAR(c);
- unsigned rows=(s->height-48)/16;char line[29];uint32_t at=offset;
+ unsigned rows=s->height>48?(s->height-48)/16:0;char line[29];uint32_t at=offset;
  for(unsigned row=0;row<rows && at<size;++row){at=crash_text_line(report,size,at,line);crash_literal(&c,line,8+row*16);}
- crash_literal(&c,at<size?"Tap or key: next page":"Tap or key: continue",s->height-30);
+ crash_literal(&c,at<size?"Tap or key: next page":"Tap or key: continue",s->height>30?s->height-30:0);
  *next=at;return CANVAS_OK(c);
 }
 #endif
