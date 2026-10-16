@@ -5,6 +5,7 @@
 #include "runtime_boot_confirm.h"
 #endif
 #include "RiscRuntimeV1.h"
+#include "RiscRuntimeCheckpointV1.h"
 #include "WatchViewport.h"
 static watch_viewport clock_viewport;
 #include "nova/nova.h"
@@ -1195,6 +1196,11 @@ __attribute__((visibility("default"))) void app_main(void) {
     if(!clock_contexts_recover_export())goto done;
 #endif
     while(alive(&now)) {
+        /* Startup and the previous frame have fully completed presentation.
+         * No frame is held here. Never dispatch this service from present(),
+         * raster callbacks, pacing, or another ordinary yield/BUSY path. */
+        int32_t serviced=risc_runtime_service_checkpoint_v1(rt);
+        if(serviced!=RISC_RUNTIME_CHECKPOINT_OK && serviced!=RISC_RUNTIME_CHECKPOINT_BUSY)return;
 #ifdef WATCH_BLE_BROADCAST
         if(!clock_broadcast_step())return;
 #endif

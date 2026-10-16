@@ -2,8 +2,8 @@
   "RiscRuntimeV1.h": {
     "repository": "michaelrolphone-cmyk/RiscRTE",
     "path": "sdk/app/RiscRuntimeV1.h",
-    "commit": "be6efce33a19d3a21ced4077a038fdcc7b9b94a3",
-    "sha256": "6fbfacaa46d532bfef083e8c7dd3bbe36613e557279fdda887d814d53915526b"
+    "commit": "605cfe5133bacd8af0ad337f4f231517b6c11df0",
+    "sha256": "e8ddeb072831b0951ebe4eb3c68e54c08d778560b866537f86eaf78d2aae34fc"
   },
   "APP_CAPABILITIES.md": {
     "repository": "michaelrolphone-cmyk/RiscRTE",
@@ -16,5 +16,11 @@
     "commit": "bd73f918bd2392693e4ee7719f289da7531da4b1",
     "path": "sdk/app/RiscKeyValueV1.h",
     "sha256": "5d5524ffd27b164f31505c5f538f528b39b35e356922e03e2eb59a9c68677b56"
+  },
+  "RiscRuntimeCheckpointV1.h": {
+    "repository": "michaelrolphone-cmyk/RiscRTE",
+    "path": "sdk/app/RiscRuntimeCheckpointV1.h",
+    "commit": "605cfe5133bacd8af0ad337f4f231517b6c11df0",
+    "sha256": "dcc3bb7d76aa2d39f45d6cc648f38b6e4e3708cafcff463d21bee96275fd17f0"
   }
 }
