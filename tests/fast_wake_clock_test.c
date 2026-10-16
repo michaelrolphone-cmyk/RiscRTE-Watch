@@ -45,6 +45,10 @@ static int32_t light_wake_drift;
 static unsigned rtc_refusal_wake,rtc_recovery_wake,rtc_reconcile_errors,rtc_read_calls;
 static unsigned transient_rtc_failures,rtc_read_at[16];
 static bool wait_rtc_recovery,first_time_valid,first_time_warning;
+static bool live_rtc_update,live_rtc_applied,live_rtc_presented;
+static twatch_rtc_time_v1 live_rtc_value,live_rtc_expected;
+static uint32_t live_rtc_applied_at;
+static int64_t live_rtc_epoch;
 static uint32_t prealarm_crown_events;
 static const char *fail_capability;
 static unsigned key_trace_count,key_acquire_cost,startup_events;
@@ -144,7 +148,17 @@ static bool fast_diagnostic(const char*s){
  if(strstr(s,"stage=radios-begin")){radio_at=clock_ms;assert(input_stages>0);if(wake_count)assert(resume_input_at>=wake_began);assert(frame_at>=(wake_count?wake_began:first_at));}
  if(strstr(s,"stage=broadcast-begin"))broadcast_at=clock_ms;
  if(strstr(s,"stage=contexts-begin"))contexts_at=clock_ms;
- if(strstr(s,"stage=services-ready")){stage_calls++;if(wake_count+refused_cycles==requested_wakes&&!early_launch&&!wait_rtc_recovery)ended=true;}
+ if(strstr(s,"stage=services-ready")){
+  stage_calls++;
+  if(live_rtc_update){
+   /* Model an already accepted RTC update and its Runtime seed. The RTC
+    * setting application's write transaction is a separate qualification. */
+   assert(!live_rtc_applied&&!owned&&!pending);
+   int64_t epoch;assert(watch_runtime_epoch(&live_rtc_value,&epoch)&&epoch==live_rtc_epoch);
+   assert(native_api.seed(native_api.context,epoch,0)==RISC_REALTIME_OK);
+   live_rtc_applied=true;live_rtc_applied_at=clock_ms;
+  }else if(wake_count+refused_cycles==requested_wakes&&!early_launch&&!wait_rtc_recovery)ended=true;
+ }
  return true;
 }
 static bool fast_status(void*c,uint64_t token,risc_display_present_status_v1*out){
@@ -153,6 +167,12 @@ static bool fast_status(void*c,uint64_t token,risc_display_present_status_v1*out
  if(clock_ms-frame_started<transfer_cost){out->state=RISC_DISPLAY_PRESENT_ACTIVE;return true;}
  pending=false;out->state=fail_display?RISC_DISPLAY_PRESENT_FAILED:RISC_DISPLAY_PRESENT_COMPLETE;
  if(!fail_display){memcpy(completed_pixels,pixels,sizeof(pixels));last_complete=submitted;frame_at=clock_ms;if(clock_alarm_modal)alarm_frames++;
+  if(live_rtc_applied&&face.time_valid&&!memcmp(&face.time,&live_rtc_expected,sizeof(face.time))){
+   fixture_expected_face(true);assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
+   assert(hardware_brightness==clock_quick.brightness&&hardware_brightness>0);
+   assert(native_time.epoch_seconds==live_rtc_epoch);
+   assert(clock_ms-live_rtc_applied_at<=500);live_rtc_presented=true;ended=true;
+  }
   if(wait_rtc_recovery&&first_seen&&!clock_rtc_reconcile_pending&&face.time_valid&&!sleep_status[0])ended=true;
   if(refused_restores&&hardware_brightness){
    check_refusal_pixels();clean_refusal_frames++;
@@ -179,7 +199,7 @@ static bool fast_key(void*c,uint32_t*out){check_io();(void)c;*out=0;
  return true;}
 static int32_t fast_sleep(void*c,risc_light_sleep_result_v1*out){check_io();(void)c;(void)out;assert(!touch.subscription&&!ble_state&&!pending&&!owned);assert(!broadcast_live&&!contexts_live);sleeps++;wake_count++;clock_ms+=500;native_time.epoch_seconds+=light_wake_drift;if(wake_count==rtc_refusal_wake)fail_late_rtc_read=true;if(wake_count==rtc_recovery_wake)fail_late_rtc_read=false;if(low_on_wake){low_percent=5;clock_low_battery_sampled=false;}if(alarm_on_wake){alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;}return RISC_LIGHT_SLEEP_OK;}
 static int32_t fast_sleep_timed(void*c,uint32_t ms,risc_light_sleep_result_v1*out){(void)ms;return fast_sleep(c,out);}
-static bool fast_rtc(void*c,twatch_rtc_time_v1*out){check_io();assert(rtc_read_calls<16);rtc_read_at[rtc_read_calls++]=clock_ms;if(transient_rtc_failures){transient_rtc_failures--;return false;}if(fail_late_rtc_read){native_context_failed=late_rtc_retention;return false;}if(unreadable_rtc)return false;if(unset_time){memset(out,0,sizeof(*out));return true;}return rtc_read(c,out);}
+static bool fast_rtc(void*c,twatch_rtc_time_v1*out){check_io();assert(rtc_read_calls<16);rtc_read_at[rtc_read_calls++]=clock_ms;if(transient_rtc_failures){transient_rtc_failures--;return false;}if(fail_late_rtc_read){native_context_failed=late_rtc_retention;return false;}if(unreadable_rtc)return false;if(unset_time){memset(out,0,sizeof(*out));return true;}if(live_rtc_applied){*out=live_rtc_value;return true;}return rtc_read(c,out);}
 static int32_t alarm_status(void*c,alarm_status_v1*out){check_io();(void)c;*out=alarm_view;return 0;}
 static int32_t alarm_step(void*c){check_io();(void)c;return 0;}
 static int32_t alarm_refresh(void*c){check_io();(void)c;return 0;}
@@ -329,6 +349,7 @@ static void reset_case(void){
  clock_face_grant=(risc_runtime_capability_v1){0};clock_face_edit=(portable_preference_atomic){0};atomic_token=0;
 #endif
  initial_default_entry=false;alarm_touch_test=false;alarm_touch_phase=alarm_touch_wrong_y=0;
+ live_rtc_update=live_rtc_applied=live_rtc_presented=false;live_rtc_applied_at=0;
  launch_failure_kind=launch_failure_reads=0;
  key_trace_count=key_acquire_cost=startup_events=0;repeated_hold=trace_manual=trace_discard=trace_long=false;
  (void)runtime;
@@ -567,7 +588,44 @@ static int regression_main(void){
  return 0;
 }
 
+static void live_rtc_update_cases(void){
+ /* Fixed external-RTC UTC+08 input and independently specified Denver output:
+  * forward/backward adjustment, both DST boundaries, leap-day/year rollover.
+  * This checks the real Home render/present loop after the shared native clock
+  * changes. The 500ms bound is modeled fixture time, never device latency. */
+ static const struct {twatch_rtc_time_v1 rtc,expected;int64_t epoch;} cases[]={
+  {{.year=2026,.month=10,.day=4,.hour=0,.minute=5,.second=40,.weekday=0},
+   {.year=2026,.month=10,.day=3,.hour=10,.minute=5,.second=40,.weekday=6},INT64_C(1791043540)},
+  {{.year=2026,.month=10,.day=3,.hour=23,.minute=55,.second=40,.weekday=6},
+   {.year=2026,.month=10,.day=3,.hour=9,.minute=55,.second=40,.weekday=6},INT64_C(1791042940)},
+  {{.year=2026,.month=3,.day=8,.hour=16,.minute=59,.second=59,.weekday=0},
+   {.year=2026,.month=3,.day=8,.hour=1,.minute=59,.second=59,.weekday=0},INT64_C(1772960399)},
+  {{.year=2026,.month=3,.day=8,.hour=17,.weekday=0},
+   {.year=2026,.month=3,.day=8,.hour=3,.weekday=0},INT64_C(1772960400)},
+  {{.year=2026,.month=11,.day=1,.hour=15,.minute=59,.second=59,.weekday=0},
+   {.year=2026,.month=11,.day=1,.hour=1,.minute=59,.second=59,.weekday=0},INT64_C(1793519999)},
+  {{.year=2026,.month=11,.day=1,.hour=16,.weekday=0},
+   {.year=2026,.month=11,.day=1,.hour=1,.weekday=0},INT64_C(1793520000)},
+  {{.year=2028,.month=2,.day=29,.hour=8,.weekday=2},
+   {.year=2028,.month=2,.day=28,.hour=17,.weekday=1},INT64_C(1835395200)},
+  {{.year=2027,.month=1,.day=1,.hour=8,.weekday=5},
+   {.year=2026,.month=12,.day=31,.hour=17,.weekday=4},INT64_C(1798761600)},
+ };
+ unsigned count=0;
+ for(unsigned selected=0;selected<WATCH_FACE_COUNT;selected++)
+  for(unsigned i=0;i<sizeof(cases)/sizeof(*cases);i++){
+   reset_case();live_rtc_update=true;live_rtc_value=cases[i].rtc;live_rtc_expected=cases[i].expected;live_rtc_epoch=cases[i].epoch;
+   saved_face=true;memcpy(saved_blob,(uint8_t[]){0x46,1,(uint8_t)selected,(uint8_t)(selected^0xa5)},4);
+   app_main();check_clean();
+   assert(picker.selected==selected&&live_rtc_applied&&live_rtc_presented&&seed_calls==2&&!sleeps);
+   assert(face.time_valid&&!memcmp(&face.time,&live_rtc_expected,sizeof(face.time)));count++;
+  }
+ printf("Live RTC/native update: %u completed-face cases, all faces, forward/backward, DST/leap/year boundaries, modeled <=500ms, clean custody PASS\n",count);
+}
+
 int main(void){
+ live_rtc_update_cases();
+ if(getenv("WATCH_TEST_RTC_UPDATES_ONLY"))return 0;
  for(unsigned cause=0;cause<=RISC_BOOT_DEEP_OTHER;cause++) {
   reset_case();initial_default_entry=true;boot_cause=cause;app_main();check_clean();
   if(cause<RISC_BOOT_DEEP_TIMER){assert(first_seen&&first_frames>10&&first_at>2000);}
