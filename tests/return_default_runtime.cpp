@@ -1,6 +1,7 @@
 // Runs the production Runtime and the actual zero-service clock return module.
 // dlopen is the host loader boundary, not target instruction emulation.
 #include "bootstrap/Runtime.h"
+#include "RuntimeFileFixture.h"
 #include <cassert>
 #include <cstring>
 #include <cstdio>
@@ -26,11 +27,20 @@ int main(int argc,char**argv){
  assert(argc==2);std::string root=argv[1];
  write(root+"/board.json",R"({"schema":"riscrte.board-hardware","schema_version":1,"board_id":"generic-return-test","revision":"unspecified","buses":[],"devices":[]})");
  write(root+"/boot.json",R"({"board":"board.json","default_app":"default.elf","drivers":[]})");
+ // Existing host paths do not authorize implicit Runtime filesystem access.
+ {RiscBoot::Runtime unbound({owner,health,wait_ms,log_line});
+  assert(!unbound.prepare(root.c_str()));
+  assert(!strcmp(unbound.error(),"invalid boot invocation"));
+  assert(!risc_runtime_get_api(1));assert(events.empty());}
  for(unsigned cycle=0;cycle<3;cycle++){
   home_entries=child_entries=0;app_live=false;events.clear();
+  // Explicit test-only metadata provider must outlive Runtime teardown.
+  RiscTest::FileSources files({root});
   {RiscBoot::Runtime runtime({owner,health,wait_ms,log_line});
+   assert(files.bind(runtime));
    if(!runtime.prepare(root.c_str())){std::fprintf(stderr,"%s\n",runtime.error());return 2;}
    assert(runtime.run());assert(!risc_runtime_get_api(1));}
+  assert(files.sources()->exitSafe());
   assert(home_entries==2&&child_entries==1&&!app_live);
   // Return module has no constructors, service grants or background clients;
   // the previous Home and child finalize before fresh Home initialization.
