@@ -6,13 +6,22 @@ Canonical shared Home application for ESP32-S3 watches. Device repositories supp
 
 ## One build, independent capabilities
 
-Home 0.16.0 builds `default.elf` and its `clock.elf` return-to-Home companion without board or resolution defines. These are roles, not board variants. Each board consumes the same bytes for each role.
+Home 0.18.0 builds `default.elf` and its `clock.elf` return-to-Home companion without board or resolution defines. These are roles, not board variants. Each board consumes the same bytes for each role.
 
 Capabilities describe functions, never device models. Battery (`board.battery`), power key (`input.power-key`), system sleep (`power.sleep`), frame output (`display.output`) and display sleep (`display.power`) have independent interfaces. Home no longer casts a battery to a private T-Watch PMU table or a framebuffer to panel-specific power methods. Generic contracts and their compatibility adapters are pinned from RiscRTE-Drivers; the adapters, not the application, interpret legacy combined driver tables.
 
 Absent optional services do not fabricate hardware support: no battery gives unknown telemetry, no key gives no key events, and missing sleep/display-power keeps Home awake. An acquired invalid API remains an error. Supported services resolve through capability selection, not fixed physical instance IDs. Existing application IDs and saved settings namespaces remain compatible.
 
 See `docs/CAPABILITY_BOUNDARIES.md` for API and provisioning details.
+
+## Settled native services
+
+Home optionally calls Runtime's append-only service checkpoint once at a settled
+foreground-loop boundary, after startup or the preceding presentation completes
+and before acquiring another frame. Older Runtime tables remain compatible and
+perform no service work. The callback is never added to presentation polling,
+raster callbacks, pacing, or generic yield/BUSY paths. Both watches retain the
+same source and build inputs. See `docs/RUNTIME_SERVICE_CHECKPOINT.md`.
 
 ## Display and input
 
@@ -38,6 +47,7 @@ Use the compiler and System-Apps/Utilities source revisions in `dependencies.loc
 python3 -m pip install -r scripts/requirements.txt
 python3 scripts/test_capabilities.py
 python3 scripts/test_capabilities.py --sanitize
+python3 scripts/test_runtime_service_checkpoint.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities --output /tmp/home-checkpoint-proof
 python3 scripts/test_viewport.py
 python3 scripts/test_home_native_height.py
 python3 scripts/test_native_faces.py

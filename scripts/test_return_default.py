@@ -6,7 +6,7 @@ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--runtime',type=P
 r=Path(__file__).resolve().parents[1];n=a.runtime.resolve()
 with tempfile.TemporaryDirectory(prefix='shared-watch-return-') as tmp:
  out=Path(tmp);san=['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer'] if a.sanitize else []
- includes=['-I'+str(n/x) for x in ['src','sdk/app','sdk/driver','sdk/hardware','lib/ArduinoJson/src','test/drivers/stubs']]
+ includes=['-I'+str(n/x) for x in ['src','sdk/app','sdk/driver','sdk/hardware','lib/ArduinoJson/src','test','test/drivers/stubs']]
  for name in ['default','child','clock']:
   src=r/('apps/clock/return_to_default.c' if name=='clock' else 'tests/return_default_fixture.c')
   defines=['-DRETURN_TEST_CHILD'] if name=='child' else []
