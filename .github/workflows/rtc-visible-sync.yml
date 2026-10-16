@@ -1,0 +1,59 @@
+name: Visible RTC synchronization
+on:
+  push:
+    branches: [main, work/rtc-visible-sync-20261016]
+    paths: ['apps/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', 'dependencies.lock.json', '.github/workflows/rtc-visible-sync.yml']
+  pull_request:
+    paths: ['apps/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', 'dependencies.lock.json', '.github/workflows/rtc-visible-sync.yml']
+permissions:
+  contents: read
+jobs:
+  actual-home:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        size: ['240x240', '410x502']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - id: deps
+        name: Read exact application dependency pins
+        run: |
+          python3 - <<'PY'
+          import json, os
+          pins = json.load(open('dependencies.lock.json'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              for name in ('system', 'utilities'):
+                  print(f"{name}={pins[name]['commit']}", file=output)
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: ${{ steps.deps.outputs.system }}
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: ${{ steps.deps.outputs.utilities }}
+          path: .source/utilities
+          persist-credentials: false
+      - name: Actual Home boot, accepted time update and wake
+        env:
+          SIZE: ${{ matrix.size }}
+        run: |
+          set -o pipefail
+          mkdir -p evidence
+          git rev-parse HEAD | tee evidence/watch-source.txt
+          git -C .source/system rev-parse HEAD | tee evidence/system-source.txt
+          git -C .source/utilities rev-parse HEAD | tee evidence/utilities-source.txt
+          python3 scripts/test_fast_wake_clock.py --system-apps .source/system --utilities .source/utilities --width "${SIZE%x*}" --height "${SIZE#*x}" --atomic --crash-report 2>&1 | tee "evidence/rtc-${SIZE}.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visible-rtc-${{ matrix.size }}
+          path: evidence
+          retention-days: 30
