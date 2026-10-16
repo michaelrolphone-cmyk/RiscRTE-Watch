@@ -199,7 +199,13 @@ static int32_t motion_deep(void*c,uint32_t ms){check_io();(void)c;(void)ms;asser
 static bool context_pause(void*c){check_io();(void)c;assert(!held&&!pending);contexts_live=false;return !fail_context_pause;}
 static bool context_step(void*c,const contexts_policy_v1*p){check_io();(void)c;assert(!held&&!pending&&!clock_radios_pending&&clock_contexts_started);
  assert(!queued_context_handoff);
- if(!contexts_live){assert(clock_deferred_phase==2&&clock_ms>=contexts_at&&frame_at<=contexts_at&&submitted>broadcast_frame);contexts_live=true;contexts_starts++;clock_ms+=service_start_cost;}
+ if(!contexts_live){
+#ifdef WATCH_CRASH_REPORT
+  if(clock_deferred_phase==4){assert(clock_crash.attempted&&clock_crash.hooks.files_enabled);contexts_live=true;}
+  else
+#endif
+  {assert(clock_deferred_phase==2&&clock_ms>=contexts_at&&frame_at<=contexts_at&&submitted>broadcast_frame);contexts_live=true;contexts_starts++;clock_ms+=service_start_cost;}
+ }
  assert(!p->enabled||contexts_enabled);if(low_percent<10)assert(!p->audio_allowed&&!p->radio_allowed);
  return true;}
 static bool context_status(void*c,contexts_status_v1*out){check_io();(void)c;*out=contexts_view;return true;}
@@ -214,7 +220,13 @@ static bool context_capture(void*c){check_io();(void)c;return true;}
 static const contexts_service_v1 context_api={.api_version=1,.struct_size=sizeof(context_api),.step=context_step,.pause=context_pause,.status=context_status,.request_export=context_request,.begin_export=context_begin,.export_record=context_export,.finish_export=context_finish,.label=context_label,.claim_preset=context_claim,.preset_result=context_result,.capture_audio=context_capture};
 static bool broadcast_step(void*c,bool allowed,const telemetry_broadcast_policy_v1*p){check_io();(void)c;assert(allowed&&!clock_radios_pending&&clock_broadcast_started);
  assert(!queued_context_handoff);
- if(!broadcast_live){assert(clock_deferred_phase==1&&clock_ms>=broadcast_at&&frame_at<=broadcast_at);broadcast_frame=submitted;broadcast_live=true;broadcast_starts++;clock_ms+=service_start_cost;}
+ if(!broadcast_live){
+#ifdef WATCH_CRASH_REPORT
+  if(clock_deferred_phase==4){assert(clock_crash.attempted&&clock_crash.hooks.files_enabled);broadcast_live=true;}
+  else
+#endif
+  {assert(clock_deferred_phase==1&&clock_ms>=broadcast_at&&frame_at<=broadcast_at);broadcast_frame=submitted;broadcast_live=true;broadcast_starts++;clock_ms+=service_start_cost;}
+ }
  assert(!p->radios_allowed||(!clock_quick.ui.airplane&&clock_quick.ui.bluetooth_enabled));
  return !(fail_broadcast_restart&&wake_count);}
 static bool broadcast_pause(void*c){check_io();(void)c;broadcast_live=false;return true;}
@@ -226,6 +238,11 @@ static const portable_bluetooth_control_v1 fast_ble;
 static const risc_key_value_v1 fast_kv;
 static bool fast_acquire(const char*n,uint32_t version,uint64_t instance,risc_runtime_capability_v1*g){
  check_io();
+#ifdef WATCH_CRASH_REPORT
+ // This lifecycle fixture has no persistent crash spool. Model optional
+ // AppData absence instead of handing its nonzero namespace to device mocks.
+ if(!strcmp(n,RISC_APP_DATA_CAPABILITY)){assert(version==1&&instance==WATCH_CRASH_REPORT_NAMESPACE);return false;}
+#endif
  if(sleep_failure_armed&&((fail_sleep_acquire==1&&!strcmp(n,RISC_KEY_VALUE_CAPABILITY)&&instance==1)||
     (fail_sleep_acquire==2&&!strcmp(n,TWATCH_MOTION_CAPABILITY)&&instance==0))){
   assert(!hardware_brightness&&!touch.subscription&&!pending&&!owned&&!broadcast_live&&!contexts_live);
