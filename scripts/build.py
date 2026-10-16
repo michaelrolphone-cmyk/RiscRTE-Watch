@@ -16,6 +16,7 @@ for name in ('system','utilities'):p.add_argument('--'+name,type=Path,required=T
 p.add_argument('--output',type=Path,default=ROOT/'dist')
 p.add_argument('--cc',default=os.environ.get('WATCH_APP_CC') or shutil.which('xtensa-esp32s3-elf-gcc'))
 p.add_argument('--role',choices=['default','clock','both'],default='both')
+p.add_argument('--automatic-provision',action='store_true',help='Explicit generic foreground core-profile reconciliation')
 a=p.parse_args()
 if not a.cc:p.error('Set WATCH_APP_CC or --cc to the pinned ESP32-S3 compiler')
 S=a.system.resolve();U=a.utilities.resolve();out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
@@ -30,7 +31,7 @@ home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py
  'include/WatchTapPolicy.h','include/PortableMotionTap.h','include/PortablePowerStatus.h','include/PortableTapSettings.h',
  'include/twatch_calendar.h','include/twatch_caps.h','include/twatch_power.h','include/twatch_util.h',
  'apps/runtime_features/clock_runtime.h','apps/runtime_features/sdk',
- 'apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
+ 'apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
  'apps/clock/points_projection.c','apps/clock/points_projection.h','apps/clock/points_compat.h',
  'apps/clock/nova','apps/clock/faces','apps/clock/transitions','apps/clock/effects/boot.cpp',
  'apps/clock/effects/effects.h','apps/clock/effects/divdi3.c','apps/clock/clock_alarm.inc',
@@ -48,12 +49,14 @@ common=['-Os','-fPIC','-mtext-section-literals','-mlongcalls','-fvisibility=hidd
 effect=out/'boot-effect.o'
 subprocess.run([a.cc.removesuffix('gcc')+'g++','-std=c++11',*common,'-fno-exceptions','-fno-rtti','-fno-threadsafe-statics',*incs,'-c',str(ROOT/'apps/clock/effects/boot.cpp'),'-o',str(effect)],check=True)
 sources=[ROOT/'apps/clock/crown.c',ROOT/'apps/clock/viewport.c',ROOT/'apps/clock/capability_clients.c',ROOT/'apps/clock/quick_radios.c',ROOT/'apps/clock/nova/nova.c',ROOT/'apps/clock/points_projection.c',ROOT/'apps/clock/effects/divdi3.c',*[S/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')],effect]
+if a.automatic_provision:sources += [S/'lib/PortableApps/src/PortableAutomaticProvision.c',S/'lib/PortableApps/src/PortableNetworkSession.c']
 validator=out/'validate-elf'
 subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Wextra','-Werror','-I'+str(S/'test/native_apps/stubs'),'-I'+str(S/'lib/elf_loader/include'),str(S/'lib/elf_loader/src/esp_elf_validate.c'),str(S/'test/native_apps/validate_test.c'),'-o',str(validator)],check=True)
-records={'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':'runtime-provider','hardware_profile_inputs':False,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
+records={'automatic_provision':a.automatic_provision,'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':'runtime-provider','hardware_profile_inputs':False,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
 for role in ['default','clock'] if a.role=='both' else [a.role]:
  target=out/(role+'.elf');mapping=out/(role+'.map');mapping.write_text('{ global: app_main; local: *; };\n')
- flags=FLAGS if role=='default' else []
+ flags=list(FLAGS) if role=='default' else []
+ if role=='default' and a.automatic_provision:flags.append('-DWATCH_AUTOMATIC_PROVISION')
  role_sources=sources if role=='default' else [ROOT/'apps/clock/return_to_default.c']
  command=[a.cc,'-std=c11',*common,'-nostdlib','-nostartfiles','-shared','-Wl,--gc-sections','-Wl,--no-relax','-Wl,--hash-style=sysv','-Wl,--version-script='+str(mapping),*flags,*incs,*map(str,role_sources),'-lgcc','-o',str(target)]
  subprocess.run(command,check=True);normalize(target)
@@ -69,7 +72,10 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.18.0'
+  manifest['version']='0.19.0' if a.automatic_provision else '0.18.0'
+  if a.automatic_provision:
+   manifest['requires'].append({'capability':'software.installed-apps','api':1})
+   manifest['optional'].append({'capability':'storage.volume','api':1})
  (out/(role+'.json')).write_text(json.dumps(manifest,indent=2)+'\n')
  records['artifacts'][role]={'role':'home' if role=='default' else 'return-to-default','file_name':target.name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'imports':sorted(imports),'exports':sorted(exports),'compaction':proof,'defines':flags}
  print(role+': target build and Runtime ELF validation PASS',flush=True)

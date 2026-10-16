@@ -40,9 +40,18 @@ def check_build(path):
     optional = {(x['capability'], x['api']) for x in app.get('optional', [])}
     require(('storage.preferences', 1) in required and ('storage.files', 1) in optional,
             'Generic storage declarations missing')
-    require(not any(cap in {'storage.volume', 'storage.key-value.atomic'} for cap, _ in required | optional),
-            'Application declares a backend-specific contract')
-    for literal in (b'storage.volume\0', b'storage.key-value.atomic\0'):
+    automatic = record.get('automatic_provision', False)
+    require(('storage.volume', 1) not in required, 'Removable volume must stay optional')
+    require((('storage.volume', 1) in optional) == automatic,
+            'Optional removable-volume declaration differs from selected provisioning feature')
+    require((('-DWATCH_AUTOMATIC_PROVISION' in flags)) == automatic,
+            'Provisioning selection differs from compiler receipt')
+    require(not any('WATCH_PROVISION_VOLUME' in flag for flag in flags),
+            'Physical provisioning volume identity in build')
+    require(('storage.key-value.atomic', 1) not in required | optional,
+            'Application declares a preference backend')
+    forbidden = (b'storage.key-value.atomic\0',) if automatic else (b'storage.volume\0', b'storage.key-value.atomic\0')
+    for literal in forbidden:
         require(literal not in raw, 'Backend-specific capability compiled into Home: ' + repr(literal))
     return raw, manifest, record
 

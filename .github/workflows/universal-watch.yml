@@ -56,6 +56,8 @@ jobs:
           python3 scripts/test_capabilities.py
           python3 scripts/test_fast_wake_clock.py --system-apps .source/system --utilities .source/utilities
           python3 scripts/test_clock_raster_gestures.py --system-apps .source/system --utilities .source/utilities
+          python3 scripts/test_fast_wake_clock.py --system-apps .source/system --utilities .source/utilities --automatic-provision --atomic --crash-report
+          python3 scripts/test_fast_wake_clock.py --system-apps .source/system --utilities .source/utilities --automatic-provision --atomic --crash-report --native
           python3 scripts/test_home_native_height.py
           python3 scripts/test_packed_alpha.py
           python3 scripts/test_packed_calendar.py
@@ -90,6 +92,9 @@ jobs:
           python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc"
           python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --output dist/replay --role default
           python3 scripts/verify_shared_default.py --first dist --second dist/replay --receipt dist/shared-default-proof.json
+          python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --automatic-provision --output dist/provisioning
+          python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --automatic-provision --output dist/provisioning-replay --role default
+          python3 scripts/verify_shared_default.py --first dist/provisioning --second dist/provisioning-replay --receipt dist/provisioning/shared-default-proof.json
           python3 .source/drivers/scripts/build_legacy_power_bridge.py --watch-sdk "$PWD" --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --validator dist/validate-elf --output dist/generic-power
           git rev-parse HEAD > dist/COMMIT.txt
           git archive HEAD | gzip > dist/source.tar.gz
@@ -101,6 +106,12 @@ jobs:
             dist/default.json
             dist/clock.elf
             dist/clock.json
+            dist/provisioning/default.elf
+            dist/provisioning/default.json
+            dist/provisioning/clock.elf
+            dist/provisioning/clock.json
+            dist/provisioning/build.json
+            dist/provisioning/shared-default-proof.json
             dist/generic-power/**/driver.elf
             dist/generic-power/**/manifest.json
             dist/generic-power/build.json
