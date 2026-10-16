@@ -13,7 +13,11 @@ static void clock_provision_resume(void){
  if(clock_deferred_phase==4)clock_deferred_phase=1;
 }
 static bool clock_provision_utc(void*p,uint64_t*out){(void)p;risc_realtime_snapshot_v1 time;
- if(!watch_runtime_snapshot(&native_clock,&time)||time.validity!=RISC_REALTIME_VALID||native_clock.rtc_reconcile_pending)return false;
+ if(!watch_runtime_snapshot(&native_clock,&time))return false;
+ /* A strictly validated UNSET snapshot is the controller's private zero token,
+  * not a clock seed. A fresh unset RTC deliberately leaves reconciliation due. */
+ if(time.validity==RISC_REALTIME_UNSET){*out=0;return true;}
+ if(native_clock.rtc_reconcile_pending||!time.epoch_seconds)return false;
  *out=(uint64_t)time.epoch_seconds;return true;
 }
 static void clock_provision_retain(void*p){(void)p;watch_runtime_halt(&native_clock);}

@@ -132,9 +132,11 @@ static unsigned stage_index(const char *name) {
 }
 static void check_io(void){assert(!retained_fence);}
 static risc_realtime_snapshot_v1 native_time;
+static int32_t native_read_result;
+static unsigned native_reads;
 static alarm_status_v1 alarm_view;
 static contexts_status_v1 contexts_view;
-static int32_t native_read(void*c,risc_realtime_snapshot_v1*out){check_io();(void)c;if(native_context_failed)return RISC_REALTIME_CONTEXT;*out=native_time;return 0;}
+static int32_t native_read(void*c,risc_realtime_snapshot_v1*out){check_io();(void)c;++native_reads;if(native_context_failed)return RISC_REALTIME_CONTEXT;if(native_read_result)return native_read_result;*out=native_time;return 0;}
 static int32_t native_seed(void*c,int64_t seconds,uint32_t ns){check_io();(void)c;assert(!ns);seed_calls++;native_time.epoch_seconds=seconds;native_time.validity=1;return 0;}
 static int32_t wake_read(void*c,uint32_t type,uint32_t schema,risc_retained_wake_record_v1*out,uint32_t*cause){
  check_io();(void)c;*cause=boot_cause;*out=(risc_retained_wake_record_v1){.struct_size=sizeof(*out),.type=type,.schema_version=schema,.size=1,.payload={1}};return checkpoint_result;}
@@ -377,7 +379,7 @@ static void reset_case(void){
  home_automatic_grant=(risc_runtime_capability_v1){0};home_automatic=(portable_preference_automatic){0};
  clock_face_grant=(risc_runtime_capability_v1){0};clock_face_edit=(portable_preference_atomic){0};atomic_token=0;
 #endif
- initial_default_entry=false;
+ initial_default_entry=false;native_read_result=RISC_REALTIME_OK;native_reads=0;
  launch_failure_kind=launch_failure_reads=0;
  key_trace_count=key_acquire_cost=startup_events=0;repeated_hold=trace_manual=trace_discard=trace_long=false;
  (void)runtime;
@@ -411,6 +413,85 @@ static void reset_case(void){
  contexts_view=(contexts_status_v1){.struct_size=sizeof(contexts_view)};
  contexts_view.audio.model_state=contexts_view.radio.model_state=CONTEXTS_MODEL_READY;
 }
+#ifdef WATCH_AUTOMATIC_PROVISION
+static void check_provision_utc(bool accepted,uint64_t expected,bool context_failed) {
+ uint64_t utc=UINT64_MAX;
+ watch_clock_runtime runtime_before;memcpy(&runtime_before,&native_clock,sizeof(runtime_before));
+ unsigned char face_before[sizeof(face)],time_before[sizeof(native_time)];
+ memcpy(face_before,&face,sizeof(face));memcpy(time_before,&native_time,sizeof(native_time));
+ bool pending_before=clock_rtc_reconcile_pending,delayed_before=clock_rtc_retry_delayed;
+ uint32_t retry_before=clock_rtc_retry_sampled_at;
+ unsigned rtc_before=rtc_read_calls,seeds_before=seed_calls,writes_before=face_writes;
+ unsigned retains_before=retains,reads_before=native_reads;
+ bool reads=!native_clock.halted&&native_clock.time;
+ assert(clock_provision_utc(NULL,&utc)==accepted);
+ assert(utc==(accepted?expected:UINT64_MAX));
+ assert(native_reads==reads_before+(unsigned)reads);
+ assert(!memcmp(face_before,&face,sizeof(face))&&!memcmp(time_before,&native_time,sizeof(native_time)));
+ assert(rtc_read_calls==rtc_before&&seed_calls==seeds_before&&face_writes==writes_before);
+ assert(clock_rtc_reconcile_pending==pending_before&&clock_rtc_retry_delayed==delayed_before&&clock_rtc_retry_sampled_at==retry_before);
+ if(context_failed)runtime_before.halted=true; /* Preserve the existing custody fence. */
+ assert(!memcmp(&runtime_before,&native_clock,sizeof(native_clock)));
+ assert(retains==retains_before+(unsigned)context_failed);
+}
+static void check_provision_utc_snapshots(void) {
+ reset_case();
+ native_clock=(watch_clock_runtime){.runtime=&fast_runtime,.time=&native_api,.time_live=true,.fallback=&ra};
+ clock_rtc_reconcile_pending=clock_rtc_retry_delayed=true;clock_rtc_retry_sampled_at=1234;
+ risc_realtime_snapshot_v1 valid=native_time;
+ risc_realtime_snapshot_v1 unset={.struct_size=sizeof(unset),.validity=RISC_REALTIME_UNSET,
+  .monotonic_before_us=123,.monotonic_after_us=456};
+ for(unsigned pending=0;pending<2;pending++){
+  native_clock.rtc_reconcile_pending=(bool)pending;
+  native_time=unset;check_provision_utc(true,0,false);
+  native_time=valid;check_provision_utc(!pending,(uint64_t)valid.epoch_seconds,false);
+ }
+ native_clock.rtc_reconcile_pending=false;
+ native_time=valid;native_time.nanoseconds=999999000;
+ check_provision_utc(true,(uint64_t)valid.epoch_seconds,false);
+ native_time.epoch_seconds=INT32_MAX;check_provision_utc(true,INT32_MAX,false);
+ /* A valid Unix epoch must never be mistaken for the private UNSET token. */
+ native_time=valid;native_time.epoch_seconds=0;check_provision_utc(false,0,false);
+ /* Old invalid/unreadable RTC calendars are not native UNSET evidence. */
+ for(unsigned pending=0;pending<2;pending++){
+  native_clock.rtc_reconcile_pending=(bool)pending;
+  unset_time=unreadable_rtc=true;native_time=valid;
+  check_provision_utc(!pending,(uint64_t)valid.epoch_seconds,false);
+ }
+ native_clock.rtc_reconcile_pending=true;native_time=unset;
+ static const int32_t failures[]={RISC_REALTIME_INVALID,RISC_REALTIME_IO,1,-99};
+ for(unsigned i=0;i<sizeof(failures)/sizeof(*failures);i++){
+  native_read_result=failures[i];check_provision_utc(false,0,false);
+ }
+ native_read_result=RISC_REALTIME_OK;
+ /* Both sample kinds must pass the complete native contract before admission. */
+ for(unsigned known=0;known<2;known++)for(unsigned malformed=0;malformed<11;malformed++){
+  native_clock.rtc_reconcile_pending=false;native_time=known?valid:unset;
+  switch(malformed){
+   case 0:native_time.struct_size=0;break;
+   case 1:native_time.struct_size--;break;
+   case 2:native_time.struct_size++;break;
+   case 3:native_time.reserved=1;break;
+   case 4:native_time.nanoseconds=1000000000u;break;
+   case 5:native_time.nanoseconds=1;break;
+   case 6:native_time.monotonic_before_us=native_time.monotonic_after_us+1;break;
+   case 7:native_time.validity=RISC_REALTIME_VALID+1;break;
+   case 8:native_time.validity=UINT32_MAX;break;
+   case 9:native_time.epoch_seconds=-1;break;
+   case 10:native_time.epoch_seconds=(int64_t)INT32_MAX+1;break;
+  }
+  check_provision_utc(false,0,false);
+ }
+ native_time=unset;native_time.epoch_seconds=1;check_provision_utc(false,0,false);
+ native_time=unset;native_time.nanoseconds=1000;check_provision_utc(false,0,false);
+ native_time=unset;native_clock.time=NULL;check_provision_utc(false,0,false);
+ native_clock.time=&native_api;native_context_failed=true;
+ check_provision_utc(false,0,true);
+ check_provision_utc(false,0,false); /* No further read after CONTEXT retention. */
+ assert(retained_fence);
+ puts("Home provisioning UTC: strict UNSET with pending reconciliation, valid-clock fencing, zero-token separation, malformed/error/context refusal, and no RTC/native/face/fallback/reconciliation writes PASS");
+}
+#endif
 static void check_clean(void){assert(!retained_fence&&!held&&!pending&&!owned&&!allocations);assert(grants==ungrants);assert(subscribed==unsubscribed);assert(!confirmed_early);assert(motion_prepares==wake_count&&motion_resumes==wake_count&&motion_sleeps==wake_count&&alarm_resumes==wake_count);}
 static void retained_reset(void){assert(retained_fence&&!allocations);grants=ungrants;subscribed=unsubscribed;owned=pending=false;held=0;}
 static void saved_radio(uint8_t flags){radio_saved=true;memcpy(radio_bytes,(uint8_t[]){0x51,1,flags,(uint8_t)(flags^0xa5)},4);}
@@ -662,6 +743,7 @@ int main(void){
  puts("Actual crash modal PASS: all pages complete before ack; exact displayed/spooled bytes; unavailable storage and failed presentation preserve native evidence");
 #endif
 #ifdef WATCH_AUTOMATIC_PROVISION
+ check_provision_utc_snapshots();
  reset_case();fixture_provision_mode=1;saved_radio(0);app_main();check_clean();
  assert(fixture_provision_scans==5&&stage_calls==2&&broadcast_starts==2&&contexts_starts==2&&!clock_provision_busy);
  puts("Actual Home provisioning: first-frame admission, missing SD internal scan, saved-radio fence, paused Contexts/broadcast, resumed service phases and clean teardown PASS");
