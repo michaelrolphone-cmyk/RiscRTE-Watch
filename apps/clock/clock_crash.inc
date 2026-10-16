@@ -11,7 +11,11 @@ static bool clock_crash_safe(void *context) {
  return !native_clock.halted && !clock_contexts_uncertain && !clock_broadcast_uncertain && alive(&now);
 }
 static bool clock_crash_prepare(void *context) {
- (void)context;return clock_crash_safe(NULL) && clock_contexts_pause() && clock_broadcast_pause();
+ (void)context;
+#ifdef WATCH_AUTOMATIC_PROVISION
+ if(!clock_provision_close())return false;
+#endif
+ return clock_crash_safe(NULL) && clock_contexts_pause() && clock_broadcast_pause();
 }
 static void clock_crash_retain(void *context) {(void)context;watch_runtime_halt(&native_clock);}
 static uint64_t clock_crash_now(void *context) {(void)context;uint32_t now=0;(void)alive(&now);return now;}

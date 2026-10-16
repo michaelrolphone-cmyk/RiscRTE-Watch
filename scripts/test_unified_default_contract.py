@@ -20,12 +20,15 @@ def contract():
             arguments.extend(x.value for x in node.args if isinstance(x,ast.Constant) and isinstance(x.value,str))
         if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FLAGS' for t in node.targets):
             defines=[n.value for n in ast.walk(node.value) if isinstance(n,ast.Constant) and isinstance(n.value,str)]
-    assert set(arguments)=={'--','--output','--cc','--role'} or set(arguments)=={'--output','--cc','--role'}, arguments
+    assert set(arguments)-{'--'}=={'--output','--cc','--role','--automatic-provision'}, arguments
     assert '-DCRASH_REPORT_SESSION_FILES=1' in defines
     assert '-DPORTABLE_PREFERENCE_STORE' in defines
     assert '-DWATCH_ATOMIC_PREFERENCES' in defines
     assert '-DPORTABLE_QUICK_ATOMIC_PREFERENCES' in defines
     assert not any(word in value.lower() for value in defines for word in ('waveshare','twatch','410','502','240','sd_volume_instance'))
+    provision=(ROOT/'apps/clock/clock_provision.inc').read_text()
+    assert 'hooks.sd_enabled=true;hooks.volume_instance=0;' in provision
+    assert 'WATCH_PROVISION_VOLUME' not in provision
     source=(ROOT/'apps/clock/clock_crash.inc').read_text()
     assert 'hooks.files_enabled=true;hooks.files_instance=0;' in source
     assert 'WATCH_CRASH_REPORT_SD_VOLUME_INSTANCE' not in source

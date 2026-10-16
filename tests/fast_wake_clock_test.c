@@ -18,6 +18,24 @@
 
 #undef main
 
+#ifdef WATCH_AUTOMATIC_PROVISION
+static unsigned fixture_provision_mode,fixture_provision_scans,fixture_volume_acquires;
+static const risc_storage_volume_api_v1 fixture_provision_volume={.api_version=1,.struct_size=sizeof(fixture_provision_volume)};
+static int fp_refresh(void*p){(void)p;assert(clock_provision_busy);return 0;}
+static int fp_step(void*p,const risc_storage_volume_api_v1*v){(void)p;assert(v==(fixture_provision_mode==2?&fixture_provision_volume:NULL)&&clock_provision_busy&&!clock_contexts_started&&!clock_broadcast_started);return ++fixture_provision_scans<5?INSTALLED_APPS_WORKING:INSTALLED_APPS_OK;}
+static int fp_cancel(void*p){(void)p;return 0;}
+static int fp_begin(void*p,const char*s,uint64_t t){(void)p;(void)s;(void)t;assert(false);return 0;}
+static int fp_feed(void*p,uint64_t t){(void)p;(void)t;return 0;}
+static int fp_install(void*p,uint32_t i,uint32_t g){(void)p;(void)i;(void)g;return 0;}
+static int fp_descriptor(void*p,const char*s){(void)p;(void)s;return 0;}
+static uint32_t fp_count(void*p){(void)p;return 0;}
+static bool fp_get(void*p,uint32_t i,installed_app_v1*out){(void)p;(void)i;(void)out;return false;}
+static const installed_apps_automatic_v1 fixture_provision_api={
+ .base={.base={.base={.api_version=1,.struct_size=sizeof(fixture_provision_api),.refresh=fp_refresh,.step=fp_step,.cancel=fp_cancel},.provision_tag=INSTALLED_APPS_PROVISION_TAG,.provision_version=1,.install_descriptor=fp_descriptor},.feed_tag=INSTALLED_APPS_FEED_TAG,.feed_version=1,.refresh=fp_feed,.step=fp_cancel,.cancel=fp_cancel,.generation=fp_count,.count=fp_count,.get=fp_get,.install=fp_install},.automatic_tag=INSTALLED_APPS_AUTOMATIC_TAG,.automatic_version=1,.begin=fp_begin,.step=fp_step,.cancel=fp_cancel};
+#else
+#define fixture_provision_mode 0
+#endif
+
 static bool initial_default_entry;
 static bool fast_initial_default(void){return initial_default_entry;}
 static uint32_t boot_cause,checkpoint_result,retains,confirmations,promotions;
@@ -41,6 +59,8 @@ static uint32_t wake_stage_times[128],wake_stage_count;
 static uint32_t display_load_cost,sleep_setting_cost,sleep_setting_reads;
 static uint32_t alarm_load_cost,alarm_acquires,rtc_acquires;
 static bool crown_before_alarm,fail_late_rtc_read,late_rtc_retention,native_context_failed;
+static int32_t native_read_result;
+static unsigned native_reads;
 static int32_t light_wake_drift;
 static unsigned rtc_refusal_wake,rtc_recovery_wake,rtc_reconcile_errors,rtc_read_calls;
 static unsigned transient_rtc_failures,rtc_read_at[16];
@@ -86,7 +106,7 @@ static void check_io(void){assert(!retained_fence);}
 static risc_realtime_snapshot_v1 native_time;
 static alarm_status_v1 alarm_view;
 static contexts_status_v1 contexts_view;
-static int32_t native_read(void*c,risc_realtime_snapshot_v1*out){check_io();(void)c;if(native_context_failed)return RISC_REALTIME_CONTEXT;*out=native_time;return 0;}
+static int32_t native_read(void*c,risc_realtime_snapshot_v1*out){check_io();(void)c;++native_reads;if(native_context_failed)return RISC_REALTIME_CONTEXT;if(native_read_result)return native_read_result;*out=native_time;return 0;}
 static int32_t native_seed(void*c,int64_t seconds,uint32_t ns){check_io();(void)c;assert(!ns);seed_calls++;native_time.epoch_seconds=seconds;native_time.validity=1;return 0;}
 static int32_t wake_read(void*c,uint32_t type,uint32_t schema,risc_retained_wake_record_v1*out,uint32_t*cause){
  check_io();(void)c;*cause=boot_cause;*out=(risc_retained_wake_record_v1){.struct_size=sizeof(*out),.type=type,.schema_version=schema,.size=1,.payload={1}};return checkpoint_result;}
@@ -157,7 +177,7 @@ static bool fast_diagnostic(const char*s){
    int64_t epoch;assert(watch_runtime_epoch(&live_rtc_value,&epoch)&&epoch==live_rtc_epoch);
    assert(native_api.seed(native_api.context,epoch,0)==RISC_REALTIME_OK);
    live_rtc_applied=true;live_rtc_applied_at=clock_ms;
-  }else if(wake_count+refused_cycles==requested_wakes&&!early_launch&&!wait_rtc_recovery)ended=true;
+  }else if(wake_count+refused_cycles==requested_wakes&&!early_launch&&!wait_rtc_recovery&&(!fixture_provision_mode||stage_calls>=2))ended=true;
  }
  return true;
 }
@@ -258,6 +278,10 @@ static const portable_bluetooth_control_v1 fast_ble;
 static const risc_key_value_v1 fast_kv;
 static bool fast_acquire(const char*n,uint32_t version,uint64_t instance,risc_runtime_capability_v1*g){
  check_io();
+#ifdef WATCH_AUTOMATIC_PROVISION
+ if(!strcmp(n,INSTALLED_APPS_CAPABILITY)){assert(first_seen&&clock_deferred_phase==4);if(!fixture_provision_mode)return false;g->api=&fixture_provision_api;++grants;return true;}
+ if(fixture_provision_mode&&!strcmp(n,"storage.volume")){assert(instance==0);++fixture_volume_acquires;if(fixture_provision_mode!=2)return false;g->api=&fixture_provision_volume;++grants;return true;}
+#endif
 #ifdef WATCH_CRASH_REPORT
  // This lifecycle fixture has no persistent crash spool. Model optional
  // AppData absence instead of handing its nonzero namespace to device mocks.
@@ -342,6 +366,9 @@ static bool fast_launch_failure(risc_runtime_launch_failure_v1 *out){
 static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
+#ifdef WATCH_AUTOMATIC_PROVISION
+ fixture_provision_mode=fixture_provision_scans=fixture_volume_acquires=0;
+#endif
 #ifdef WATCH_ATOMIC_PREFERENCES
  clock_atomic_retained=false;clock_quick_scope=false;quick_atomic_running=false;
  quick_atomic_grant=(risc_runtime_capability_v1){0};quick_atomic_edit=(portable_preference_atomic){0};quick_atomic_discard();
@@ -368,6 +395,7 @@ static void reset_case(void){
  motion_prepares=motion_resumes=motion_sleeps=alarm_resumes=points_loads=broadcast_frame=0;service_start_cost=400;
  wake_stage_count=display_load_cost=sleep_setting_cost=sleep_setting_reads=0;
  alarm_load_cost=alarm_acquires=rtc_acquires=0;
+ native_read_result=RISC_REALTIME_OK;native_reads=0;
  crown_before_alarm=fail_late_rtc_read=late_rtc_retention=native_context_failed=false;prealarm_crown_events=0;
  light_wake_drift=3600;rtc_refusal_wake=rtc_recovery_wake=rtc_reconcile_errors=rtc_read_calls=0;
  transient_rtc_failures=0;memset(rtc_read_at,0,sizeof(rtc_read_at));wait_rtc_recovery=first_time_valid=first_time_warning=false;
@@ -383,6 +411,85 @@ static void reset_case(void){
  contexts_view=(contexts_status_v1){.struct_size=sizeof(contexts_view)};
  contexts_view.audio.model_state=contexts_view.radio.model_state=CONTEXTS_MODEL_READY;
 }
+#ifdef WATCH_AUTOMATIC_PROVISION
+static void check_provision_utc(bool accepted,uint64_t expected,bool context_failed) {
+ uint64_t utc=UINT64_MAX;
+ watch_clock_runtime runtime_before;memcpy(&runtime_before,&native_clock,sizeof(runtime_before));
+ unsigned char face_before[sizeof(face)],time_before[sizeof(native_time)];
+ memcpy(face_before,&face,sizeof(face));memcpy(time_before,&native_time,sizeof(native_time));
+ bool pending_before=clock_rtc_reconcile_pending,delayed_before=clock_rtc_retry_delayed;
+ uint32_t retry_before=clock_rtc_retry_sampled_at;
+ unsigned rtc_before=rtc_read_calls,seeds_before=seed_calls,writes_before=face_writes;
+ unsigned retains_before=retains,reads_before=native_reads;
+ bool reads=!native_clock.halted&&native_clock.time;
+ assert(clock_provision_utc(NULL,&utc)==accepted);
+ assert(utc==(accepted?expected:UINT64_MAX));
+ assert(native_reads==reads_before+(unsigned)reads);
+ assert(!memcmp(face_before,&face,sizeof(face))&&!memcmp(time_before,&native_time,sizeof(native_time)));
+ assert(rtc_read_calls==rtc_before&&seed_calls==seeds_before&&face_writes==writes_before);
+ assert(clock_rtc_reconcile_pending==pending_before&&clock_rtc_retry_delayed==delayed_before&&clock_rtc_retry_sampled_at==retry_before);
+ if(context_failed)runtime_before.halted=true; /* Preserve the existing custody fence. */
+ assert(!memcmp(&runtime_before,&native_clock,sizeof(native_clock)));
+ assert(retains==retains_before+(unsigned)context_failed);
+}
+static void check_provision_utc_snapshots(void) {
+ reset_case();
+ native_clock=(watch_clock_runtime){.runtime=&fast_runtime,.time=&native_api,.time_live=true,.fallback=&ra};
+ clock_rtc_reconcile_pending=clock_rtc_retry_delayed=true;clock_rtc_retry_sampled_at=1234;
+ risc_realtime_snapshot_v1 valid=native_time;
+ risc_realtime_snapshot_v1 unset={.struct_size=sizeof(unset),.validity=RISC_REALTIME_UNSET,
+  .monotonic_before_us=123,.monotonic_after_us=456};
+ for(unsigned pending=0;pending<2;pending++){
+  native_clock.rtc_reconcile_pending=(bool)pending;
+  native_time=unset;check_provision_utc(true,0,false);
+  native_time=valid;check_provision_utc(!pending,(uint64_t)valid.epoch_seconds,false);
+ }
+ native_clock.rtc_reconcile_pending=false;
+ native_time=valid;native_time.nanoseconds=999999000;
+ check_provision_utc(true,(uint64_t)valid.epoch_seconds,false);
+ native_time.epoch_seconds=INT32_MAX;check_provision_utc(true,INT32_MAX,false);
+ /* A valid Unix epoch must never be mistaken for the private UNSET token. */
+ native_time=valid;native_time.epoch_seconds=0;check_provision_utc(false,0,false);
+ /* Old invalid/unreadable RTC calendars are not native UNSET evidence. */
+ for(unsigned pending=0;pending<2;pending++){
+  native_clock.rtc_reconcile_pending=(bool)pending;
+  unset_time=unreadable_rtc=true;native_time=valid;
+  check_provision_utc(!pending,(uint64_t)valid.epoch_seconds,false);
+ }
+ native_clock.rtc_reconcile_pending=true;native_time=unset;
+ static const int32_t failures[]={RISC_REALTIME_INVALID,RISC_REALTIME_IO,1,-99};
+ for(unsigned i=0;i<sizeof(failures)/sizeof(*failures);i++){
+  native_read_result=failures[i];check_provision_utc(false,0,false);
+ }
+ native_read_result=RISC_REALTIME_OK;
+ /* Both sample kinds must pass the complete native contract before admission. */
+ for(unsigned known=0;known<2;known++)for(unsigned malformed=0;malformed<11;malformed++){
+  native_clock.rtc_reconcile_pending=false;native_time=known?valid:unset;
+  switch(malformed){
+   case 0:native_time.struct_size=0;break;
+   case 1:native_time.struct_size--;break;
+   case 2:native_time.struct_size++;break;
+   case 3:native_time.reserved=1;break;
+   case 4:native_time.nanoseconds=1000000000u;break;
+   case 5:native_time.nanoseconds=1;break;
+   case 6:native_time.monotonic_before_us=native_time.monotonic_after_us+1;break;
+   case 7:native_time.validity=RISC_REALTIME_VALID+1;break;
+   case 8:native_time.validity=UINT32_MAX;break;
+   case 9:native_time.epoch_seconds=-1;break;
+   case 10:native_time.epoch_seconds=(int64_t)INT32_MAX+1;break;
+  }
+  check_provision_utc(false,0,false);
+ }
+ native_time=unset;native_time.epoch_seconds=1;check_provision_utc(false,0,false);
+ native_time=unset;native_time.nanoseconds=1000;check_provision_utc(false,0,false);
+ native_time=unset;native_clock.time=NULL;check_provision_utc(false,0,false);
+ native_clock.time=&native_api;native_context_failed=true;
+ check_provision_utc(false,0,true);
+ check_provision_utc(false,0,false); /* No further read after CONTEXT retention. */
+ assert(retained_fence);
+ puts("Home provisioning UTC: strict UNSET with pending reconciliation, valid-clock fencing, zero-token separation, malformed/error/context refusal, and no RTC/native/face/fallback/reconciliation writes PASS");
+}
+#endif
 static void check_clean(void){assert(!retained_fence&&!held&&!pending&&!owned&&!allocations);assert(grants==ungrants);assert(subscribed==unsubscribed);assert(!confirmed_early);assert(motion_prepares==wake_count&&motion_resumes==wake_count&&motion_sleeps==wake_count&&alarm_resumes==wake_count);}
 static void retained_reset(void){assert(retained_fence&&!allocations);grants=ungrants;subscribed=unsubscribed;owned=pending=false;held=0;}
 static void saved_radio(uint8_t flags){radio_saved=true;memcpy(radio_bytes,(uint8_t[]){0x51,1,flags,(uint8_t)(flags^0xa5)},4);}
@@ -669,5 +776,13 @@ int main(void){
  unsigned unchanged_frames=submitted;for(unsigned i=0;i<100;i++)clock_key_trace("WATCH_KEY test=budget");assert(key_trace_count==24&&submitted==unchanged_frames);
  puts("Bounded key trace: delayed key acquisition, fresh Home after stale short/long gesture, held-input suppression, manual sleep,24-message cap and unchanged cleanup PASS");
  puts("Sleep diagnostics: real Home blank brightness/acquire failure injection, absent key/power/panel capability, exact stage and unchanged cleanup PASS");
+#ifdef WATCH_AUTOMATIC_PROVISION
+ check_provision_utc_snapshots();
+ for(unsigned volume=1;volume<=2;++volume){
+ reset_case();fixture_provision_mode=volume;saved_radio(0);app_main();check_clean();
+ assert(fixture_provision_scans==5&&fixture_volume_acquires==1&&stage_calls==2&&broadcast_starts==2&&contexts_starts==2&&!clock_provision_busy);
+ }
+ puts("Actual Home provisioning: first-frame admission, absent/authorized optional SD scans via instance0, saved-radio fence, paused Contexts/broadcast, resumed service phases and clean teardown PASS");
+#endif
  return 0;
 }
