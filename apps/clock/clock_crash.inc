@@ -19,9 +19,10 @@ static void clock_crash_init(void) {
  clock_crash_modal=false;
  crash_report_session_hooks hooks={.runtime=rt,.safe=clock_crash_safe,.prepare_storage=clock_crash_prepare,
   .now=clock_crash_now,.retain=clock_crash_retain,.namespace_id=WATCH_CRASH_REPORT_NAMESPACE};
-#ifdef WATCH_CRASH_REPORT_VOLUME
- hooks.sd_enabled=true;hooks.volume_instance=WATCH_CRASH_REPORT_VOLUME;
-#endif
+ /* A unique provisioned file service is optional. The internal spool stays
+  * authoritative when no service is available. This application never selects
+  * a storage device or controls a storage transport. */
+ hooks.files_enabled=true;hooks.files_instance=0;
  crash_session_init(&clock_crash,&hooks);
 }
 static bool clock_crash_step(void) {

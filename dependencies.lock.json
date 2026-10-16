@@ -6,16 +6,16 @@
   },
   "system": {
     "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
-    "commit": "b9feba2b33684767f0853671ab5a1d3a7142c98f"
+    "commit": "cb483470887b5198e2f3cd2457586ef6622142a9"
   },
   "utilities": {
     "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
-    "commit": "cc56de34f2a1c6efa9761b28d92ed1cb8e8240e5"
+    "commit": "fc9f93402050f020a3422ee889620b2414c7ad5d"
   },
   "generic_power_providers": {
     "repository": "michaelrolphone-cmyk/RiscRTE-Drivers",
     "commit": "422e1e81a498fb6bdab9abf086325afc05a532dc",
     "version": "0.1.0"
   },
-  "compiler": "xtensa-esp32s3-elf-gcc 8.4.0 esp-2021r2-patch5"
+  "compiler": "xtensa-esp32s3-elf-gcc 15.2.0 esp-15.2.0_20251204"
 }

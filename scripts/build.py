@@ -6,7 +6,7 @@ from compact_current_elf import compact
 from normalize_xtensa_relocations import normalize
 from build_inputs import file_manifest, verify_dependency
 ROOT=Path(__file__).resolve().parents[1]
-FLAGS=['-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
+FLAGS=['-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DCRASH_REPORT_SESSION_FILES=1','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_PREFERENCE_STORE','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
  '-DWATCH_CLOCK_LAUNCHER','-DWATCH_CLOCK_ALARMS','-DWATCH_CLOCK_POINTS',
  '-DPORTABLE_RTC_UTC8_DENVER','-DWATCH_PAIRED_BOOT_CONFIRM','-DWATCH_QUICK_ACTIONS',
  '-DWATCH_QUICK_RADIOS','-DWATCH_MOTION_WAKE','-DWATCH_ALARM_SLEEP_RESUME','-DWATCH_CONTEXTS_CLIENT',
@@ -16,8 +16,6 @@ for name in ('system','utilities'):p.add_argument('--'+name,type=Path,required=T
 p.add_argument('--output',type=Path,default=ROOT/'dist')
 p.add_argument('--cc',default=os.environ.get('WATCH_APP_CC') or shutil.which('xtensa-esp32s3-elf-gcc'))
 p.add_argument('--role',choices=['default','clock','both'],default='both')
-p.add_argument('--crash-volume',type=int,help='Optional product SD instance; omission keeps internal reports')
-p.add_argument('--preferences',choices=['atomic','nvs'],default='atomic',help='Select copied atomic preferences or the deployed synchronous NVS capability')
 a=p.parse_args()
 if not a.cc:p.error('Set WATCH_APP_CC or --cc to the pinned ESP32-S3 compiler')
 S=a.system.resolve();U=a.utilities.resolve();out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
@@ -42,7 +40,7 @@ home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py
  'apps/clock/return_to_default.c','apps/clock/default.json','apps/clock/clock.json']
 home_inputs=file_manifest(ROOT,home_paths)
 compiler=subprocess.check_output([a.cc,'--version'],text=True).splitlines()[0]
-if '8.4.0' not in compiler:raise RuntimeError('Expected the deployed ESP32-S3 GCC 8.4.0 toolchain')
+if '15.2.0' not in compiler or 'esp-15.2.0_20251204' not in compiler:raise RuntimeError('Expected the pinned native ESP32-S3 GCC 15.2.0 toolchain')
 from merged_sdk import headers
 includes=[headers(out,S,U,ROOT),ROOT/'include',S/'lib/PortableApps/src']
 incs=['-I'+str(x) for x in includes]
@@ -52,11 +50,10 @@ subprocess.run([a.cc.removesuffix('gcc')+'g++','-std=c++11',*common,'-fno-except
 sources=[ROOT/'apps/clock/crown.c',ROOT/'apps/clock/viewport.c',ROOT/'apps/clock/capability_clients.c',ROOT/'apps/clock/quick_radios.c',ROOT/'apps/clock/nova/nova.c',ROOT/'apps/clock/points_projection.c',ROOT/'apps/clock/effects/divdi3.c',*[S/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')],effect]
 validator=out/'validate-elf'
 subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Wextra','-Werror','-I'+str(S/'test/native_apps/stubs'),'-I'+str(S/'lib/elf_loader/include'),str(S/'lib/elf_loader/src/esp_elf_validate.c'),str(S/'test/native_apps/validate_test.c'),'-o',str(validator)],check=True)
-records={'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':a.preferences,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
+records={'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':'runtime-provider','hardware_profile_inputs':False,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
 for role in ['default','clock'] if a.role=='both' else [a.role]:
  target=out/(role+'.elf');mapping=out/(role+'.map');mapping.write_text('{ global: app_main; local: *; };\n')
- flags=[f for f in FLAGS if a.preferences=='atomic' or f not in ('-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES')] if role=='default' else []
- if role=='default' and a.crash_volume is not None:flags.append('-DWATCH_CRASH_REPORT_VOLUME='+str(a.crash_volume))
+ flags=FLAGS if role=='default' else []
  role_sources=sources if role=='default' else [ROOT/'apps/clock/return_to_default.c']
  command=[a.cc,'-std=c11',*common,'-nostdlib','-nostartfiles','-shared','-Wl,--gc-sections','-Wl,--no-relax','-Wl,--hash-style=sysv','-Wl,--version-script='+str(mapping),*flags,*incs,*map(str,role_sources),'-lgcc','-o',str(target)]
  subprocess.run(command,check=True);normalize(target)
@@ -72,10 +69,7 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.16.0'
-  manifest['requires'].append({'capability':'storage.app-data','api':1})
-  if a.crash_volume is not None:manifest['requires'].append({'capability':'storage.volume','api':1})
- if a.preferences=='nvs':manifest['requires']=[r for r in manifest.get('requires',[]) if r['capability']!='storage.key-value.atomic']
+  manifest['version']='0.17.0'
  (out/(role+'.json')).write_text(json.dumps(manifest,indent=2)+'\n')
  records['artifacts'][role]={'role':'home' if role=='default' else 'return-to-default','file_name':target.name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'imports':sorted(imports),'exports':sorted(exports),'compaction':proof,'defines':flags}
  print(role+': target build and Runtime ELF validation PASS',flush=True)

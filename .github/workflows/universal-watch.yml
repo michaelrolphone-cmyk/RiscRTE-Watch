@@ -1,7 +1,7 @@
 name: Universal watch application
 on:
   push:
-    branches: [feat/universal-watch, main, work/native-height-layout-20261013, fix/native-watch-faces-20261015]
+    branches: [feat/universal-watch, main, work/native-height-layout-20261013, fix/native-watch-faces-20261015, work/unified-default-capabilities]
     paths: ['apps/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', '.github/workflows/universal-watch.yml', 'dependencies.lock.json']
   pull_request:
 permissions:
@@ -9,6 +9,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: michaelrolphone-cmyk/RiscRTE
-          ref: 5323d1e834bdcc8e5e9fb0e8f76c383e46626801
+          ref: 659d859acb122640ef4003bb8d7099501d4381be
           path: .source/runtime
           persist-credentials: false
       - name: Generic contracts, independent services and display classes
@@ -63,6 +64,8 @@ jobs:
           python3 scripts/test_native_faces.py
           python3 scripts/test_native_effects.py
           python3 scripts/test_crown_native_lifecycle.py --system-apps .source/system --utilities .source/utilities
+          python3 scripts/test_generic_preferences.py --system .source/system --utilities .source/utilities --output dist/generic-preferences
+          python3 scripts/test_unified_default_contract.py --system .source/system --utilities .source/utilities --output dist/unified-default-contract
           python3 .source/system/scripts/test_quick_native.py
           python3 scripts/test_fast_wake_clock.py --native --system-apps .source/system --utilities .source/utilities
           python3 scripts/test_clock_raster_gestures.py --native --output dist/clock-raster-gestures-native --system-apps .source/system --utilities .source/utilities
@@ -77,14 +80,16 @@ jobs:
       - name: Prepare pinned compiler
         run: |
           mkdir -p .source/toolchain
-          curl --fail --location --retry 2 --max-time 180 https://github.com/espressif/crosstool-NG/releases/download/esp-2021r2-patch5/xtensa-esp32s3-elf-gcc8_4_0-esp-2021r2-patch5-linux-amd64.tar.gz -o "$RUNNER_TEMP/toolchain.tar.gz"
-          echo "8aa17a6adf01efa5b1628c8ac578063a44d26ae9581d39486b92223a41ef262f  $RUNNER_TEMP/toolchain.tar.gz" | sha256sum --check
-          tar -xzf "$RUNNER_TEMP/toolchain.tar.gz" -C .source/toolchain
+          curl --fail --location --retry 2 --max-time 180 https://github.com/espressif/crosstool-NG/releases/download/esp-15.2.0_20251204/xtensa-esp-elf-15.2.0_20251204-x86_64-linux-gnu.tar.xz -o "$RUNNER_TEMP/toolchain.tar.xz"
+          echo "3d50f5cd5f173acfd524e07c1cd69bc99585731a415ca2e5bce879997fe602b8  $RUNNER_TEMP/toolchain.tar.xz" | sha256sum --check
+          tar -xJf "$RUNNER_TEMP/toolchain.tar.xz" -C .source/toolchain
           python3 -m pip install -r scripts/requirements.txt
       - name: Build and validate shared ELFs
         run: |
-          python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp32s3-elf/bin/xtensa-esp32s3-elf-gcc"
-          python3 .source/drivers/scripts/build_legacy_power_bridge.py --watch-sdk "$PWD" --cc "$PWD/.source/toolchain/xtensa-esp32s3-elf/bin/xtensa-esp32s3-elf-gcc" --validator dist/validate-elf --output dist/generic-power
+          python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc"
+          python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --output dist/replay --role default
+          python3 scripts/verify_shared_default.py --first dist --second dist/replay --receipt dist/shared-default-proof.json
+          python3 .source/drivers/scripts/build_legacy_power_bridge.py --watch-sdk "$PWD" --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --validator dist/validate-elf --output dist/generic-power
           git rev-parse HEAD > dist/COMMIT.txt
           git archive HEAD | gzip > dist/source.tar.gz
       - uses: actions/upload-artifact@v4
@@ -99,6 +104,9 @@ jobs:
             dist/generic-power/**/manifest.json
             dist/generic-power/build.json
             dist/build.json
+            dist/shared-default-proof.json
+            dist/generic-preferences/receipt.json
+            dist/unified-default-contract/receipt.json
             dist/COMMIT.txt
             dist/source.tar.gz
           retention-days: 30
