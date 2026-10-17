@@ -6,6 +6,7 @@
 #endif
 #include "RiscRuntimeV1.h"
 #include "RiscRuntimeCheckpointV1.h"
+#include "WatchRuntimeSleep.h"
 #include "WatchViewport.h"
 static watch_viewport clock_viewport;
 #include "nova/nova.h"
@@ -776,8 +777,8 @@ static bool clock_deferred_step(uint32_t now) {
  * signed provider result in the runtime log as well, including INT32_MIN,
  * without an allocation, service acquisition or printf dependency. */
 static void clock_sleep_refused(void) {
-    static const char *const stages[]={"UNKNOWN","SENSOR","PANEL","PMU","ALARM","LIGHT","DEEP","ACQUIRE","API","SETTINGS","MOTION","RUNTIME"};
-    const char *name=stages[watch_sleep_stage<12?watch_sleep_stage:0];
+    static const char *const stages[]={"UNKNOWN","SENSOR","PANEL","PMU","ALARM","LIGHT","DEEP","ACQUIRE","API","SETTINGS","MOTION","RUNTIME","SERVICE"};
+    const char *name=stages[watch_sleep_stage<13?watch_sleep_stage:0];
     /* Acquisition is boolean; these stages have no numeric provider error. */
     bool detail_available=watch_sleep_stage<9 || watch_sleep_stage>11;
     char line[80];size_t used=0;
@@ -877,17 +878,24 @@ static int sleep_cycle(void) {
 #ifdef WATCH_CLOCK_LAUNCHER
     mode=sleep_mode;
 #endif
+    uint64_t sleep_token=0;
+    int preparation=watch_runtime_sleep_begin(rt,&sleep_token);
+    if(preparation==WATCH_SLEEP_RETAINED)return preparation;
+    int rc=preparation;
+    if(preparation==WATCH_SLEEP_WOKE) {
 #ifdef WATCH_CLOCK_ALARMS
     (void)watch_sleep_prepared;
 #ifdef WATCH_MOTION_WAKE
     (void)watch_alarm_sleep_prepared;
-    int rc=watch_motion_sleep(rt,panel,pmu,mode,clock_alarm.api);
+    rc=watch_motion_sleep(rt,panel,pmu,mode,clock_alarm.api);
 #else
-    int rc=watch_alarm_sleep_prepared(panel,pmu,mode,clock_alarm.api,rt->diagnostic);
+    rc=watch_alarm_sleep_prepared(panel,pmu,mode,clock_alarm.api,rt->diagnostic);
 #endif
 #else
-    int rc=watch_sleep_prepared(panel,pmu,mode,rt->diagnostic);
+    rc=watch_sleep_prepared(panel,pmu,mode,rt->diagnostic);
 #endif
+    rc=watch_runtime_sleep_end(rt,sleep_token,rc);
+    }
     if(rc==WATCH_SLEEP_RETAINED)return WATCH_SLEEP_RETAINED;
     if(rc<0)return clock_sleep_failure("SLEEP-RESTORE");
     uint32_t cleared=0;
