@@ -1,0 +1,22 @@
+{
+  "source_base_commit": "416fa9f144fa5bd5471e6f4c9cefff21455c8361",
+  "branch": "fix/home-serial-idle-gate",
+  "runtime_base_commit": "48229bd1593a2e24e95bf4537b495ee615990fd3",
+  "verified_candidate_files_sha256": {
+    "apps/clock/crown.c": "7992b8fd5709d66d74dd5e9f9412140f457acc7d7d139f5c9fb1867ee4256a9c",
+    "tests/serial_session_idle.inc": "63ba2302e67283085d1716799388fb335004c8152dba3a0b31990c9c7f96569d",
+    "tests/serial_session_idle_bridge.cpp": "423b78a36c716c927697575c5fda012410546a62170f705f4b3382f6794ae6bf",
+    "scripts/test_serial_session_idle.py": "853c6cee008ab4500aac0a1855b53d28965829e5de39bd90dea2a8d5e1cc60eb",
+    "sdk/app/RiscRuntimeV1.h": "f1b59491473b268722306ce63a97228f90487493e13aa4f470b1ce0c864d4565"
+  },
+  "runtime_serial_source_sha256": {
+    "/tmp/runtime-stat-fix-20261017/src/runtime/serial/Files.cpp": "3cb1d0f693e498b7c7926a3b50ef012a6184d13c99d7a9aadb6b7d8117ca8e9b",
+    "/tmp/runtime-stat-fix-20261017/src/runtime/serial/Files.h": "731133e550b5eec4d7a65c88d3e6846c10ebc7438d45683b477ddd5a9ef0bda4"
+  },
+  "receipt": "final/receipt.json",
+  "baseline_receipt": "baseline/receipt.json",
+  "source_linkage": "These exact candidate bytes were tested, then included unchanged in the enclosing Watch commit. The enclosing Git commit is the immutable source pin. Runtime modifications are independently pinned by their source hashes above, not represented as committed by runtime_base_commit.",
+  "race_limit": "A new session arriving after the settled Home checkpoint can still cause one ordinary pre-sleep SERVICE refusal after blanking. Modeled HELLO/NS/PATH response latencies were 95/95/1495 ms; native Runtime scheduling, browser confirmation pauses and physical USB remain unqualified.",
+  "existing_broad_suites": "Not run on this candidate yet; shared compiler handed back for prioritized Runtime long preflight.",
+  "publication": "Not published; independent review pending."
+}
