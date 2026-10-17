@@ -1,0 +1,1 @@
+HOME_CONFIRM case=quiescent-refusal turns=1 attempts=1 success=0 wait=0 deadline=0 yields=475 first_ms=3980 final_ms=4075 first_frame=4 final_frame=5 PASS

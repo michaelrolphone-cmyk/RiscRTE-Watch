@@ -1,7 +1,7 @@
 name: Universal watch application
 on:
   push:
-    branches: [feat/universal-watch, main, work/native-height-layout-20261013, fix/native-watch-faces-20261015, work/unified-default-capabilities, work/serial-service-checkpoint, fix/mounted-sd-sleep-20261017]
+    branches: [feat/universal-watch, main, work/native-height-layout-20261013, fix/native-watch-faces-20261015, work/unified-default-capabilities, work/serial-service-checkpoint, fix/mounted-sd-sleep-20261017, fix/home-first-exit-checkpoint]
     paths: ['apps/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', '.github/workflows/universal-watch.yml', 'dependencies.lock.json']
   pull_request:
 permissions:
@@ -50,6 +50,12 @@ jobs:
           ref: 34716712d4cb7f25fda56a540aafc652c924c995
           path: .source/runtime
           persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Watch
+          ref: b00d4e7d36fc69c8defd250a82f6af077c732137
+          path: .source/baseline-watch
+          persist-credentials: false
       - name: Generic contracts, independent services and display classes
         run: |
           for f in RiscPowerSleepV1.h RiscPowerKeyV1.h RiscDisplayPowerV1.h; do cmp "sdk/driver/$f" ".source/drivers/sdk/driver/$f"; done
@@ -73,6 +79,13 @@ jobs:
           python3 scripts/test_generic_preferences.py --system .source/system --utilities .source/utilities --output dist/generic-preferences
           python3 scripts/test_unified_default_contract.py --system .source/system --utilities .source/utilities --output dist/unified-default-contract
           python3 scripts/test_runtime_service_checkpoint.py --system .source/system --utilities .source/utilities --output dist/runtime-service-checkpoint
+          python3 scripts/test_home_exit_checkpoint.py --system .source/system --utilities .source/utilities --output dist/home-exit-checkpoint
+          python3 scripts/test_home_exit_checkpoint.py --system .source/system --utilities .source/utilities --output dist/home-exit-checkpoint-product --automatic-provision --atomic --crash-report
+          for size in '240 240' '410 502'; do
+            read width height <<< "$size"
+            python3 scripts/test_home_confirmation_deferral.py --watch .source/baseline-watch --baseline --system .source/system --utilities .source/utilities --width "$width" --height "$height" --output "dist/home-confirmation/baseline-$width-$height"
+            python3 scripts/test_home_confirmation_deferral.py --watch . --system .source/system --utilities .source/utilities --width "$width" --height "$height" --output "dist/home-confirmation/fixed-$width-$height"
+          done
           python3 scripts/test_runtime_sleep.py --system .source/system --utilities .source/utilities --output dist/runtime-sleep
           python3 .source/system/scripts/test_quick_native.py
           python3 scripts/test_fast_wake_clock.py --native --system-apps .source/system --utilities .source/utilities
@@ -125,6 +138,9 @@ jobs:
             dist/generic-preferences/receipt.json
             dist/unified-default-contract/receipt.json
             dist/runtime-service-checkpoint/receipt.json
+            dist/home-exit-checkpoint/**
+            dist/home-exit-checkpoint-product/**
+            dist/home-confirmation/**
             dist/runtime-sleep/receipt.json
             dist/COMMIT.txt
             dist/source.tar.gz
