@@ -1,4 +1,6 @@
 """The builder rejects declared pins that do not match actual input bytes."""
+import ast
+import json
 import importlib.util
 import os
 import subprocess
@@ -10,6 +12,18 @@ spec=importlib.util.spec_from_file_location('build_inputs',ROOT/'scripts/build_i
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 class Inputs(unittest.TestCase):
+    def test_home_version_checkpoint(self):
+        tree=ast.parse((ROOT/'scripts/build.py').read_text())
+        versions=[node.value for node in ast.walk(tree) if isinstance(node,ast.Assign)
+                  and any(ast.unparse(target)=="manifest['version']" for target in node.targets)]
+        self.assertEqual(len(versions),1)
+        version=versions[0]
+        self.assertIsInstance(version,ast.IfExp)
+        self.assertEqual(ast.unparse(version.test),'a.automatic_provision')
+        self.assertEqual(ast.literal_eval(version.body),'0.20.2')
+        self.assertEqual(ast.literal_eval(version.orelse),'0.19.2')
+        self.assertEqual(json.loads((ROOT/'apps/clock/default.json').read_text())['version'],'0.19.2')
+
     def test_pinned_bytes_and_rejection(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);(root/'include').mkdir();(root/'include/api.h').write_text('original\n')
