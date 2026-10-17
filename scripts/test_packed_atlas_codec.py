@@ -48,11 +48,12 @@ short_cases = [bytes(values) for length in range(9)
                for values in itertools.product(range(2), repeat=length)]
 rng = random.Random(0xA71A5)
 cases = []
-for length in (1, 2, 3, 4, 65, 66, 67, 127, 128, 129, 253, 254, 255, 256):
-    cases.extend([bytes(length), bytes([255]) * length, bytes(range(length)),
-                  (b'abc' * 86)[:length], (bytes(range(17)) * 16)[:length]])
+for length in (1, 2, 3, 4, 65, 66, 67, 127, 128, 129, 253, 254, 255, 256, 257, 511, 512):
+    cases.extend([bytes(length), bytes([255]) * length, bytes(i % 256 for i in range(length)),
+                  (b'abc' * 171)[:length], (bytes(range(17)) * 31)[:length]])
+cases.append((bytes(range(255)) * 3)[:512])
 for _ in range(64):
-    length = rng.randrange(1, 257)
+    length = rng.randrange(1, 513)
     alphabet = rng.choice((2, 4, 16, 256))
     cases.append(bytes(rng.randrange(alphabet) for _ in range(length)))
 for raw in short_cases + cases:
@@ -69,9 +70,10 @@ PREAMBLE = r'''
 #include <stdio.h>
 static unsigned fixture_bytes;
 static uint32_t fixture_blocks[2];
-static uint8_t fixture_packed[512];
+static uint8_t fixture_packed[1024];
+#define UPPER_ALPHA_BLOCK_BYTES 512u
 #define UPPER_ALPHA_BYTES fixture_bytes
-#define UPPER_ALPHA_GLYPH_MAX 256
+#define UPPER_ALPHA_GLYPH_MAX 512
 #define PREFIX_alpha_blocks fixture_blocks
 #define PREFIX_alpha_packed fixture_packed
 #define PREFIX_alpha_read fixture_read
@@ -84,12 +86,12 @@ static void load(unsigned bytes,const uint8_t *packed,unsigned length) {
     if(length)memcpy(fixture_packed,packed,length);
 }
 static void reject(unsigned bytes,const uint8_t *packed,unsigned length) {
-    uint8_t result[256];load(bytes,packed,length);
+    uint8_t result[512];load(bytes,packed,length);
     assert(!fixture_read(0,bytes,result));
 }
 int main(void) {
     (void)fixture_glyph;
-    uint8_t result[256];
+    uint8_t result[512];
 '''
 MALFORMED = r'''
     /* Literal, run, and backward-copy endpoint errors. */
@@ -114,7 +116,7 @@ MALFORMED = r'''
     for(unsigned i=0;i<68;i++)assert(result[i]==(i%2?9:7));
     /* Malformed block index, invalid request, and zero-length request. */
     fixture_blocks[0]=6;assert(!fixture_read(0,1,result));
-    fixture_blocks[0]=0;fixture_blocks[1]=513;assert(!fixture_read(0,1,result));
+    fixture_blocks[0]=0;fixture_blocks[1]=1025;assert(!fixture_read(0,1,result));
     assert(!fixture_read(UINT32_MAX,1,result));
     assert(!fixture_read(0,UINT32_MAX,result));
     assert(!fixture_read(0,0,NULL));

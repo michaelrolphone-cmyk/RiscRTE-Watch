@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Lossless RLE/LZ atlas with independent 256-byte blocks and optimal parsing.
+"""Lossless RLE/LZ atlas with independent 512-byte blocks and optimal parsing.
 
 Tags 0..127: 1..128 literal bytes. Tags 128..191: repeat one byte 3..66
  times. Tags 192..255: copy 3..66 bytes from a nonzero one-byte backward
  distance in the current block. Copies may overlap, so no history buffer is
- required beyond the decoder's existing 256-byte block scratch.
+ required beyond the decoder's existing 512-byte block scratch.
 """
 from pathlib import Path
 import hashlib
 import json
 import re
 
-BLOCK_BYTES = 256
+BLOCK_BYTES = 512
 MATCH_MAX = 66
 
 
@@ -25,6 +25,9 @@ def encode(block):
         longest, distance = 0, 0
         if len(key) == 3:
             for previous in reversed(seen.get(key, [])):
+                # Token distance remains one byte even in a larger block.
+                if start - previous > 255:
+                    break
                 length = 3
                 while (length < MATCH_MAX and start + length < size
                        and block[previous + length] == block[start + length]):
@@ -95,6 +98,7 @@ def main():
     assert glyphs
     maximum = max(glyph[3] * glyph[4] for glyph in glyphs)
     replacement = "static const uint8_t face_alpha[]={0}; /* Identity marker; never indexed. */\n"
+    replacement += f"#define FACE_ALPHA_BLOCK_BYTES {BLOCK_BYTES}u\n"
     replacement += f"#define FACE_ALPHA_BYTES {len(raw)}u\n#define FACE_ALPHA_GLYPH_MAX {maximum}u\n"
     replacement += array("face_alpha_blocks", "uint32_t", offsets)
     replacement += array("face_alpha_packed", "uint8_t", packed)

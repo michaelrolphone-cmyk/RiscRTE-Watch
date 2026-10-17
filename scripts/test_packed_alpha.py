@@ -13,7 +13,7 @@ int main(void){
  (void)face_alpha;(void)face_alpha_glyph;
  uint8_t result[FACE_ALPHA_GLYPH_MAX];
  for(unsigned start=0;start<sizeof(original);start++){
-  unsigned n=sizeof(original)-start;if(n>257)n=257;
+  unsigned n=sizeof(original)-start;if(n>513)n=513;
   assert(face_alpha_read(start,n,result));assert(!memcmp(result,original+start,n));
  }
  for(unsigned start=0;start<sizeof(original);start+=997){
@@ -28,7 +28,7 @@ int main(void){
  assert(face_alpha_read(sizeof(original),0,result));
  assert(!face_alpha_read(0,UINT32_MAX,result));
  assert(!face_alpha_read(sizeof(original),1,result));assert(!face_alpha_read(UINT32_MAX,1,result));assert(!face_alpha_read(0,1,NULL));
- puts("Packed alpha: every original byte and 257-byte boundary-crossing range exact; every glyph, zero-length reads and invalid bounds PASS");
+ puts("Packed alpha: every original byte and 513-byte boundary-crossing range exact; every glyph, zero-length reads and invalid bounds PASS");
 }
 '''
 with tempfile.TemporaryDirectory() as temp:

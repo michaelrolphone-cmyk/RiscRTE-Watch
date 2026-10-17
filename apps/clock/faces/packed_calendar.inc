@@ -1,15 +1,15 @@
-/* Independent 256-byte RLE/LZ blocks, no heap, history, or service I/O.
+/* Independent 512-byte RLE/LZ blocks, no heap, history, or service I/O.
  * 0xxxxxxx: 1..128 literals; 10xxxxxx: 3..66 repeats plus value;
  * 11xxxxxx: 3..66 backreference bytes plus nonzero block-local distance.
  */
 static bool calendar_alpha_read(uint32_t start,uint32_t count,uint8_t *out) {
     if(!out || start>CALENDAR_ALPHA_BYTES || count>CALENDAR_ALPHA_BYTES-start)return false;
     while(count) {
-        unsigned block=start/256u,skip=start%256u;
-        unsigned expected=CALENDAR_ALPHA_BYTES-block*256u;if(expected>256u)expected=256u;
+        unsigned block=start/CALENDAR_ALPHA_BLOCK_BYTES,skip=start%CALENDAR_ALPHA_BLOCK_BYTES;
+        unsigned expected=CALENDAR_ALPHA_BYTES-block*CALENDAR_ALPHA_BLOCK_BYTES;if(expected>CALENDAR_ALPHA_BLOCK_BYTES)expected=CALENDAR_ALPHA_BLOCK_BYTES;
         uint32_t pos=calendar_alpha_blocks[block],end=calendar_alpha_blocks[block+1];
         if(pos>end || end>sizeof(calendar_alpha_packed))return false;
-        uint8_t decoded[256];unsigned used=0;
+        uint8_t decoded[CALENDAR_ALPHA_BLOCK_BYTES];unsigned used=0;
         while(pos<end) {
             unsigned tag=calendar_alpha_packed[pos++];
             unsigned n=(tag<128u)?tag+1u:(tag&63u)+3u;
