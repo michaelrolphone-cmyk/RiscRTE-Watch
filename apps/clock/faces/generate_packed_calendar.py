@@ -82,6 +82,38 @@ def array(name, kind, data):
     return "static const " + kind + " " + name + "[]={\n" + ",\n".join(rows) + "\n};\n"
 
 
+def compact_rings(source):
+    """Retain one octant only after proving exact integer reconstruction."""
+    reports = {}
+    def replace(match):
+        name = match[1]
+        rows = [tuple(map(int, values)) for values in
+                re.findall(r"\{(\d+),(\d+),(\d+)\}", match[2])]
+        original = {pixel: (angle, alpha) for pixel, angle, alpha in rows}
+        assert len(original) == len(rows) and rows
+        octant = [row for row in rows if row[0] % 240 >= row[0] // 240 >= 120]
+        restored = {}
+        for pixel, angle, alpha in octant:
+            x, y = pixel % 240, pixel // 240
+            for xx, yy, aa in ((x, y, angle), (y, x, (34560 - angle) % 46080)):
+                for ox, oy, oa in ((xx, yy, aa), (239 - xx, yy, -aa % 46080),
+                                  (xx, 239 - yy, (23040 - aa) % 46080),
+                                  (239 - xx, 239 - yy, (aa + 23040) % 46080)):
+                    key, value = oy * 240 + ox, (oa, alpha)
+                    assert key not in restored or restored[key] == value
+                    restored[key] = value
+        assert restored == original, "Ring symmetry is not exact: " + name
+        reports[name] = {"original_rows": len(rows), "octant_rows": len(octant),
+                         "every_pixel_angle_alpha_exact": True}
+        lines = [",".join("{%d,%d,%d}" % row for row in octant[i:i + 8])
+                 for i in range(0, len(octant), 8)]
+        return "static const fc_ring_pixel " + name + "[]={\n" + ",\n".join(lines) + "\n};"
+    pattern = r"static const fc_ring_pixel (fc_ring_\d+)\[\]=\{(.*?)\};"
+    packed, count = re.subn(pattern, replace, source, flags=re.S)
+    assert count == 2 and set(reports) == {"fc_ring_96", "fc_ring_98"}
+    return "#define WATCH_CALENDAR_RING_OCTANTS 1\n" + packed, reports
+
+
 def main():
     root = Path(__file__).resolve().parent
     source = (root / "calendar_assets.inc").read_text()
@@ -102,7 +134,8 @@ def main():
     replacement += f"#define CALENDAR_ALPHA_BYTES {len(raw)}u\n#define CALENDAR_ALPHA_GLYPH_MAX {maximum}u\n"
     replacement += array("calendar_alpha_blocks", "uint32_t", offsets)
     replacement += array("calendar_alpha_packed", "uint8_t", packed)
-    (root / "calendar_packed.inc").write_text(source[:match.start()] + replacement + source[match.end():])
+    tail, rings = compact_rings(source[match.end():])
+    (root / "calendar_packed.inc").write_text(source[:match.start()] + replacement + tail)
     metadata = {
         "input": "calendar_assets.inc",
         "input_sha256": hashlib.sha256(source.encode()).hexdigest(),
@@ -114,6 +147,7 @@ def main():
         "block_bytes": BLOCK_BYTES,
         "codec": "block-rle-lz-v1",
         "lossless": True,
+        "ring_octants": rings,
     }
     (root / "packed-calendar.json").write_text(json.dumps(metadata, indent=2) + "\n")
     print(len(raw), len(packed) + len(offsets) * 4, maximum)

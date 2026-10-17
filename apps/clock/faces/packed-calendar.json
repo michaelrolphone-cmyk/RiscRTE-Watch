@@ -8,5 +8,17 @@
   "glyph_scratch_bytes": 9858,
   "block_bytes": 512,
   "codec": "block-rle-lz-v1",
-  "lossless": true
+  "lossless": true,
+  "ring_octants": {
+    "fc_ring_96": {
+      "original_rows": 4600,
+      "octant_rows": 578,
+      "every_pixel_angle_alpha_exact": true
+    },
+    "fc_ring_98": {
+      "original_rows": 6540,
+      "octant_rows": 821,
+      "every_pixel_angle_alpha_exact": true
+    }
+  }
 }

@@ -87,11 +87,23 @@ static void fc_battery(canvas*c,const nova_watch_state*s,const nova_watch_labels
     int start=x*16-(10*w+18)*8;
     for(unsigned i=0;i<10;i++)fc_round_rect(c,start+(int)i*(w+2)*16,y*16,w*16,64,16,i<filled?color:fc_dim(color,41));
 }
+#ifdef WATCH_CALENDAR_RING_OCTANTS
+#include "calendar_ring_decode.inc"
+#endif
 static void fc_arc(canvas*c,const fc_ring_pixel*ring,unsigned count,int radius,int width,int start,int end,uint16_t color) {
     if(end<=start)return;
     if(c->width!=240u){f2arc(c,radius,start,end,120,120,width*16,color);return;}
+#ifdef WATCH_CALENDAR_RING_OCTANTS
+    for(unsigned i=0;i<count;i++)for(unsigned transform=0;transform<8u;transform++) {
+        fc_ring_pixel pixel;
+        if(fc_ring_expand(&ring[i],transform,&pixel) &&
+           pixel.angle*2u>=(unsigned)start && pixel.angle*2u<=(unsigned)end)
+            blend(indexed(c,pixel.pixel),color,pixel.alpha);
+    }
+#else
     for(unsigned i=0;i<count;i++)if(ring[i].angle*2u>=(unsigned)start&&ring[i].angle*2u<=(unsigned)end)
         blend(indexed(c,ring[i].pixel),color,ring[i].alpha);
+#endif
     if(end-start<360*256){int x,y;fpoint(start,radius,120,120,&x,&y);fcirc(c,x,y,width*8,0,color);fpoint(end,radius,120,120,&x,&y);fcirc(c,x,y,width*8,0,color);}
 }
 static void fc_fade(canvas*c) {
