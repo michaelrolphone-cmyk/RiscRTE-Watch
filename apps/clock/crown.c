@@ -1485,6 +1485,11 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef PORTABLE_LOW_BATTERY
         idle=idle&&clock_quick.idle_ms!=0;
 #endif
+        /* Native service work may remain active between host requests.
+         * Keep automatic idle from blanking Home before that work settles;
+         * the next OK checkpoint re-enables the existing idle deadline.
+         * An explicit crown sleep request retains its normal refusal path. */
+        idle=idle&&serviced==RISC_RUNTIME_CHECKPOINT_OK;
         if(manual && !watch_capabilities_can_sleep(&device_clients)) {
             memcpy(sleep_status,"SLEEP ERR CAPABILITY",sizeof("SLEEP ERR CAPABILITY"));
             clock_sleep_failure(!device_clients.sleep?"POWER-CAPABILITY":"PANEL-CAPABILITY");

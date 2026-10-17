@@ -24,8 +24,11 @@ into provider dispatch.
 - Missing suffix or a null optional pointer: no-op success, preserving older
   Runtime compatibility without reading beyond its reported table size.
 - `RISC_RUNTIME_CHECKPOINT_OK`: continue the normal foreground iteration.
-- `RISC_RUNTIME_CHECKPOINT_BUSY`: continue normal rendering/scheduling; another
-  service attempt occurs only at a later settled loop boundary.
+- `RISC_RUNTIME_CHECKPOINT_BUSY`: continue normal input/rendering/scheduling;
+  defer automatic idle sleep before closing input or blanking the panel. Another
+  service attempt occurs only at a later settled loop boundary. The next OK
+  result re-enables the existing idle deadline without resetting it. Explicit
+  crown sleep requests retain their normal preparation/refusal behavior.
 - `RISC_RUNTIME_CHECKPOINT_CONTEXT`, `RISC_RUNTIME_CHECKPOINT_RETAINED`, or an
   unknown result: return promptly from `app_main`, with no subsequent provider
   calls, speculative cleanup, or callback retry. Runtime owns retained custody.

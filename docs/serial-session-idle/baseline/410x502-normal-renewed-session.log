@@ -1,0 +1,1 @@
+HOME_SERIAL_IDLE 410x502 variant=baseline case=renewed-session checkpoints=484 busy=406 visible_busy_frames=401 input_polls=5753 blank_while_busy=10 refused=5 prepare=6 resumes=1 sleep=1 first_prepare_ms=10950 first_sleep_ms=65770 last_request_ms=25075 expired_ms=56440 disconnected_ms=0 visible=1 PASS
