@@ -363,7 +363,7 @@ static bool fast_launch_failure(risc_runtime_launch_failure_v1 *out){
  strcpy(out->application,"optional-app.elf");strcpy(out->detail,"media absent or invalid");
  launch_failure_kind=0;return true;
 }
-static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
+static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=RISC_RUNTIME_SERVICE_CHECKPOINT_V1_SIZE,.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
 #ifdef WATCH_AUTOMATIC_PROVISION
@@ -512,11 +512,11 @@ static char diagnostic_line[80];
 static bool capture_diagnostic(const char *line){assert(strlen(line)<sizeof(diagnostic_line));strcpy(diagnostic_line,line);return false;}
 static void check_refusal_diagnostics(void){
  static const risc_runtime_api_v1 capture={.diagnostic=capture_diagnostic};
- static const char *const stages[]={"UNKNOWN","SENSOR","PANEL","PMU","ALARM","LIGHT","DEEP","ACQUIRE","API","SETTINGS","MOTION","RUNTIME","UNKNOWN"};
+ static const char *const stages[]={"UNKNOWN","SENSOR","PANEL","PMU","ALARM","LIGHT","DEEP","ACQUIRE","API","SETTINGS","MOTION","RUNTIME","SERVICE","UNKNOWN"};
  static const int32_t details[]={0,-1,17,INT32_MIN,INT32_MAX};
  const risc_runtime_api_v1 *saved=rt;rt=&capture;
  memcpy(expected_pixels,pixels,sizeof(pixels));
- for(unsigned stage=0;stage<13;stage++)for(unsigned detail=0;detail<5;detail++){
+ for(unsigned stage=0;stage<14;stage++)for(unsigned detail=0;detail<5;detail++){
   watch_sleep_stage=stage;watch_sleep_detail=details[detail];clock_sleep_refused();
   bool has_detail=stage<9||stage>11;
   char expected[80];

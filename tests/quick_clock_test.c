@@ -299,7 +299,7 @@ static bool launch(const char*p){assert(!strcmp(p,"springboard.elf")&&!owned&&!p
  fixture_expected_face(true);
   assert(!memcmp(pixels,expected_pixels,sizeof(pixels)));
  launches++;if(scenario==6)return false;launched=true;return true;}
-static const risc_runtime_api_v1 runtime={.api_version=1,.struct_size=sizeof(runtime),.health=health,.yield_ms=yield,.diagnostic=diagnostic,.request_launch=launch,.acquire=acquire_cap,.release=release_cap};
+static const risc_runtime_api_v1 runtime={.api_version=1,.struct_size=RISC_RUNTIME_SERVICE_CHECKPOINT_V1_SIZE,.health=health,.yield_ms=yield,.diagnostic=diagnostic,.request_launch=launch,.acquire=acquire_cap,.release=release_cap};
 #ifndef WATCH_TEST_RUNTIME_EXTERN
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t v){assert(v==1);return &runtime;}
 #endif

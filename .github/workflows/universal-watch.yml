@@ -1,7 +1,7 @@
 name: Universal watch application
 on:
   push:
-    branches: [feat/universal-watch, main, work/native-height-layout-20261013, fix/native-watch-faces-20261015, work/unified-default-capabilities, work/serial-service-checkpoint]
+    branches: [feat/universal-watch, main, work/native-height-layout-20261013, fix/native-watch-faces-20261015, work/unified-default-capabilities, work/serial-service-checkpoint, fix/mounted-sd-sleep-20261017]
     paths: ['apps/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', '.github/workflows/universal-watch.yml', 'dependencies.lock.json']
   pull_request:
 permissions:
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: michaelrolphone-cmyk/RiscRTE
-          ref: 605cfe5133bacd8af0ad337f4f231517b6c11df0
+          ref: 34716712d4cb7f25fda56a540aafc652c924c995
           path: .source/runtime
           persist-credentials: false
       - name: Generic contracts, independent services and display classes
@@ -73,6 +73,7 @@ jobs:
           python3 scripts/test_generic_preferences.py --system .source/system --utilities .source/utilities --output dist/generic-preferences
           python3 scripts/test_unified_default_contract.py --system .source/system --utilities .source/utilities --output dist/unified-default-contract
           python3 scripts/test_runtime_service_checkpoint.py --system .source/system --utilities .source/utilities --output dist/runtime-service-checkpoint
+          python3 scripts/test_runtime_sleep.py --system .source/system --utilities .source/utilities --output dist/runtime-sleep
           python3 .source/system/scripts/test_quick_native.py
           python3 scripts/test_fast_wake_clock.py --native --system-apps .source/system --utilities .source/utilities
           python3 scripts/test_clock_raster_gestures.py --native --output dist/clock-raster-gestures-native --system-apps .source/system --utilities .source/utilities
@@ -124,6 +125,7 @@ jobs:
             dist/generic-preferences/receipt.json
             dist/unified-default-contract/receipt.json
             dist/runtime-service-checkpoint/receipt.json
+            dist/runtime-sleep/receipt.json
             dist/COMMIT.txt
             dist/source.tar.gz
           retention-days: 30

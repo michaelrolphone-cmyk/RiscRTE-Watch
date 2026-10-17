@@ -257,7 +257,7 @@ static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_
  if(!strcmp(k,PORTABLE_CONTEXT_ENABLED_KEY)&&contexts_enabled){assert(n>=4);memcpy(b,(uint8_t[]){0x43,1,1,1^0xa5},4);*z=4;return RISC_KEY_VALUE_OK;}
  return face_get(c,k,b,n,z);}
 static const risc_key_value_v1 fast_kv={1,sizeof(fast_kv),NULL,fast_get,face_put};
-static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=sizeof(fast_runtime),.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain};
+static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=RISC_RUNTIME_SERVICE_CHECKPOINT_V1_SIZE,.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
  (void)runtime;
