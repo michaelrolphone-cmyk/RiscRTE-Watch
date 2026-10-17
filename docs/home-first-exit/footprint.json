@@ -1,0 +1,121 @@
+{
+  "scope": "Exact GCC15.2 target shared-ELF size/admission measurement; no full native product or physical qualification",
+  "sources": {
+    "watch": "b00d4e7d36fc69c8defd250a82f6af077c732137",
+    "system": "bb0cadf3cec3445a64e11513b47b2676f3fdd92d",
+    "utilities": "4fdcad2495c33fe63f5f6faca9b11ced3c739a5b"
+  },
+  "baseline": {
+    "bytes": 552856,
+    "sha256": "2488ba37935dfa1601904b6c62802293fabcaab8000c203377e70707bf6685cf",
+    "imports": [
+      "free",
+      "malloc",
+      "memchr",
+      "memcmp",
+      "memcpy",
+      "memmove",
+      "memset",
+      "risc_runtime_get_api",
+      "snprintf",
+      "strcmp",
+      "strlen",
+      "strncmp"
+    ],
+    "exports": [
+      "app_main"
+    ],
+    "sections": {
+      ".hash": 76,
+      ".dynsym": 224,
+      ".dynstr": 110,
+      ".rela.dyn": 29724,
+      ".rela.plt": 1524,
+      ".text": 127000,
+      ".rodata": 388596,
+      ".got.loc": 2392,
+      ".data.rel.ro": 1172,
+      ".dynamic": 160,
+      ".got": 4,
+      ".data": 28,
+      ".bss": 265772,
+      ".comment": 47,
+      ".xtensa.info": 56
+    }
+  },
+  "prototype": {
+    "bytes": 554284,
+    "sha256": "6ef21cb224b2713f291a864bb2d3d97ed510fece83b51a7b90d692e7f081a6f2",
+    "imports": [
+      "free",
+      "malloc",
+      "memchr",
+      "memcmp",
+      "memcpy",
+      "memmove",
+      "memset",
+      "risc_runtime_get_api",
+      "snprintf",
+      "strcmp",
+      "strlen",
+      "strncmp"
+    ],
+    "exports": [
+      "app_main"
+    ],
+    "sections": {
+      ".hash": 76,
+      ".dynsym": 224,
+      ".dynstr": 110,
+      ".rela.dyn": 30492,
+      ".rela.plt": 1524,
+      ".text": 127600,
+      ".rodata": 388616,
+      ".got.loc": 2432,
+      ".data.rel.ro": 1172,
+      ".dynamic": 160,
+      ".got": 4,
+      ".data": 28,
+      ".bss": 265768,
+      ".comment": 47,
+      ".xtensa.info": 56
+    }
+  },
+  "delta_bytes": 1428,
+  "section_deltas": {
+    ".rela.dyn": 768,
+    ".text": 600,
+    ".rodata": 20,
+    ".got.loc": 40,
+    ".bss": -4
+  },
+  "production": {
+    "bytes": 554284,
+    "sha256": "7b2293247cd28845786164b48eb11c0339b1c009a5ae4ffd5b7aec3359a72d9c",
+    "imports": [
+      "free",
+      "malloc",
+      "memchr",
+      "memcmp",
+      "memcpy",
+      "memmove",
+      "memset",
+      "risc_runtime_get_api",
+      "snprintf",
+      "strcmp",
+      "strlen",
+      "strncmp"
+    ],
+    "exports": [
+      "app_main"
+    ],
+    "home_version": "0.20.1",
+    "crown_sha256": "9207aabc3f3109258d8cf38909a332df23044232074ae8c4b9ec1861b43bf4a5"
+  },
+  "stack": {
+    "method": "linked Xtensa entry instructions, not whole-call-chain bound",
+    "baseline_app_main": 624,
+    "prototype_app_main": 592,
+    "prototype_checkpoint": 96
+  }
+}

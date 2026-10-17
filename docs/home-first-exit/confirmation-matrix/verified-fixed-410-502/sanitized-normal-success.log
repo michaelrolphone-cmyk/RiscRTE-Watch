@@ -1,0 +1,1 @@
+HOME_CONFIRM case=normal-success turns=1 attempts=1 success=1 wait=0 deadline=0 yields=665 first_ms=3980 final_ms=4265 first_frame=4 final_frame=7 PASS
