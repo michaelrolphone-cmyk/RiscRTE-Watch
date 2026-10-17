@@ -1,0 +1,24 @@
+{
+  "purpose": "Archived byte-identical six-case baseline fixture inputs; paths in the baseline receipt refer to original test locations. The generated C file is also hash-verified.",
+  "inputs": [
+    {
+      "receipt_path": "/tmp/wave-home-session-idle-watch/tests/serial_session_idle.inc",
+      "archive_path": "baseline-fixture/serial_session_idle.inc",
+      "sha256": "81544c23cac4150db686e5881d84c7414e23b4b26c565fa12b002cc753ad968c"
+    },
+    {
+      "receipt_path": "/tmp/wave-home-session-idle-watch/tests/serial_session_idle_bridge.cpp",
+      "archive_path": "baseline-fixture/serial_session_idle_bridge.cpp",
+      "sha256": "d928586ba8e5d1c145252980af170ab6e10e535faab0e1b5622b4300b8f0db2c"
+    },
+    {
+      "receipt_path": "/tmp/wave-home-session-idle-watch/scripts/test_serial_session_idle.py",
+      "archive_path": "baseline-fixture/test_serial_session_idle.py",
+      "sha256": "7de570f893efea14d389e59adc2ddf30aad62d3a3d24ac03b4005d4f0ef892af"
+    }
+  ],
+  "generated_fixture": {
+    "archive_path": "baseline-fixture/generated.c",
+    "sha256": "7083c4986edf902eb12a569e32f8b19988b83ba0157802c869efcc4b10cc32d4"
+  }
+}
