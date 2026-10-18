@@ -1,0 +1,64 @@
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:46:14: error: unknown type name ‘risc_radio_iq_temporal_api_v1’; did you mean ‘risc_radio_iq_extended_api_v1’?
+   46 | static const risc_radio_iq_temporal_api_v1 *timed_receiver;
+      |              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |              risc_radio_iq_extended_api_v1
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:49:8: error: unknown type name ‘risc_radio_iq_envelope_v1’; did you mean ‘risc_radio_iq_trace_v1’?
+   49 | static risc_radio_iq_envelope_v1 timed_samples[256];
+      |        ^~~~~~~~~~~~~~~~~~~~~~~~~
+      |        risc_radio_iq_trace_v1
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c: In function ‘radio_step’:
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:270:34: error: request for member ‘start_envelope’ in something not a structure or union
+  270 |             result=timed_receiver->start_envelope(receiver->base.base.context,&settings,1000,&timed_format);
+      |                                  ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:279:38: error: request for member ‘read_envelope’ in something not a structure or union
+  279 |                 result=timed_receiver->read_envelope(receiver->base.base.context,timed_samples,256,&count,&dropped);
+      |                                      ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:281:53: error: unknown type name ‘risc_radio_iq_envelope_v1’; did you mean ‘risc_radio_iq_trace_v1’?
+  281 |                 for(unsigned j=0;j<count;j++){const risc_radio_iq_envelope_v1*v=&timed_samples[j];bool gap=(v->flags&RISC_RADIO_IQ_ENVELOPE_GAP)!=0;
+      |                                                     ^~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                     risc_radio_iq_trace_v1
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:281:110: error: request for member ‘flags’ in something not a structure or union
+  281 |                 for(unsigned j=0;j<count;j++){const risc_radio_iq_envelope_v1*v=&timed_samples[j];bool gap=(v->flags&RISC_RADIO_IQ_ENVELOPE_GAP)!=0;
+      |                                                                                                              ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:281:118: error: ‘RISC_RADIO_IQ_ENVELOPE_GAP’ undeclared (first use in this function)
+  281 |                 for(unsigned j=0;j<count;j++){const risc_radio_iq_envelope_v1*v=&timed_samples[j];bool gap=(v->flags&RISC_RADIO_IQ_ENVELOPE_GAP)!=0;
+      |                                                                                                                      ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:281:118: note: each undeclared identifier is reported only once for each function it appears in
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:282:44: error: request for member ‘magnitude’ in something not a structure or union
+  282 |                     cf_envelope_sample(rp,v->magnitude,v->timestamp_us,v->observed_us,gap);cf_envelope_sample(ep,v->magnitude,v->timestamp_us,v->observed_us,gap);
+      |                                            ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:282:57: error: request for member ‘timestamp_us’ in something not a structure or union
+  282 |                     cf_envelope_sample(rp,v->magnitude,v->timestamp_us,v->observed_us,gap);cf_envelope_sample(ep,v->magnitude,v->timestamp_us,v->observed_us,gap);
+      |                                                         ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:282:73: error: request for member ‘observed_us’ in something not a structure or union
+  282 |                     cf_envelope_sample(rp,v->magnitude,v->timestamp_us,v->observed_us,gap);cf_envelope_sample(ep,v->magnitude,v->timestamp_us,v->observed_us,gap);
+      |                                                                         ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:282:115: error: request for member ‘magnitude’ in something not a structure or union
+  282 |                     cf_envelope_sample(rp,v->magnitude,v->timestamp_us,v->observed_us,gap);cf_envelope_sample(ep,v->magnitude,v->timestamp_us,v->observed_us,gap);
+      |                                                                                                                   ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:282:128: error: request for member ‘timestamp_us’ in something not a structure or union
+  282 |                     cf_envelope_sample(rp,v->magnitude,v->timestamp_us,v->observed_us,gap);cf_envelope_sample(ep,v->magnitude,v->timestamp_us,v->observed_us,gap);
+      |                                                                                                                                ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:282:144: error: request for member ‘observed_us’ in something not a structure or union
+  282 |                     cf_envelope_sample(rp,v->magnitude,v->timestamp_us,v->observed_us,gap);cf_envelope_sample(ep,v->magnitude,v->timestamp_us,v->observed_us,gap);
+      |                                                                                                                                                ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:283:46: error: request for member ‘timestamp_us’ in something not a structure or union
+  283 |                     fp_temporal_event(CF_RF,v->timestamp_us/1000u);
+      |                                              ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:288:45: error: request for member ‘latest_iq’ in something not a structure or union
+  288 |             if(!result)result=timed_receiver->latest_iq(receiver->base.base.context,pairs,256,&stamp);
+      |                                             ^~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c: In function ‘start’:
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:517:56: error: implicit declaration of function ‘risc_radio_iq_temporal’ [-Wimplicit-function-declaration]
+  517 |     clock_api=c;microphone=m;receiver=q;timed_receiver=risc_radio_iq_temporal(q);timed_radio=false;
+      |                                                        ^~~~~~~~~~~~~~~~~~~~~~
+/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c:517:55: error: assignment to ‘const int *’ from ‘int’ makes pointer from integer without a cast [-Wint-conversion]
+  517 |     clock_api=c;microphone=m;receiver=q;timed_receiver=risc_radio_iq_temporal(q);timed_radio=false;
+      |                                                       ^
+Traceback (most recent call last):
+  File "/workspace/shared/x4-home-navigation/contexts-retry/run.py", line 29, in <module>
+    result=subprocess.run(command,text=True,capture_output=True);print(result.stdout+result.stderr,end='');result.check_returncode()
+                                                                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 502, in check_returncode
+    raise CalledProcessError(self.returncode, self.args, self.stdout,
+subprocess.CalledProcessError: Command '['cc', '-std=c11', '-O1', '-g', '-Wall', '-Wextra', '-Werror', '-I/workspace/shared/x4-home-navigation/contexts-retry', '-I/workspace/shared/wave-lifetime-successor/utilities-clean/Apps', '-I/workspace/shared/wave-lifetime-successor/utilities-clean/lib/Contexts/include', '-I/workspace/shared/wave-lifetime-successor/runtime-qualified/sdk/driver', '-MMD', '-MF', '/workspace/shared/x4-home-navigation/contexts-retry/source.d', '/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c', '/workspace/shared/x4-home-navigation/contexts-retry/contexts_retry.c', '-lm', '-o', '/workspace/shared/x4-home-navigation/contexts-retry/test']' returned non-zero exit status 1.

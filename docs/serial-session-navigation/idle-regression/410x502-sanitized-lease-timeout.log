@@ -1,0 +1,1 @@
+HOME_SERIAL_IDLE 410x502 variant=fixed case=lease-timeout checkpoints=312 busy=307 visible_busy_frames=307 input_polls=3744 blank_while_busy=0 refused=0 prepare=1 resumes=1 sleep=1 first_prepare_ms=33655 first_sleep_ms=33655 last_request_ms=2785 expired_ms=32860 disconnected_ms=0 response_ms=0,0,0 max_response_ms=0 visible=1 PASS

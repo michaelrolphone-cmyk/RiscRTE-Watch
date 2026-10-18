@@ -8,15 +8,17 @@ p=argparse.ArgumentParser(description=__doc__)
 for name in ('system','utilities','runtime','output'):p.add_argument('--'+name,type=Path,required=True)
 p.add_argument('--home',type=Path,default=ROOT)
 p.add_argument('--expect-baseline',action='store_true')
+p.add_argument('--navigation-only',action='store_true')
 p.add_argument('--normal-only',action='store_true')
 p.add_argument('--dimensions',choices=('both','410x502','240x240'),default='both')
 p.add_argument('--prepare-only',action='store_true')
 a=p.parse_args();w=a.home.resolve();a.output.mkdir(parents=True,exist_ok=True)
+fixture_name='serial_session_navigation.inc' if a.navigation_only else 'serial_session_idle.inc'
 variant='baseline' if a.expect_baseline else 'fixed'
 receipt={'scope':'Actual Home controller/renderer and real RiscSerial::Files lease/parser. Runtime service/sleep adapter, device APIs and time are modeled. No target, native Runtime scheduler, USB browser or physical-device qualification.','variant':variant,'home_head':subprocess.check_output(['git','-C',str(w),'rev-parse','HEAD'],text=True).strip(),'runtime_head':subprocess.check_output(['git','-C',str(a.runtime),'rev-parse','HEAD'],text=True).strip(),'runs':[],'compilations':[],'inputs':{},'hardware_tested':False,'leak_detection':False}
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def save(): (a.output/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
-for path in [w/'apps/clock/crown.c',ROOT/'tests/serial_session_idle.inc',ROOT/'tests/serial_session_idle_bridge.cpp',Path(__file__).resolve(),a.runtime/'src/runtime/serial/Files.cpp',a.runtime/'src/runtime/serial/Files.h']:
+for path in [w/'apps/clock/crown.c',ROOT/'tests'/fixture_name,ROOT/'tests/serial_session_idle_bridge.cpp',Path(__file__).resolve(),a.runtime/'src/runtime/serial/Files.cpp',a.runtime/'src/runtime/serial/Files.h']:
  receipt['inputs'][str(path)]=digest(path)
 if a.prepare_only:
  save();print('Prepared exact-source inputs; no compiler started.');raise SystemExit(0)
@@ -26,8 +28,8 @@ with tempfile.TemporaryDirectory(prefix='home-serial-idle-') as temp:
  source=original.read_text();assert source.count('static const risc_runtime_api_v1 fast_runtime=')==1
  source=source.replace('static const risc_runtime_api_v1 fast_runtime=','static risc_runtime_api_v1 fast_runtime=').replace('int main(void){','int inherited_fast_main(void){')
  source='#include <stdbool.h>\nstatic bool probe_long;\n'+source.replace('ended=true;','if(!probe_long)ended=true;')
- source+=(ROOT/'tests/serial_session_idle.inc').read_text()
- fixture=work/'serial_session_idle.c';fixture.write_text(source)
+ source+=(ROOT/'tests'/fixture_name).read_text()
+ fixture=work/'serial_session_idle.c';fixture.write_text(source);(a.output/'generated_fixture.c').write_text(source)
  receipt['generated_fixture_sha256']=digest(fixture);receipt['inputs'][str(original)]=digest(original)
  sources=[fixture,*[w/'apps/clock'/n for n in ('nova/nova.c','points_projection.c','viewport.c','capability_clients.c','quick_radios.c')],*[a.system/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c','PortableAutomaticProvision.c','PortableNetworkSession.c')]]
  dims=[(240,240),(410,502)] if a.dimensions=='both' else [tuple(map(int,a.dimensions.split('x')))]
@@ -49,7 +51,7 @@ with tempfile.TemporaryDirectory(prefix='home-serial-idle-') as temp:
      path=Path(q)
      if path!=fixture:receipt['inputs'][str(path)]=digest(path)
    binary=work/'test';run(['c++',*flags,*objects,'-o',binary]);compilation['binary_sha256']=digest(binary)
-   for case in ('old-signal','lease-timeout','renewed-session','disconnect','no-session','manual-busy','blanking-arrival'):
+   for case in (('swipe-active','swipe-pending','swipe-undrained','swipe-disconnect','swipe-no-session','swipe-late','wifi-active','wifi-no-session','contexts-export','contexts-export-no-session','contexts-workflow','contexts-workflow-message','contexts-export-late','contexts-workflow-late') if a.navigation_only else ('old-signal','lease-timeout','renewed-session','disconnect','no-session','manual-busy','blanking-arrival')):
     result=subprocess.run([str(binary),case,variant],capture_output=True,text=True,env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0','UBSAN_OPTIONS':'halt_on_error=1'},timeout=120)
     log=a.output/f'{width}x{height}-{"sanitized" if sanitized else "normal"}-{case}.log'
     log.write_text(result.stdout+result.stderr);print(result.stdout+result.stderr,end='',flush=True)

@@ -1,0 +1,4 @@
+410x502-normal: PASS
+410x502-address: PASS
+410x502-undefined: PASS
+Actual Home checkpoint tests PASS; source hashes and bounded logs: /workspace/shared/x4-home-navigation/exit-regression-410

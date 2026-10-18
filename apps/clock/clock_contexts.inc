@@ -28,6 +28,10 @@ static bool clock_context_rules(void){
   if(clock_alarm.api)(void)clock_alarm.api->refresh(clock_alarm.api->context);
  }
  if(clock_context_message[0])return true;
+ /* This ABI cannot peek at a workflow before claiming it. Defer only claim,
+  * including timer/message steps, until handoff is admissible; evaluation,
+  * settings, capture and projection above continue normally. */
+ if(!clock_navigation_ready)return true;
  contexts_workflow_v1 action={.struct_size=sizeof(action),.claim=true};if(!fp->fingerprint(fp->base.context,CONTEXTS_FP_WORKFLOW,&action))return false;
  if(action.available){
   if(!clock_background_pause())return false;
@@ -96,6 +100,8 @@ static bool clock_contexts_tick(void) {
     }
     clock_contexts_project(&s);
     if(s.export_pending&&!s.export_active&&!clock_alarm_modal&&!picker.open&&!pqa_visible(&clock_quick.ui)) {
+        /* Keep the export pending; BUSY is not an unsupported owner. */
+        if(!clock_navigation_ready)return true;
         unsigned source=s.export_pending&CONTEXTS_AUDIO?CONTEXTS_AUDIO:CONTEXTS_RADIO;
         if(!clock_background_pause()||!clock_contexts.api->begin_export(clock_contexts.api->context,source))return clock_contexts_failure();
         if(rt->request_launch(source==CONTEXTS_AUDIO?"audio_spectrum.elf":"waterfall.elf")) {

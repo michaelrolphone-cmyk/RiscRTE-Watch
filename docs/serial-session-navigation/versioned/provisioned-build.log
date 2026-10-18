@@ -1,0 +1,6 @@
+lto-wrapper: warning: using serial compilation of 4 LTRANS jobs
+lto-wrapper: note: see the '-flto' option documentation for more information
+Native ELF structural validation tests passed
+default: target build and Runtime ELF validation PASS
+Native ELF structural validation tests passed
+clock: target build and Runtime ELF validation PASS

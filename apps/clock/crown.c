@@ -43,6 +43,19 @@ static void clock_wake_visible(void);
 #endif
 
 static const risc_runtime_api_v1 *rt;
+/* Settled checkpoint admission, shared by all Home handoff paths. Runtime's
+ * request_launch remains authoritative if a service arrives after this sample. */
+static bool clock_navigation_ready;
+#ifdef WATCH_CLOCK_LAUNCHER
+static bool clock_navigation_allowed(void) {
+    if(clock_navigation_ready)return true;
+    if(strcmp(sleep_status,"SERVICE BUSY - RETRY")) {
+        memcpy(sleep_status,"SERVICE BUSY - RETRY",sizeof("SERVICE BUSY - RETRY"));
+        rt->diagnostic("WATCH_CLOCK navigation=busy action=retry");
+    }
+    return false;
+}
+#endif
 #ifdef WATCH_RUNTIME_FEATURES
 #include "../runtime_features/clock_runtime.h"
 static watch_clock_runtime native_clock;
@@ -1000,7 +1013,7 @@ static void clock_exit_checkpoint(unsigned line) {
     (void)client.write(client.invocation,text,sizeof(text)-1);
 }
 __attribute__((visibility("default"))) void app_main(void) {
-    clock_first_exit=0;
+    clock_first_exit=0;clock_navigation_ready=false;
 #ifdef WATCH_AUTOMATIC_PROVISION
     clock_provision_initialized=clock_provision_busy=false;
 #endif
@@ -1267,6 +1280,8 @@ __attribute__((visibility("default"))) void app_main(void) {
          * raster callbacks, pacing, or another ordinary yield/BUSY path. */
         int32_t serviced=risc_runtime_service_checkpoint_v1(rt);
         if(serviced!=RISC_RUNTIME_CHECKPOINT_OK && serviced!=RISC_RUNTIME_CHECKPOINT_BUSY){clock_exit_checkpoint(__LINE__);return;}
+        clock_navigation_ready=serviced==RISC_RUNTIME_CHECKPOINT_OK;
+        if(clock_navigation_ready&&!strcmp(sleep_status,"SERVICE BUSY - RETRY"))sleep_status[0]=0;
 #ifdef WATCH_BLE_BROADCAST
         if(!clock_broadcast_step()){clock_exit_checkpoint(__LINE__);return;}
 #endif
@@ -1368,10 +1383,12 @@ __attribute__((visibility("default"))) void app_main(void) {
         }
         ++quick_atomic_contact;
         uint32_t quick_actions=quick_atomic_take_action();bool volume_changed=false;
+        if(!clock_quick.ui.radio_controls&&(quick_actions&PQA_WIFI)&&!clock_navigation_allowed())quick_actions&=~(uint32_t)PQA_WIFI;
         if(!quick_atomic_capture(quick_actions)){clock_exit_checkpoint(__LINE__);break;}
         quick_atomic_show_queue_error();
 #else
         uint32_t quick_actions=pqa_take_action(&clock_quick.ui);bool volume_changed=false;
+        if(!clock_quick.ui.radio_controls&&(quick_actions&PQA_WIFI)&&!clock_navigation_allowed())quick_actions&=~(uint32_t)PQA_WIFI;
 #endif
 #ifdef WATCH_CONTEXTS_CLIENT
 #ifdef WATCH_AUTOMATIC_PROVISION
@@ -1452,23 +1469,30 @@ __attribute__((visibility("default"))) void app_main(void) {
          * selection; short-release manual sleep is evaluated below. */
         if(picker.open&&(events&1u)){watch_face_close(&picker);nova_watch_picker_cache_destroy(picker_scratch);picker_scratch=NULL;picker_save_failed=false;}
         if(launcher_swipe_pending) {
+            /* Always consume the gesture. Leaving this latch set suppresses
+             * input, rendering and pacing; it must never become a deferred
+             * launch after the service becomes ready. The recognizer already
+             * requires neutral and a fresh contact after a qualified swipe. */
             launcher_swipe_pending=false;
-            /* The completed sharp Clock remains in provider-owned storage.
-             * Incoming Springboard owns the single blur/crossfade and adopts
-             * the still-held contact as drag-only; never fade through black. */
-            if(!launcher_touch_close(&touch)) {clock_exit_checkpoint(__LINE__);break;}
+            if(clock_navigation_allowed()) {
+                /* The completed sharp Clock remains in provider-owned storage.
+                 * Incoming Springboard owns the single blur/crossfade and adopts
+                 * the still-held contact as drag-only; never fade through black. */
+                if(!launcher_touch_close(&touch)) {clock_exit_checkpoint(__LINE__);break;}
 #ifdef WATCH_AUTOMATIC_PROVISION
-            if(!clock_provision_close()){clock_exit_checkpoint(__LINE__);break;}
+                if(!clock_provision_close()){clock_exit_checkpoint(__LINE__);break;}
 #endif
-            if(rt->request_launch("springboard.elf")) {
+                if(rt->request_launch("springboard.elf")) {
 #ifdef WATCH_BLE_BROADCAST
-                clock_handoff=true;
+                    clock_handoff=true;
 #endif
-                {clock_exit_checkpoint(__LINE__);break;}
+                    {clock_exit_checkpoint(__LINE__);break;}
+                }
+                memcpy(sleep_status,"NAVIGATION UNAVAILABLE",sizeof("NAVIGATION UNAVAILABLE"));
+                rt->diagnostic("WATCH_CLOCK error=launcher-request");
+                if(!launcher_touch_open(&touch) || !alive(&now)) {clock_exit_checkpoint(__LINE__);break;}
+                last_activity=now;
             }
-            rt->diagnostic("WATCH_CLOCK error=launcher-request");
-            if(!launcher_touch_open(&touch) || !alive(&now)) {clock_exit_checkpoint(__LINE__);break;}
-            last_activity=now;
         }
 #endif
         bool manual=(events&2u) && (uint32_t)(now-armed_at)>=250u;

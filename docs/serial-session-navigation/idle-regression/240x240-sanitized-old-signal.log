@@ -1,0 +1,1 @@
+HOME_SERIAL_IDLE 240x240 variant=fixed case=old-signal checkpoints=232 busy=228 visible_busy_frames=225 input_polls=2762 blank_while_busy=5 refused=2 prepare=3 resumes=1 sleep=1 first_prepare_ms=10895 first_sleep_ms=32845 last_request_ms=2785 expired_ms=32845 disconnected_ms=0 response_ms=0,0,0 max_response_ms=0 visible=1 PASS

@@ -1,0 +1,7 @@
+{
+  "apps/clock/crown.c": "17811b243ea914a99c66b2a8a496725226ef6d54c4003738cb5a09c9bca9b76e",
+  "apps/clock/clock_contexts.inc": "553842ac45a137df6ae4c0da0d01fd192ef127ae973037c40d41a69d48dd2471",
+  "tests/serial_session_navigation.inc": "b7f9954e2f266c55793386d2342392fc038661b07af6b356b58a342e748a34cd",
+  "tests/serial_session_idle_bridge.cpp": "afe99ce70f4e6ac3588a815142efaedb92f4475ff6c2955beb1fe272c820fb9a",
+  "scripts/test_serial_session_idle.py": "7f2535294b30fd8b26645dfaa63e9bf53c1aae24684efd00c55cce2a4b173893"
+}

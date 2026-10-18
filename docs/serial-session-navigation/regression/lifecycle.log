@@ -1,0 +1,8 @@
+Crown native lifecycle 240x240: exact physical retained snapshots, boot blend, final sharp frame, no provider lease/allocation leak PASS
+Crown native lifecycle 410x502: exact physical retained snapshots, boot blend, final sharp frame, no provider lease/allocation leak PASS
+Crown native lifecycle 502x410: exact physical retained snapshots, boot blend, final sharp frame, no provider lease/allocation leak PASS
+Crown native lifecycle 120x150: exact physical retained snapshots, boot blend, final sharp frame, no provider lease/allocation leak PASS
+Crown native lifecycle 240x240: exact physical retained snapshots, boot blend, final sharp frame, no provider lease/allocation leak PASS
+Crown native lifecycle 410x502: exact physical retained snapshots, boot blend, final sharp frame, no provider lease/allocation leak PASS
+Crown native lifecycle 502x410: exact physical retained snapshots, boot blend, final sharp frame, no provider lease/allocation leak PASS
+Crown native lifecycle 120x150: exact physical retained snapshots, boot blend, final sharp frame, no provider lease/allocation leak PASS

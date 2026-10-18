@@ -72,7 +72,7 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.20.2' if a.automatic_provision else '0.19.2'
+  manifest['version']='0.20.3' if a.automatic_provision else '0.19.3'
   if a.automatic_provision:
    manifest['requires'].append({'capability':'software.installed-apps','api':1})
    manifest['optional'].append({'capability':'storage.volume','api':1})

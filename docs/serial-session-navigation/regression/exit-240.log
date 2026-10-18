@@ -1,0 +1,4 @@
+240x240-normal: PASS
+240x240-address: PASS
+240x240-undefined: PASS
+Actual Home checkpoint tests PASS; source hashes and bounded logs: /workspace/shared/x4-home-navigation/exit-regression-240

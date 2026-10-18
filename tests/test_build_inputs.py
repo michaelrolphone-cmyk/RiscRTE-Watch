@@ -20,9 +20,11 @@ class Inputs(unittest.TestCase):
         version=versions[0]
         self.assertIsInstance(version,ast.IfExp)
         self.assertEqual(ast.unparse(version.test),'a.automatic_provision')
-        self.assertEqual(ast.literal_eval(version.body),'0.20.2')
-        self.assertEqual(ast.literal_eval(version.orelse),'0.19.2')
-        self.assertEqual(json.loads((ROOT/'apps/clock/default.json').read_text())['version'],'0.19.2')
+        self.assertEqual(ast.literal_eval(version.body),'0.20.3')
+        self.assertEqual(ast.literal_eval(version.orelse),'0.19.3')
+        self.assertEqual(json.loads((ROOT/'apps/clock/default.json').read_text())['version'],'0.19.3')
+        self.assertEqual(json.loads((ROOT/'apps/clock/clock.json').read_text())['version'],'0.15.0')
+        self.assertEqual(json.loads((ROOT/'apps/clock/manifest.json').read_text())['version'],'0.8.0')
 
     def test_pinned_bytes_and_rejection(self):
         with tempfile.TemporaryDirectory() as directory:

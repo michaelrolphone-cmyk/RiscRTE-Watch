@@ -9,6 +9,7 @@ const RiscSerial::Namespace names[]={{1,"payload",&files,true}};
 uint32_t nowMs,lastRequest,expiredAt,disconnectedAt,queuedAt,maxLatency,latencies[4];
 unsigned requests;
 bool enabled,renew,drop,renewed,race;
+int pathHold;uint32_t pathRelease;
 bool safe(){return true;}
 uint32_t millis(){return nowMs;}
 const char*commands[]={"RTEF1 12345678 1 HELLO\n","RTEF1 12345678 2 NS 0\n","RTEF1 12345678 3 PATH 0 2f7061796c6f6164\n"};
@@ -36,6 +37,12 @@ extern "C" void serial_probe_arrive(uint32_t now){
 }
 extern "C" int serial_probe_checkpoint(uint32_t now){
  nowMs=now;
+ if(pathHold){
+  if(nowMs>=pathRelease){wire.checkpoint();collect(" 0 PATH 8");pathHold=0;}
+  else if(pathHold==2)wire.checkpoint();
+  if(pathHold)assert(wire.pending());
+  return wire.exitSafe();
+ }
  if(race){
   wire.checkpoint();
   if(wire.outputSize()){
@@ -62,3 +69,18 @@ extern "C" uint32_t serial_probe_disconnected_at(){return disconnectedAt;}
 extern "C" uint32_t serial_probe_timeout(){return RiscSerial::Files::TimeoutMs;}
 extern "C" uint32_t serial_probe_max_latency(){return maxLatency;}
 extern "C" uint32_t serial_probe_latency(unsigned i){assert(i<4);return latencies[i];}
+
+extern "C" int serial_probe_exit_safe(){return wire.exitSafe();}
+extern "C" int serial_probe_pending(){return wire.pending();}
+extern "C" void serial_probe_path(uint32_t now,int mode){
+ nowMs=now;if(!enabled)return;
+ assert(requests==3&&!wire.pending());
+ queue("RTEF1 12345678 4 PATH 0 2f7061796c6f6164\n");
+ if(mode){pathHold=mode;pathRelease=now+1500;if(mode==2)wire.checkpoint();}
+ else {wire.checkpoint();collect(" 0 PATH 8");}
+}
+
+extern "C" void serial_probe_late(uint32_t now){
+ assert(!enabled&&!requests&&wire.exitSafe());nowMs=now;enabled=true;
+ for(unsigned i=0;i<3;i++)request(commands[i],expected[i]);
+}

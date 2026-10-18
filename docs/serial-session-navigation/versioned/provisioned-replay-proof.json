@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "default_sha256": "0b2f3639c7478726fa2dc0933ea64213516986a30e5c4f46c25f985c1c4ee2f7",
+  "default_bytes": 556020,
+  "manifest_sha256": "39a41965c0cfbb9d9183a675c39e84b3372d7edced4948e949425dc980c18018",
+  "independent_builds_identical": true,
+  "product_extractions": [],
+  "hardware_tested": false
+}
