@@ -1,0 +1,23 @@
+{
+  "prior_qualified_checkpoint": "c7fd39e9e45cd821eaeb7560ef010d4679c9ba5e",
+  "remote_main_at_reconciliation": "5ea25dda1c6c7b254e35ac649c91f357f7fcc6ee",
+  "versions": {
+    "automatic": "0.20.3",
+    "ordinary": "0.19.3",
+    "return": "0.15.0",
+    "legacy_manifest": "0.8.0"
+  },
+  "source_files": {
+    "apps/clock/crown.c": "17811b243ea914a99c66b2a8a496725226ef6d54c4003738cb5a09c9bca9b76e",
+    "apps/clock/clock_contexts.inc": "553842ac45a137df6ae4c0da0d01fd192ef127ae973037c40d41a69d48dd2471",
+    "apps/clock/default.json": "9a9fd973af4c2ac8458efac5ed8e45fb8f52a3aa56f993eb2e8eeb5d1e1841a8",
+    "apps/clock/clock.json": "ee26c7ec19cb41daafa76e455c3bd24ca9a1ee6762fe5cf74cd2ddb321fc0bcd",
+    "apps/clock/manifest.json": "e8d9dd1625e5351e2d859d6148532fc9c810853dfcd0e4e6a6cb4dd2dc3ac68d",
+    "scripts/build.py": "4fd424324f49d09f04e76e9b785ca6fb6c797caae4c39fe1e64db34f3145198d",
+    "tests/test_build_inputs.py": "ef1142a2f44c066f13fd36014620da8148df5d49e6218a2879f735c3edfebbf6",
+    ".github/workflows/serial-session-navigation.yml": "3b0f893dace4772267a8338e04fdd32a509fa29d8931cc91d0834fba89722482"
+  },
+  "return_elf_sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+  "return_matches_released_bytes": true,
+  "hardware_tested": false
+}

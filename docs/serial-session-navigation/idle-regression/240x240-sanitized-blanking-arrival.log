@@ -1,0 +1,1 @@
+HOME_SERIAL_IDLE 240x240 variant=fixed case=blanking-arrival checkpoints=63 busy=3 visible_busy_frames=3 input_polls=756 blank_while_busy=1 refused=1 prepare=1 resumes=0 sleep=0 first_prepare_ms=10895 first_sleep_ms=0 last_request_ms=12485 expired_ms=0 disconnected_ms=0 response_ms=95,95,1495 max_response_ms=1495 visible=1 PASS

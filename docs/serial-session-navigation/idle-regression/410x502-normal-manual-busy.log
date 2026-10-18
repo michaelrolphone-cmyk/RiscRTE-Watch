@@ -1,0 +1,1 @@
+HOME_SERIAL_IDLE 410x502 variant=fixed case=manual-busy checkpoints=56 busy=56 visible_busy_frames=55 input_polls=671 blank_while_busy=2 refused=1 prepare=1 resumes=0 sleep=0 first_prepare_ms=4775 first_sleep_ms=0 last_request_ms=2785 expired_ms=0 disconnected_ms=0 response_ms=0,0,0 max_response_ms=0 visible=1 PASS

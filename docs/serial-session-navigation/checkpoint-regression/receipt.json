@@ -1,0 +1,1211 @@
+{
+  "hardware_tested": false,
+  "leak_detection": false,
+  "scope": "Production Home, delayed display and optional Runtime suffix compatibility",
+  "compilations": [
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "commands": [
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/tests/runtime_service_checkpoint_test.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/0.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/nova/nova.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/1.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/viewport.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/2.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/capability_clients.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/3.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_actions.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/4.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_render.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/5.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_session.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/6.o"
+        ],
+        [
+          "c++",
+          "-std=c++11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/effects/boot.cpp",
+          "/tmp/home-service-checkpoint-y1oh6cso/0.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/1.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/2.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/3.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/4.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/5.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/6.o",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/test"
+        ]
+      ],
+      "binary_sha256": "97f589275fe3138daccd7fa97440a7a92c1d83ada54a5a881ce7d57a7d5fe38a"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "commands": [
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/tests/runtime_service_checkpoint_test.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/0.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/nova/nova.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/1.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/viewport.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/2.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/capability_clients.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/3.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_actions.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/4.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_render.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/5.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_session.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/6.o"
+        ],
+        [
+          "c++",
+          "-std=c++11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=240u",
+          "-DTEST_HEIGHT=240u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/effects/boot.cpp",
+          "/tmp/home-service-checkpoint-y1oh6cso/0.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/1.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/2.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/3.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/4.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/5.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/6.o",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/test"
+        ]
+      ],
+      "binary_sha256": "f399c6cabe7f4538fe2358562a271ef651f42cded3536a2cbea454f0890560c5"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "commands": [
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/tests/runtime_service_checkpoint_test.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/0.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/nova/nova.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/1.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/viewport.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/2.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/capability_clients.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/3.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_actions.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/4.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_render.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/5.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_session.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/6.o"
+        ],
+        [
+          "c++",
+          "-std=c++11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/effects/boot.cpp",
+          "/tmp/home-service-checkpoint-y1oh6cso/0.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/1.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/2.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/3.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/4.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/5.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/6.o",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/test"
+        ]
+      ],
+      "binary_sha256": "147ffb296aa7fe76a3c346a3a2be08c24677aabddf8634ae522abe8341854823"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "commands": [
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/tests/runtime_service_checkpoint_test.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/0.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/nova/nova.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/1.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/viewport.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/2.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/capability_clients.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/3.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_actions.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/4.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_render.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/5.o"
+        ],
+        [
+          "cc",
+          "-std=c11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "-c",
+          "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_session.c",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/6.o"
+        ],
+        [
+          "c++",
+          "-std=c++11",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DTEST_WIDTH=410u",
+          "-DTEST_HEIGHT=502u",
+          "-I/tmp/home-service-checkpoint-y1oh6cso/sdk/include",
+          "-I/workspace/shared/x4-home-navigation/watch/include",
+          "-I/workspace/shared/x4-home-navigation/watch",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-fno-omit-frame-pointer",
+          "-no-pie",
+          "/workspace/shared/x4-home-navigation/watch/apps/clock/effects/boot.cpp",
+          "/tmp/home-service-checkpoint-y1oh6cso/0.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/1.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/2.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/3.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/4.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/5.o",
+          "/tmp/home-service-checkpoint-y1oh6cso/6.o",
+          "-o",
+          "/tmp/home-service-checkpoint-y1oh6cso/test"
+        ]
+      ],
+      "binary_sha256": "f1ec03c6c464d0d075ccae8a8a1e540df22cd2846b9701c29b81e66af287f199"
+    }
+  ],
+  "runs": [
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "case": "helper",
+      "stdout": "Home service checkpoint 240x240 helper: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "case": "presentation",
+      "stdout": "Home service checkpoint 240x240 presentation: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "case": "old",
+      "stdout": "Home service checkpoint 240x240 old: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "case": "null",
+      "stdout": "Home service checkpoint 240x240 null: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "case": "ok",
+      "stdout": "Home service checkpoint 240x240 ok: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "case": "busy",
+      "stdout": "Home service checkpoint 240x240 busy: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "case": "context",
+      "stdout": "Home service checkpoint 240x240 context: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "case": "retained",
+      "stdout": "Home service checkpoint 240x240 retained: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": false,
+      "case": "unknown",
+      "stdout": "Home service checkpoint 240x240 unknown: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "case": "helper",
+      "stdout": "Home service checkpoint 240x240 helper: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "case": "presentation",
+      "stdout": "Home service checkpoint 240x240 presentation: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "case": "old",
+      "stdout": "Home service checkpoint 240x240 old: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "case": "null",
+      "stdout": "Home service checkpoint 240x240 null: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "case": "ok",
+      "stdout": "Home service checkpoint 240x240 ok: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "case": "busy",
+      "stdout": "Home service checkpoint 240x240 busy: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "case": "context",
+      "stdout": "Home service checkpoint 240x240 context: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "case": "retained",
+      "stdout": "Home service checkpoint 240x240 retained: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        240,
+        240
+      ],
+      "sanitized": true,
+      "case": "unknown",
+      "stdout": "Home service checkpoint 240x240 unknown: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "case": "helper",
+      "stdout": "Home service checkpoint 410x502 helper: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "case": "presentation",
+      "stdout": "Home service checkpoint 410x502 presentation: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "case": "old",
+      "stdout": "Home service checkpoint 410x502 old: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "case": "null",
+      "stdout": "Home service checkpoint 410x502 null: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "case": "ok",
+      "stdout": "Home service checkpoint 410x502 ok: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "case": "busy",
+      "stdout": "Home service checkpoint 410x502 busy: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "case": "context",
+      "stdout": "Home service checkpoint 410x502 context: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "case": "retained",
+      "stdout": "Home service checkpoint 410x502 retained: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": false,
+      "case": "unknown",
+      "stdout": "Home service checkpoint 410x502 unknown: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "case": "helper",
+      "stdout": "Home service checkpoint 410x502 helper: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "case": "presentation",
+      "stdout": "Home service checkpoint 410x502 presentation: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "case": "old",
+      "stdout": "Home service checkpoint 410x502 old: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "case": "null",
+      "stdout": "Home service checkpoint 410x502 null: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "case": "ok",
+      "stdout": "Home service checkpoint 410x502 ok: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "case": "busy",
+      "stdout": "Home service checkpoint 410x502 busy: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "case": "context",
+      "stdout": "Home service checkpoint 410x502 context: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "case": "retained",
+      "stdout": "Home service checkpoint 410x502 retained: PASS (host-only)"
+    },
+    {
+      "dimensions": [
+        410,
+        502
+      ],
+      "sanitized": true,
+      "case": "unknown",
+      "stdout": "Home service checkpoint 410x502 unknown: PASS (host-only)"
+    }
+  ],
+  "source_sha256": {
+    "/workspace/shared/x4-home-navigation/watch/tests/runtime_service_checkpoint_test.c": "f203ef9f79cf9b069d2565c34f7552538bc7de8fbf0e710ef45a41e272f988f1",
+    "/workspace/shared/x4-home-navigation/watch/apps/clock/nova/nova.c": "a4c26ac1a168d82c538bcfb71a52e2b404d0736e23bfc6832952779cd6bfdb8f",
+    "/workspace/shared/x4-home-navigation/watch/apps/clock/viewport.c": "88cd1525804b47e627df5ee8915d858a1434268f65f4bace2fd588955853ed68",
+    "/workspace/shared/x4-home-navigation/watch/apps/clock/capability_clients.c": "3dc74facce98049b8e56ac571e088e91751ff14ad7d674fc203fd5a8572e979d",
+    "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_actions.c": "77048fbf21dca3f7b0772c74944ee4b8fefb3613ed48411280294600acaecc66",
+    "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_render.c": "3aa9cf322fb79f2bbe5d66efdc688ab5007d894590842a06fd220bee508fcd6f",
+    "/workspace/shared/wave-stat-successor/system/lib/PortableApps/src/quick_session.c": "7b2313c4f1a67f1c3ba2398c65851aad3c5c92b59f69534b5900d1362dc92c96",
+    "/workspace/shared/x4-home-navigation/watch/tests/quick_clock_test.c": "5ab0f12ec7483d8ac8be353560622430dc7b080869f7edf635f4aaf4bffea416",
+    "/workspace/shared/x4-home-navigation/watch/apps/clock/crown.c": "17811b243ea914a99c66b2a8a496725226ef6d54c4003738cb5a09c9bca9b76e",
+    "/workspace/shared/x4-home-navigation/watch/sdk/app/RiscRuntimeV1.h": "f1b59491473b268722306ce63a97228f90487493e13aa4f470b1ce0c864d4565",
+    "/workspace/shared/x4-home-navigation/watch/sdk/app/RiscRuntimeCheckpointV1.h": "dcc3bb7d76aa2d39f45d6cc648f38b6e4e3708cafcff463d21bee96275fd17f0",
+    "/workspace/shared/x4-home-navigation/watch/scripts/test_runtime_service_checkpoint.py": "c48e74645b47f2ca1c1ee681b3a87219063c409a56b29953524c8eab676451d8"
+  }
+}

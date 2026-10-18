@@ -1,0 +1,54 @@
+name: Home serial-session navigation
+on:
+  pull_request:
+    paths: ['apps/clock/**', 'sdk/**', 'include/**', 'scripts/**', 'tests/**', 'dependencies.lock.json', '.github/workflows/serial-session-navigation.yml']
+permissions:
+  contents: read
+jobs:
+  home-navigation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - id: deps
+        name: Read exact dependency pins
+        run: |
+          python3 - <<'PY'
+          import json, os
+          pins = json.load(open('dependencies.lock.json'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              for name in ('system', 'utilities'):
+                  print(f"{name}={pins[name]['commit']}", file=out)
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: ${{ steps.deps.outputs.system }}
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: ${{ steps.deps.outputs.utilities }}
+          path: .source/utilities
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE
+          ref: 7bcac96868bf37c33022e0d1f00997e91f187b02
+          path: .source/runtime
+          persist-credentials: false
+      - name: Version selection and real Home with real serial Files
+        run: |
+          python3 tests/test_build_inputs.py
+          python3 scripts/test_serial_session_idle.py --system .source/system --utilities .source/utilities --runtime .source/runtime --output evidence/navigation --navigation-only
+          python3 scripts/test_serial_session_idle.py --system .source/system --utilities .source/utilities --runtime .source/runtime --output evidence/idle
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: home-serial-session-navigation
+          path: evidence
+          retention-days: 30

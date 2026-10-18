@@ -1,0 +1,9 @@
+{
+  "utilities_head": "4fdcad2495c33fe63f5f6faca9b11ced3c739a5b",
+  "sources": {
+    "/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/service.c": "9d650a81e29b3a0f79203165e603e3ed5cbe9a190071fbef0d33427d1f604de8",
+    "/workspace/shared/wave-lifetime-successor/utilities-clean/Services/contexts/fingerprint.h": "838d4c26bcddd60e9a87e4a5dd774cb6792df79435395aacd432cab88e767781"
+  },
+  "provider_test_executed": false,
+  "blocker": "Exact release Drivers header lacks temporal/envelope extension types required by exact Utilities provider. No substitute ABI was used."
+}
