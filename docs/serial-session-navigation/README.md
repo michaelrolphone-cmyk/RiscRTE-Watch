@@ -128,3 +128,19 @@ normal/ASan/UBSan navigation matrix. Existing release files were not replaced.
 The new pull-request CI runs exact-head Home with pinned production Files and
 the idle compatibility matrix; native Runtime admission remains separately
 qualified by the companion change.
+
+### Confirmation fixture compatibility
+
+PR CI run `39107863994` exposed the older confirmation `long-busy` fixture's
+expectation that a swipe launches while the checkpoint remains BUSY. The same
+assertion failure was reproduced locally before changing the fixture. That
+expectation contradicts the new navigation admission contract.
+
+The fixture now submits one action, verifies it is consumed with one busy
+diagnostic and zero launches, and checks visible frames and confirmation wait
+progress through its 30-second modeled observation window. Confirmation success,
+quiescent refusal and retained-state assertions are unchanged. All five cases
+passed at both dimensions normally and under ASan/UBSan (20 runs). Evidence and
+exact tested source hashes are in `confirmation-compatibility`. This is a
+test-only correction; Home production bytes, versions and qualified ELF hashes
+are unchanged from the versioned checkpoint.

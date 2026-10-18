@@ -1,6 +1,8 @@
 static const char *confirm_case;
 static unsigned confirm_turns,confirm_calls,confirm_successes,confirm_first_ms,confirm_first_frame,confirm_last_frame;
 static unsigned confirm_wait_lines,confirm_deadline_lines,confirm_yields;
+static unsigned confirm_busy_navigation_lines,confirm_swipe_frame;
+static bool confirm_swipe_sent;
 static uint16_t confirm_pixels[TEST_WIDTH*TEST_HEIGHT];
 static unsigned confirm_token;
 static bool confirm_ready,confirm_snapshot;
@@ -13,6 +15,7 @@ static void confirm_yield(uint32_t ms){++confirm_yields;yield(ms);}
 static bool confirm_diagnostic(const char*s){
  if(!strcmp(s,"WATCH_CLOCK confirm=deferred checkpoint=busy"))++confirm_wait_lines;
  if(!strcmp(s,"WATCH_CLOCK confirm=deferred deadline-ms=5000 checkpoint=busy"))++confirm_deadline_lines;
+ if(!strcmp(s,"WATCH_CLOCK navigation=busy action=retry"))++confirm_busy_navigation_lines;
  return fast_diagnostic(s);
 }
 static int32_t confirm_checkpoint(void){
@@ -23,7 +26,9 @@ static int32_t confirm_checkpoint(void){
  if(!strcmp(confirm_case,"quiescent-refusal")||!strcmp(confirm_case,"normal-success")){confirm_ready=true;return RISC_RUNTIME_CHECKPOINT_OK;}
  if(!strcmp(confirm_case,"progress")&&confirm_turns>=8){confirm_ready=true;return RISC_RUNTIME_CHECKPOINT_OK;}
  if(!strcmp(confirm_case,"retained")&&confirm_turns>=8){retained_fence=true;return RISC_RUNTIME_CHECKPOINT_RETAINED;}
- if(!strcmp(confirm_case,"long-busy")&&(uint32_t)(clock_ms-confirm_first_ms)>=6500u)launcher_swipe_pending=true;
+ if(!strcmp(confirm_case,"long-busy")&&!confirm_swipe_sent&&(uint32_t)(clock_ms-confirm_first_ms)>=6500u){
+  confirm_swipe_sent=true;confirm_swipe_frame=last_complete;launcher_swipe_pending=true;
+ }
  return RISC_RUNTIME_CHECKPOINT_BUSY;
 }
 static bool confirm_boot_probe(void){
@@ -46,7 +51,11 @@ int main(int argc,char**argv){
   if(!strcmp(confirm_case,"progress"))assert(confirm_turns==8&&confirm_wait_lines==1&&last_complete>=confirm_first_frame+8);
   else assert(confirm_turns==1&&!confirm_wait_lines&&!confirm_deadline_lines);
  }else if(!strcmp(confirm_case,"long-busy")){
-  assert(!confirm_calls&&!confirm_successes&&!promotions&&clock_deferred_phase==3&&launches==1);
+  /* Busy confirmation now also refuses navigation. One rejected action must
+   * be consumed without ending the loop or starving deferred confirmation. */
+  assert(!confirm_calls&&!confirm_successes&&!promotions&&clock_deferred_phase==3&&!launches);
+  assert(confirm_swipe_sent&&!launcher_swipe_pending&&confirm_busy_navigation_lines==1);
+  assert(clock_ms>=30000u&&last_complete>confirm_swipe_frame+20);
   assert(confirm_wait_lines==1&&confirm_deadline_lines==1&&clock_ms-confirm_first_ms>=6500u&&last_complete>confirm_first_frame+20);check_clean();
  }else if(!strcmp(confirm_case,"retained")){
   assert(retained_fence&&!confirm_calls&&!promotions&&grants>ungrants&&confirm_turns==8);retained_reset();

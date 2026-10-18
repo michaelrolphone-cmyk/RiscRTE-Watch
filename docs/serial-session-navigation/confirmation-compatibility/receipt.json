@@ -1,0 +1,15 @@
+{
+  "prior_local_head": "413f8bc6072e483e40ea61b9831ffa9bb141ae92",
+  "prior_remote_head": "dbb85f77cf53a17ce7a537b95618499367565f02",
+  "failed_ci_run": 39107863994,
+  "changed_test": "tests/home_confirmation_controls.inc",
+  "old_test_sha256": "9d13e629e852c6fa869a568d514ea35ff3486b51ce32ddad271c0e444c4aa8c4",
+  "new_test_sha256": "c9332908d24cba4059e590eabc36c402417f244a0d26dab25d041cd13138ab83",
+  "results": "20 passing cases: five confirmation cases, two dimensions, normal and ASan/UBSan",
+  "unchanged_source_sha256": {
+    "apps/clock/crown.c": "17811b243ea914a99c66b2a8a496725226ef6d54c4003738cb5a09c9bca9b76e",
+    "apps/clock/clock_contexts.inc": "553842ac45a137df6ae4c0da0d01fd192ef127ae973037c40d41a69d48dd2471",
+    "scripts/build.py": "4fd424324f49d09f04e76e9b785ca6fb6c797caae4c39fe1e64db34f3145198d",
+    "apps/clock/default.json": "9a9fd973af4c2ac8458efac5ed8e45fb8f52a3aa56f993eb2e8eeb5d1e1841a8"
+  }
+}
