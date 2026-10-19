@@ -96,6 +96,7 @@ jobs:
           python3 scripts/test_capabilities.py --sanitize
           python3 scripts/test_viewport.py
           python3 scripts/test_viewport.py --sanitize
+          python3 scripts/test_bringup_native.py --output dist/bringup-native
           python3 .source/drivers/scripts/test_legacy_power_bridge.py --sdk "$PWD/sdk/driver"
           python3 .source/drivers/scripts/test_legacy_power_bridge.py --sdk "$PWD/sdk/driver" --sanitize
       - name: Prepare pinned compiler
