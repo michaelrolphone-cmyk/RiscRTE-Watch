@@ -19,6 +19,10 @@ class Inputs(unittest.TestCase):
         self.assertEqual(len(versions),1)
         version=versions[0]
         self.assertIsInstance(version,ast.IfExp)
+        self.assertEqual(ast.unparse(version.test),'a.serial_transfer_mode')
+        self.assertEqual(ast.literal_eval(version.body),'0.20.4')
+        version=version.orelse
+        self.assertIsInstance(version,ast.IfExp)
         self.assertEqual(ast.unparse(version.test),'a.automatic_provision')
         self.assertEqual(ast.literal_eval(version.body),'0.20.3')
         self.assertEqual(ast.literal_eval(version.orelse),'0.19.3')
