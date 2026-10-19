@@ -39,6 +39,15 @@ the native frame. Existing 240px golden images remain unchanged.
 
 See `docs/NATIVE_FACES.md` for coverage and device-validation limits.
 
+## Bringup diagnostics
+
+The hidden Bringup child uses diagnostic-local native geometry and RGB565 raster
+coverage at the display capability's dimensions. Its Motion, Vibrate and Back
+controls share their painted rectangles with raw-touch hit testing. Optional
+diagnostic actions remain lazy and capability-selected. See
+[`docs/BRINGUP_NATIVE.md`](docs/BRINGUP_NATIVE.md) for lifecycle guarantees, host
+qualification and the unchanged product integration boundary.
+
 ## Build and test
 
 Use the compiler and System-Apps/Utilities source revisions in `dependencies.lock.json`:
@@ -49,6 +58,7 @@ python3 scripts/test_capabilities.py
 python3 scripts/test_capabilities.py --sanitize
 python3 scripts/test_runtime_service_checkpoint.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities --output /tmp/home-checkpoint-proof
 python3 scripts/test_viewport.py
+python3 scripts/test_bringup_native.py --output /tmp/bringup-native
 python3 scripts/test_home_native_height.py
 python3 scripts/test_native_faces.py
 python3 scripts/test_native_effects.py
