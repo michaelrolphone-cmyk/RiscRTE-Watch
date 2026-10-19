@@ -21,10 +21,17 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     runs, compilations = [], []
     source = (ROOT / 'apps/clock/crown.c').read_text()
-    assert source.count('risc_runtime_service_checkpoint_v1(rt)') == 1
+    assert source.count('risc_runtime_service_checkpoint_v1(rt)') == 2
     loop = source.index('    while(alive(&now)) {')
     call = source.index('risc_runtime_service_checkpoint_v1(rt)')
     assert loop < call < source.index('#ifdef WATCH_BLE_BROADCAST', loop)
+    exit_check = 'if(risc_runtime_exit_requested_v1(rt)){clock_exit_checkpoint(__LINE__);goto done;}'
+    assert source.index(exit_check, call) < source.index('clock_navigation_ready=serviced', call)
+    settled = source.index('if (!frame(&s) || !draw_clock(now,&s) || !present() || !pace_frame(now))', loop)
+    second = source.index('risc_runtime_service_checkpoint_v1(rt)', call + 1)
+    optional = source.index('clock_deferred_step(now,serviced)', settled)
+    assert settled < second < source.index(exit_check, second) < optional
+    assert 'if(rt->struct_size>=RISC_RUNTIME_EXIT_REQUESTED_V1_SIZE && rt->exit_requested)' in source[settled:second]
     with tempfile.TemporaryDirectory(prefix='home-service-checkpoint-') as temporary:
         work = Path(temporary)
         sdk = headers(work, args.system, args.utilities, ROOT)

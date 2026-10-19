@@ -17,6 +17,7 @@ p.add_argument('--output',type=Path,default=ROOT/'dist')
 p.add_argument('--cc',default=os.environ.get('WATCH_APP_CC') or shutil.which('xtensa-esp32s3-elf-gcc'))
 p.add_argument('--role',choices=['default','clock','both'],default='both')
 p.add_argument('--automatic-provision',action='store_true',help='Explicit generic foreground core-profile reconciliation')
+p.add_argument('--serial-transfer-mode',action='store_true',help='Opt-in cooperative Home exit for a dedicated-transfer Runtime product')
 a=p.parse_args()
 if not a.cc:p.error('Set WATCH_APP_CC or --cc to the pinned ESP32-S3 compiler')
 S=a.system.resolve();U=a.utilities.resolve();out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
@@ -53,10 +54,12 @@ if a.automatic_provision:sources += [S/'lib/PortableApps/src/PortableAutomaticPr
 validator=out/'validate-elf'
 subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Wextra','-Werror','-I'+str(S/'test/native_apps/stubs'),'-I'+str(S/'lib/elf_loader/include'),str(S/'lib/elf_loader/src/esp_elf_validate.c'),str(S/'test/native_apps/validate_test.c'),'-o',str(validator)],check=True)
 records={'automatic_provision':a.automatic_provision,'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':'runtime-provider','hardware_profile_inputs':False,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
+if a.serial_transfer_mode:records['serial_transfer_mode']=True
 for role in ['default','clock'] if a.role=='both' else [a.role]:
  target=out/(role+'.elf');mapping=out/(role+'.map');mapping.write_text('{ global: app_main; local: *; };\n')
  flags=list(FLAGS) if role=='default' else []
  if role=='default' and a.automatic_provision:flags.append('-DWATCH_AUTOMATIC_PROVISION')
+ if role=='default' and a.serial_transfer_mode:flags.append('-DWATCH_SERIAL_TRANSFER_MODE')
  role_sources=sources if role=='default' else [ROOT/'apps/clock/return_to_default.c']
  command=[a.cc,'-std=c11',*common,'-nostdlib','-nostartfiles','-shared','-Wl,--gc-sections','-Wl,--no-relax','-Wl,--hash-style=sysv','-Wl,--version-script='+str(mapping),*flags,*incs,*map(str,role_sources),'-lgcc','-o',str(target)]
  subprocess.run(command,check=True);normalize(target)
@@ -72,7 +75,7 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.20.3' if a.automatic_provision else '0.19.3'
+  manifest['version']='0.20.4' if a.serial_transfer_mode else ('0.20.3' if a.automatic_provision else '0.19.3')
   if a.automatic_provision:
    manifest['requires'].append({'capability':'software.installed-apps','api':1})
    manifest['optional'].append({'capability':'storage.volume','api':1})
