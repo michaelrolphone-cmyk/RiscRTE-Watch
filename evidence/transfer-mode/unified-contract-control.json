@@ -1,0 +1,17 @@
+{
+  "failed_ci_run": 39192518917,
+  "failed_ci_job": 117868213134,
+  "failed_head": "115544db322d26751eb40345ab1b61eade4c6ea1",
+  "failure": "Explicit build-argument allowlist omitted the new serial-transfer-mode option. Production target source is unchanged.",
+  "local_baseline_exit": 1,
+  "corrected_contract": "Only default role may opt in; common FLAGS and other profiles remain unchanged.",
+  "local_completed_runs": 6,
+  "logs": {
+    "before.log": "dbd5274b2cc13c9cb2d4a977ed18a250c9a51bf970d724aa4aef5e8bd53096e2",
+    "after.log": "ab533a5c5f0a8b86ab5b3edf69d5dea9d197b1095fc3ab675d10ef4ce929263c",
+    "receipt.json": "1efc139dfef321281c3fb6a963ec8b9fc826836dd2d9a8a3cf972b1e20987d34"
+  },
+  "corrected_test_sha256": "f13dcd2e78360750a350d4b58c43cae4b8d8dc21405e43f76fdd9c4dc5dcb3f5",
+  "full_unified_receipt_sha256": "1efc139dfef321281c3fb6a963ec8b9fc826836dd2d9a8a3cf972b1e20987d34",
+  "limits": "Six actual host crash-session builds/runs, normal and sanitized. No new target build or hardware execution."
+}

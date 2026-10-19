@@ -6,6 +6,9 @@
 #endif
 #include "RiscRuntimeV1.h"
 #include "RiscRuntimeCheckpointV1.h"
+#ifdef WATCH_SERIAL_TRANSFER_MODE
+#include "RiscRuntimeHostControlV1.h"
+#endif
 #include "WatchRuntimeSleep.h"
 #include "WatchViewport.h"
 static watch_viewport clock_viewport;
@@ -1280,6 +1283,11 @@ __attribute__((visibility("default"))) void app_main(void) {
          * raster callbacks, pacing, or another ordinary yield/BUSY path. */
         int32_t serviced=risc_runtime_service_checkpoint_v1(rt);
         if(serviced!=RISC_RUNTIME_CHECKPOINT_OK && serviced!=RISC_RUNTIME_CHECKPOINT_BUSY){clock_exit_checkpoint(__LINE__);return;}
+#ifdef WATCH_SERIAL_TRANSFER_MODE
+        /* Native transfer intent is a cooperative exit, not revoked custody.
+         * Stop new foreground work and release through the checked owner path. */
+        if(risc_runtime_exit_requested_v1(rt)){clock_exit_checkpoint(__LINE__);goto done;}
+#endif
         clock_navigation_ready=serviced==RISC_RUNTIME_CHECKPOINT_OK;
         if(clock_navigation_ready&&!strcmp(sleep_status,"SERVICE BUSY - RETRY"))sleep_status[0]=0;
 #ifdef WATCH_BLE_BROADCAST
@@ -1555,6 +1563,16 @@ __attribute__((visibility("default"))) void app_main(void) {
         risc_display_surface_v1 s={0};
         if (!frame(&s) || !draw_clock(now,&s) || !present() || !pace_frame(now)) {clock_exit_checkpoint(__LINE__);break;}
 #ifdef WATCH_FAST_WAKE
+#ifdef WATCH_SERIAL_TRANSFER_MODE
+        /* HELLO may arrive during rendering, presentation or pacing. Poll only
+         * after those operations settle and before admitting another optional
+         * provider. Legacy/null cancellation suffixes keep their old cadence. */
+        if(rt->struct_size>=RISC_RUNTIME_EXIT_REQUESTED_V1_SIZE && rt->exit_requested) {
+            serviced=risc_runtime_service_checkpoint_v1(rt);
+            if(serviced!=RISC_RUNTIME_CHECKPOINT_OK && serviced!=RISC_RUNTIME_CHECKPOINT_BUSY){clock_exit_checkpoint(__LINE__);return;}
+            if(risc_runtime_exit_requested_v1(rt)){clock_exit_checkpoint(__LINE__);goto done;}
+        }
+#endif
         /* present() can latch navigation while a transfer drains. Honor it
          * before entering any optional synchronous provider work. */
 #ifdef WATCH_CLOCK_LAUNCHER

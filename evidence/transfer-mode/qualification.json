@@ -1,0 +1,329 @@
+{
+  "status": "passed",
+  "hardware_tested": false,
+  "network_ci_publication": false,
+  "release_version_reserved": false,
+  "watch_base": "93c87d05d4da54df49240141bf9ca993bc30b462",
+  "source_sha256": {
+    "apps/clock/crown.c": "84e7fec2e01764e17aa0a5b9c03fd9e2c9bb6e157d1bb06bd09469aeebc6a605",
+    "scripts/build.py": "e03d24b9028d0b1e192674873f562f0049827d67e409321d03cfb9a0cd93e30e",
+    "scripts/test_runtime_service_checkpoint.py": "81a05b2aaca65252701fb651596aabf898ef736fb379e9ab77a0b32b5a9e0ef8",
+    "scripts/test_home_transfer_exit.py": "7221f7541ca9d955b109d419e132095235d45e52cf49ae30e347194d1508edea",
+    "tests/home_transfer_exit_controls.inc": "cd7539052fb04d3960361cdbc2d4834e3261249ffb8facd7b02066424211f25e",
+    "docs/RUNTIME_SERVICE_CHECKPOINT.md": "75997da677df5f7c6a1eee537b3f8e002483384f966103720bdd77973ae420f4"
+  },
+  "source_frozen_at": "/workspace/shared/wave-transfer-mode-20261019/watch/dist/transfer-home-frozen",
+  "dependency_pins": {
+    "system": "bb0cadf3cec3445a64e11513b47b2676f3fdd92d",
+    "utilities": "4fdcad2495c33fe63f5f6faca9b11ced3c739a5b"
+  },
+  "tests": {
+    "selected": {
+      "receipt": "dist/transfer-exit-final-on-v2/receipt.json",
+      "cases": 96,
+      "sha256": "c4e82835255f1bde4a4a3518c5c767b338b606690e230dcdfc96c3d27a77e37b"
+    },
+    "feature_off": {
+      "receipt": "dist/transfer-exit-final-off-v2/receipt.json",
+      "cases": 24,
+      "sha256": "ea6a51d27d2f40d6eb724ab0c116551e93e4d5d27fcf78ba562ea8216362c94b"
+    },
+    "baseline": {
+      "receipt": "dist/transfer-exit-baseline/qualification-v2/receipt.json",
+      "cases": 24,
+      "sha256": "0b34ab497cfce3d4ed846d8124beb71d934cc1757ac3ad54a01457dbbbb0f93a"
+    }
+  },
+  "source_equivalence": "dist/transfer-feature-off-equivalence/receipt.json",
+  "default_flags_equivalence": "dist/transfer-feature-off-equivalence/build-flags.json",
+  "existing_regressions": [
+    "dist/transfer-checkpoint-regression/receipt.json",
+    "dist/transfer-exit-existing-checkpoint/report.json",
+    "dist/transfer-existing-confirmation/qualification.json",
+    "dist/transfer-existing-fast-wake.log"
+  ],
+  "causal_control_ungated": "dist/transfer-exit-debug-v2/receipt.json",
+  "frozen_baseline": "dist/transfer-exit-baseline/frozen-source.json",
+  "target_on": {
+    "receipt": "dist/transfer-target-on/build.json",
+    "artifacts": {
+      "default": {
+        "role": "home",
+        "file_name": "default.elf",
+        "bytes": 556020,
+        "sha256": "4ab8aaa0293053e5c743f057270d110fb68e43c5b0071b04691e35ebcfed1fa7",
+        "imports": [
+          "free",
+          "malloc",
+          "memchr",
+          "memcmp",
+          "memcpy",
+          "memmove",
+          "memset",
+          "risc_runtime_get_api",
+          "snprintf",
+          "strcmp",
+          "strlen",
+          "strncmp"
+        ],
+        "exports": [
+          "app_main"
+        ],
+        "compaction": {
+          "profile": "loader-metadata-v3",
+          "before_bytes": 660180,
+          "after_bytes": 556020,
+          "before_sha256": "5ce053f53be0e3de03b8dec17c5ee680263924116acfe568a0eee50e0cf1a5bc",
+          "after_sha256": "4ab8aaa0293053e5c743f057270d110fb68e43c5b0071b04691e35ebcfed1fa7",
+          "removed_sections": [
+            ".debug_abbrev",
+            ".debug_aranges",
+            ".debug_info",
+            ".debug_line",
+            ".debug_line_str",
+            ".debug_str",
+            ".xt.lit",
+            ".xt.prop"
+          ],
+          "retained_loader_sections_symbols_relocations_unchanged": true,
+          "original_elf_retained": true,
+          "tool": "GNU objcopy (crosstool-NG esp-15.2.0_20251204) 2.45",
+          "options": [
+            "--remove-section=.xt.lit",
+            "--remove-section=.xt.prop",
+            "--discard-all"
+          ]
+        },
+        "defines": [
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_CRASH_REPORT",
+          "-DCRASH_REPORT_SESSION_FILES=1",
+          "-DWATCH_CRASH_REPORT_NAMESPACE=61",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DPORTABLE_PREFERENCE_STORE",
+          "-DWATCH_ATOMIC_PREFERENCES",
+          "-DPORTABLE_QUICK_ATOMIC_PREFERENCES",
+          "-DPORTABLE_QUICK_RADIOS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DWATCH_FAST_WAKE",
+          "-DWATCH_COLD_BOOT_ANIMATION",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DPORTABLE_LOW_BATTERY",
+          "-DWATCH_RUNTIME_FEATURES",
+          "-DWATCH_BLE_BROADCAST",
+          "-DWATCH_CLOCK_LAUNCHER",
+          "-DWATCH_CLOCK_ALARMS",
+          "-DWATCH_CLOCK_POINTS",
+          "-DPORTABLE_RTC_UTC8_DENVER",
+          "-DWATCH_PAIRED_BOOT_CONFIRM",
+          "-DWATCH_QUICK_ACTIONS",
+          "-DWATCH_QUICK_RADIOS",
+          "-DWATCH_MOTION_WAKE",
+          "-DWATCH_ALARM_SLEEP_RESUME",
+          "-DWATCH_CONTEXTS_CLIENT",
+          "-flto",
+          "-Wl,--undefined=__udivdi3",
+          "-Wl,--undefined=__umoddi3",
+          "-Wl,--undefined=__divdi3",
+          "-Wl,--undefined=__moddi3",
+          "-DWATCH_AUTOMATIC_PROVISION",
+          "-DWATCH_SERIAL_TRANSFER_MODE"
+        ]
+      },
+      "clock": {
+        "role": "return-to-default",
+        "file_name": "clock.elf",
+        "bytes": 1236,
+        "sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+        "imports": [],
+        "exports": [
+          "app_main"
+        ],
+        "compaction": {
+          "profile": "loader-metadata-v3",
+          "before_bytes": 1496,
+          "after_bytes": 1236,
+          "before_sha256": "e5796b2bf6e473549545496df6438a2c0d2afd90b4e8419ab223a5cb047891c5",
+          "after_sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+          "removed_sections": [
+            ".xt.lit",
+            ".xt.prop"
+          ],
+          "retained_loader_sections_symbols_relocations_unchanged": true,
+          "original_elf_retained": true,
+          "tool": "GNU objcopy (crosstool-NG esp-15.2.0_20251204) 2.45",
+          "options": [
+            "--remove-section=.xt.lit",
+            "--remove-section=.xt.prop",
+            "--discard-all"
+          ]
+        },
+        "defines": []
+      }
+    }
+  },
+  "target_off": {
+    "receipt": "dist/transfer-target-off/build.json",
+    "artifacts": {
+      "default": {
+        "role": "home",
+        "file_name": "default.elf",
+        "bytes": 556020,
+        "sha256": "01d6e1f845dc34e46ebad9f1646af0c0dafdd98915493557c60f8351cbc299e7",
+        "imports": [
+          "free",
+          "malloc",
+          "memchr",
+          "memcmp",
+          "memcpy",
+          "memmove",
+          "memset",
+          "risc_runtime_get_api",
+          "snprintf",
+          "strcmp",
+          "strlen",
+          "strncmp"
+        ],
+        "exports": [
+          "app_main"
+        ],
+        "compaction": {
+          "profile": "loader-metadata-v3",
+          "before_bytes": 660048,
+          "after_bytes": 556020,
+          "before_sha256": "736887358af62b958a270a2e96020adbe8fe7ade5af25aaccf7aacc3627e511d",
+          "after_sha256": "01d6e1f845dc34e46ebad9f1646af0c0dafdd98915493557c60f8351cbc299e7",
+          "removed_sections": [
+            ".debug_abbrev",
+            ".debug_aranges",
+            ".debug_info",
+            ".debug_line",
+            ".debug_line_str",
+            ".debug_str",
+            ".xt.lit",
+            ".xt.prop"
+          ],
+          "retained_loader_sections_symbols_relocations_unchanged": true,
+          "original_elf_retained": true,
+          "tool": "GNU objcopy (crosstool-NG esp-15.2.0_20251204) 2.45",
+          "options": [
+            "--remove-section=.xt.lit",
+            "--remove-section=.xt.prop",
+            "--discard-all"
+          ]
+        },
+        "defines": [
+          "-DWATCH_COMPACT_NOVA_ASSETS",
+          "-DWATCH_CRASH_REPORT",
+          "-DCRASH_REPORT_SESSION_FILES=1",
+          "-DWATCH_CRASH_REPORT_NAMESPACE=61",
+          "-DWATCH_SHARED_PREFERENCE_HEADERS",
+          "-DPORTABLE_PREFERENCE_STORE",
+          "-DWATCH_ATOMIC_PREFERENCES",
+          "-DPORTABLE_QUICK_ATOMIC_PREFERENCES",
+          "-DPORTABLE_QUICK_RADIOS",
+          "-DWATCH_COMPRESSED_CALENDAR_ALPHA",
+          "-DWATCH_COMPRESSED_FACE_ALPHA",
+          "-DWATCH_FAST_WAKE",
+          "-DWATCH_COLD_BOOT_ANIMATION",
+          "-DPORTABLE_WATCH_NATIVE_HEIGHT",
+          "-DPORTABLE_LOW_BATTERY",
+          "-DWATCH_RUNTIME_FEATURES",
+          "-DWATCH_BLE_BROADCAST",
+          "-DWATCH_CLOCK_LAUNCHER",
+          "-DWATCH_CLOCK_ALARMS",
+          "-DWATCH_CLOCK_POINTS",
+          "-DPORTABLE_RTC_UTC8_DENVER",
+          "-DWATCH_PAIRED_BOOT_CONFIRM",
+          "-DWATCH_QUICK_ACTIONS",
+          "-DWATCH_QUICK_RADIOS",
+          "-DWATCH_MOTION_WAKE",
+          "-DWATCH_ALARM_SLEEP_RESUME",
+          "-DWATCH_CONTEXTS_CLIENT",
+          "-flto",
+          "-Wl,--undefined=__udivdi3",
+          "-Wl,--undefined=__umoddi3",
+          "-Wl,--undefined=__divdi3",
+          "-Wl,--undefined=__moddi3",
+          "-DWATCH_AUTOMATIC_PROVISION"
+        ]
+      },
+      "clock": {
+        "role": "return-to-default",
+        "file_name": "clock.elf",
+        "bytes": 1236,
+        "sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+        "imports": [],
+        "exports": [
+          "app_main"
+        ],
+        "compaction": {
+          "profile": "loader-metadata-v3",
+          "before_bytes": 1496,
+          "after_bytes": 1236,
+          "before_sha256": "e5796b2bf6e473549545496df6438a2c0d2afd90b4e8419ab223a5cb047891c5",
+          "after_sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+          "removed_sections": [
+            ".xt.lit",
+            ".xt.prop"
+          ],
+          "retained_loader_sections_symbols_relocations_unchanged": true,
+          "original_elf_retained": true,
+          "tool": "GNU objcopy (crosstool-NG esp-15.2.0_20251204) 2.45",
+          "options": [
+            "--remove-section=.xt.lit",
+            "--remove-section=.xt.prop",
+            "--discard-all"
+          ]
+        },
+        "defines": []
+      }
+    }
+  },
+  "toolchain": {
+    "version": "xtensa-esp-elf-gcc (crosstool-NG esp-15.2.0_20251204) 15.2.0",
+    "compiler_sha256": "f556eb8b42ff8c0bb748243afa391a216b3482b7d3724e5c2aa6870952b76b74",
+    "python": "/workspace/shared/wave-stat-successor/venv/bin/python",
+    "pyelftools": "0.32"
+  },
+  "target_commands": [
+    [
+      "/workspace/shared/wave-stat-successor/venv/bin/python",
+      "scripts/build.py",
+      "--system",
+      "/workspace/shared/wave-stat-successor/system",
+      "--utilities",
+      "/workspace/shared/wave-lifetime-successor/utilities-clean",
+      "--output",
+      "dist/transfer-target-on",
+      "--cc",
+      "/workspace/shared/wave-stat-successor/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc",
+      "--automatic-provision",
+      "--serial-transfer-mode",
+      "--role",
+      "both"
+    ],
+    [
+      "/workspace/shared/wave-stat-successor/venv/bin/python",
+      "scripts/build.py",
+      "--system",
+      "/workspace/shared/wave-stat-successor/system",
+      "--utilities",
+      "/workspace/shared/wave-lifetime-successor/utilities-clean",
+      "--output",
+      "dist/transfer-target-off",
+      "--cc",
+      "/workspace/shared/wave-stat-successor/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc",
+      "--automatic-provision",
+      "--role",
+      "both"
+    ]
+  ],
+  "limitations": [
+    "Home tests model Runtime boundaries; no claim of native serial parser/USB/device validation.",
+    "Feature-off preprocessing normalizes path strings and RAM diagnostic source-line identifiers only.",
+    "Manifest version is unchanged and unreserved; candidate build is not a publishable version reservation.",
+    "Dedicated-transfer product must package new selected-on Home rather than preserve a previous default.elf."
+  ]
+}

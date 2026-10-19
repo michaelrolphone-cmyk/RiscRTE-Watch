@@ -20,7 +20,10 @@ def contract():
             arguments.extend(x.value for x in node.args if isinstance(x,ast.Constant) and isinstance(x.value,str))
         if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FLAGS' for t in node.targets):
             defines=[n.value for n in ast.walk(node.value) if isinstance(n,ast.Constant) and isinstance(n.value,str)]
-    assert set(arguments)-{'--'}=={'--output','--cc','--role','--automatic-provision'}, arguments
+    assert set(arguments)-{'--'}=={'--output','--cc','--role','--automatic-provision','--serial-transfer-mode'}, arguments
+    transfer=[node for node in ast.walk(tree) if isinstance(node,ast.If) and ast.unparse(node.test)=="role == 'default' and a.serial_transfer_mode"]
+    assert len(transfer)==1 and ast.unparse(transfer[0].body[0])=="flags.append('-DWATCH_SERIAL_TRANSFER_MODE')"
+    assert not any('WATCH_SERIAL_TRANSFER_MODE' in value for value in defines)
     assert '-DCRASH_REPORT_SESSION_FILES=1' in defines
     assert '-DPORTABLE_PREFERENCE_STORE' in defines
     assert '-DWATCH_ATOMIC_PREFERENCES' in defines
@@ -32,7 +35,7 @@ def contract():
     source=(ROOT/'apps/clock/clock_crash.inc').read_text()
     assert 'hooks.files_enabled=true;hooks.files_instance=0;' in source
     assert 'WATCH_CRASH_REPORT_SD_VOLUME_INSTANCE' not in source
-    print('Unified default contract: fixed common preference route; no hardware/profile build switches; optional generic files instance0 PASS')
+    print('Unified default contract: fixed common preference route; no board-specific build switches; explicit Home-only transfer option; optional generic files instance0 PASS')
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
