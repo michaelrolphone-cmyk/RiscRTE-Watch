@@ -177,6 +177,13 @@ def stage(store: Store, apps: Store, services: Store, profile: dict[str, Any],
         old, new = document(store[name]), document(apps[name])
         require(old["id"] == new["id"] and old["file_name"] == new["file_name"], "Application identity/path changed")
         old.update(version=new["version"], requires=declared if role == "default" else [])
+        # Home owns its label/visibility, not the legacy persisted ID. Preserve
+        # every other product field, including the product-specific Clock route
+        # visibility (visible T-Watch shortcut versus hidden Waveshare shim).
+        if role == "default":
+            for field in ("display_name", "launcher_visible"):
+                if field in new:
+                    old[field] = new[field]
         out[name], out[role + ".elf"] = encoded(old), apps[role + ".elf"]
     # The Runtime restores configured Home after this zero-service child returns.
     # No second copy of Home, duplicate background clients or extra grants exist.
@@ -197,6 +204,7 @@ def stage(store: Store, apps: Store, services: Store, profile: dict[str, Any],
         "unchanged_files": len(store) - len(changed),
         "home_sha256": sha(out["default.elf"]), "return_sha256": sha(out["clock.elf"]),
         "old_return_bytes": len(store["clock.elf"]), "return_bytes": len(out["clock.elf"]),
+        "manifest_sha256": {role + ".json": sha(out[role + ".json"]) for role in ROLES},
     }
     return out, report
 

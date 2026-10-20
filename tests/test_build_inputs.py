@@ -20,13 +20,13 @@ class Inputs(unittest.TestCase):
         version=versions[0]
         self.assertIsInstance(version,ast.IfExp)
         self.assertEqual(ast.unparse(version.test),'a.serial_transfer_mode')
-        self.assertEqual(ast.literal_eval(version.body),'0.20.4')
+        self.assertEqual(ast.literal_eval(version.body),'0.20.6')
         version=version.orelse
         self.assertIsInstance(version,ast.IfExp)
         self.assertEqual(ast.unparse(version.test),'a.automatic_provision')
-        self.assertEqual(ast.literal_eval(version.body),'0.20.3')
-        self.assertEqual(ast.literal_eval(version.orelse),'0.19.3')
-        self.assertEqual(json.loads((ROOT/'apps/clock/default.json').read_text())['version'],'0.19.3')
+        self.assertEqual(ast.literal_eval(version.body),'0.20.5')
+        self.assertEqual(ast.literal_eval(version.orelse),'0.19.4')
+        self.assertEqual(json.loads((ROOT/'apps/clock/default.json').read_text())['version'],'0.19.4')
         self.assertEqual(json.loads((ROOT/'apps/clock/clock.json').read_text())['version'],'0.15.0')
         self.assertEqual(json.loads((ROOT/'apps/clock/manifest.json').read_text())['version'],'0.8.0')
 

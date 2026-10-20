@@ -71,6 +71,8 @@ class StageTest(unittest.TestCase):
             if name not in report['changed_files']:self.assertEqual(new[name],raw)
         self.assertEqual(len(report['added_files']),6)
         self.assertFalse(report['flashable'])
+        for role in ('default', 'clock'):
+            self.assertEqual(report['manifest_sha256'][role + '.json'], sha(new[role + '.json']))
     def test_input_immutable_on_success_and_failure(self):
         before=copy.deepcopy((self.store,self.apps,self.services,self.profile))
         self.compose()
@@ -126,6 +128,57 @@ class StageTest(unittest.TestCase):
         manifest=document(self.apps['default.json']);manifest['id']='new-settings-namespace'
         self.apps['default.json']=encoded(manifest)
         with self.assertRaisesRegex(ValueError,'identity'):self.compose()
+    def test_home_presentation_updates_without_changing_identity_or_other_fields(self):
+        old = document(self.store['default.json'])
+        old.update(display_name='twatch-clock', launcher_visible=True,
+                   description='Keep description', icon='existing-icon',
+                   optional=[{'capability':'storage.files','api':1}],
+                   supported_file_types=['.txt'], runtime_lifecycle='foreground',
+                   min_firmware_version='0.1.0')
+        self.store['default.json'] = encoded(old)
+        candidate = document(self.apps['default.json'])
+        candidate.update(display_name='Home', launcher_visible=False)
+        self.apps['default.json'] = encoded(candidate)
+        new, _ = self.compose()
+        got = document(new['default.json'])
+        self.assertEqual(got['display_name'], 'Home')
+        self.assertIs(got['launcher_visible'], False)
+        for key, value in old.items():
+            if key not in ('version', 'requires', 'display_name', 'launcher_visible'):
+                self.assertEqual(got[key], value, key)
+        self.assertEqual(document(new['boot.json'])['default_app'], 'default.elf')
+
+    def test_product_return_visibility_and_all_metadata_preserved(self):
+        for visible in (True, False):
+            with self.subTest(visible=visible):
+                old = document(self.store['clock.json'])
+                old.update(display_name='Clock', launcher_visible=visible,
+                           icon='solid:f017', description='Return to Home')
+                self.store['clock.json'] = encoded(old)
+                candidate = document(self.apps['clock.json'])
+                candidate.update(display_name='Unwanted label', launcher_visible=not visible)
+                self.apps['clock.json'] = encoded(candidate)
+                new, _ = self.compose()
+                got = document(new['clock.json'])
+                self.assertEqual(got, {**old, 'version': candidate['version'], 'requires': []})
+
+    def test_legacy_bundle_without_presentation_preserves_existing_metadata(self):
+        old = document(self.store['default.json'])
+        old.update(display_name='Home', launcher_visible=False)
+        self.store['default.json'] = encoded(old)
+        new, _ = self.compose()
+        self.assertEqual(document(new['default.json'])['display_name'], 'Home')
+        self.assertIs(document(new['default.json'])['launcher_visible'], False)
+
+    def test_actual_shared_template_controls_staged_home(self):
+        template = Path(__file__).resolve().parents[1] / 'apps/clock/default.json'
+        self.apps['default.json'] = template.read_bytes()
+        new, _ = self.compose()
+        got = document(new['default.json'])
+        self.assertEqual(got['display_name'], 'Home')
+        self.assertIs(got['launcher_visible'], False)
+        self.assertEqual(got['id'], 'twatch-clock')
+
     def test_requires_display_and_input(self):
         boot=document(self.store['boot.json']);boot['app_capabilities'][0]['grants'].pop(0)
         self.store['boot.json']=encoded(boot)

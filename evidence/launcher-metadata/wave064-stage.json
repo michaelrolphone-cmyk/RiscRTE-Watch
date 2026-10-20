@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "profile": "wave064",
+  "flashable": false,
+  "requires_device_assembly": true,
+  "requires_cohort_rebind": true,
+  "applications": 27,
+  "providers_before": 38,
+  "providers_after": 38,
+  "provider_capacity": 38,
+  "changed_files": [
+    "clock.elf",
+    "default.json"
+  ],
+  "added_files": [],
+  "unchanged_files": 109,
+  "home_sha256": "4ab8aaa0293053e5c743f057270d110fb68e43c5b0071b04691e35ebcfed1fa7",
+  "return_sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+  "old_return_bytes": 1232,
+  "return_bytes": 1236,
+  "manifest_sha256": {
+    "default.json": "a04474687d09a2efb3c441958cadb1ce1b4cb27bcd91279fa9398091f5b1dd14",
+    "clock.json": "03b4da54072f12b743e406beaa47bb1ae83df9e684d1bd645e8b1cf7538dc1ea"
+  }
+}

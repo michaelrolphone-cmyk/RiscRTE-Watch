@@ -1,0 +1,3 @@
+Generic capability clients: 16 independent service combinations, base-only gauge, no-gauge sleep, API errors and retained cleanup PASS
+Generic sleep: battery-free light sleep, refusal restore, restore failure, retained transport PASS
+Watch tap policy: legacy persisted settings and arbitrary driver-declared profiles PASS

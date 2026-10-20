@@ -14,6 +14,9 @@ Absent optional services do not fabricate hardware support: no battery gives unk
 
 See `docs/CAPABILITY_BOUNDARIES.md` for API and provisioning details.
 
+The persisted `twatch-clock` identity is presented as hidden Home. Device-owned
+Clock shortcut visibility stays unchanged. See `docs/LAUNCHER_METADATA.md`.
+
 ## Settled native services
 
 Home optionally calls Runtime's append-only service checkpoint once at a settled
