@@ -59,7 +59,8 @@ jobs:
       - name: Generic contracts, independent services and display classes
         run: |
           for f in RiscPowerSleepV1.h RiscPowerKeyV1.h RiscDisplayPowerV1.h; do cmp "sdk/driver/$f" ".source/drivers/sdk/driver/$f"; done
-          python3 tests/test_build_inputs.py
+          python3 -m unittest discover -s tests -v
+          python3 scripts/test_launcher_metadata.py --runtime .source/runtime --output dist/launcher-source --sanitize
           python3 scripts/check_capability_boundaries.py
           python3 scripts/test_capabilities.py
           python3 scripts/test_fast_wake_clock.py --system-apps .source/system --utilities .source/utilities
@@ -73,6 +74,7 @@ jobs:
           python3 scripts/test_packed_atlas_codec.py
           python3 scripts/test_packed_atlas_render.py
           python3 scripts/test_packed_atlas_render.py --sanitize
+          python3 scripts/test_alarm_safe_area.py
           python3 scripts/test_native_faces.py
           python3 scripts/test_native_effects.py
           python3 scripts/test_crown_native_lifecycle.py --system-apps .source/system --utilities .source/utilities
@@ -115,6 +117,10 @@ jobs:
           python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --automatic-provision --output dist/provisioning-replay --role default
           python3 scripts/verify_shared_default.py --first dist/provisioning --second dist/provisioning-replay --receipt dist/provisioning/shared-default-proof.json
           python3 .source/drivers/scripts/build_legacy_power_bridge.py --watch-sdk "$PWD" --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --validator dist/validate-elf --output dist/generic-power
+          python3 scripts/test_launcher_metadata.py --runtime .source/runtime --artifacts dist --output dist/launcher-ordinary
+          python3 scripts/test_launcher_metadata.py --runtime .source/runtime --artifacts dist/provisioning --output dist/launcher-provisioning
+          python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --automatic-provision --serial-transfer-mode --output dist/transfer
+          python3 scripts/test_launcher_metadata.py --runtime .source/runtime --artifacts dist/transfer --output dist/launcher-transfer
           git rev-parse HEAD > dist/COMMIT.txt
           git archive HEAD | gzip > dist/source.tar.gz
       - uses: actions/upload-artifact@v4
@@ -143,6 +149,12 @@ jobs:
             dist/home-exit-checkpoint-product/**
             dist/home-confirmation/**
             dist/runtime-sleep/receipt.json
+            dist/launcher-*/receipt.json
+            dist/transfer/default.elf
+            dist/transfer/default.json
+            dist/transfer/clock.elf
+            dist/transfer/clock.json
+            dist/transfer/build.json
             dist/COMMIT.txt
             dist/source.tar.gz
           retention-days: 30

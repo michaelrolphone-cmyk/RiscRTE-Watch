@@ -459,12 +459,22 @@ bool nova_watch_picker_collections_render(risc_display_surface_v1*s,const nova_w
 }
 
 /* Pure alert view reuses the picker fonts and canvas; no service calls here. */
-bool nova_watch_alarm_label_render(risc_display_surface_v1*s,const char*label,bool countdown,bool blocked,
+bool nova_watch_alarm_label_render_safe(risc_display_surface_v1*s,const risc_display_rect_v1*safe,const char*label,bool countdown,bool blocked,
         bool rtc_error,bool dismissing,bool uncertain,bool occurrence) {
     if(!home_surface_valid(s))return false;
     canvas c=CANVAS_INIT(s,((const nova_watch_state*)NULL));
-    CANVAS_CLEAR(c);c=home_ui_canvas(c);
-    const int ui_height=ui_y(&c,(int)s->height);
+    /* Validate before clearing or offsetting any pixel pointer. */
+    if(safe && (safe->x<0 || safe->y<0 || !safe->width || !safe->height ||
+       (uint32_t)safe->x>=s->width || (uint32_t)safe->y>=s->height ||
+       safe->width>s->width-(uint32_t)safe->x || safe->height>s->height-(uint32_t)safe->y))return false;
+    CANVAS_CLEAR(c);
+    if(safe) {
+        c.pixels+=(size_t)safe->y*c.stride+(size_t)safe->x*2u;
+        c.width=safe->width;c.height=safe->height;
+    }
+    const unsigned content_height=c.height;
+    c=home_ui_canvas(c);
+    const int ui_height=ui_y(&c,(int)content_height);
     char title[24];unsigned title_length=0;
     if(label)while(title_length<23&&label[title_length]){char ch=label[title_length];title[title_length++]=ch>='a'&&ch<='z'?(char)(ch-'a'+'A'):ch;}
     title[title_length]=0;
@@ -476,6 +486,11 @@ bool nova_watch_alarm_label_render(risc_display_surface_v1*s,const char*label,bo
     ftext(&c,&ff_o13,occurrence?"DISMISS":"BACK",120,ui_height-61,256,0,FWHITE,0);
     if(blocked)ftext(&c,&ff_r12,"RETRY",120,ui_height-20,256,0,FCYAN,0);
     return CANVAS_OK(c);
+}
+
+bool nova_watch_alarm_label_render(risc_display_surface_v1*s,const char*label,bool countdown,bool blocked,
+        bool rtc_error,bool dismissing,bool uncertain,bool occurrence) {
+    return nova_watch_alarm_label_render_safe(s,NULL,label,countdown,blocked,rtc_error,dismissing,uncertain,occurrence);
 }
 
 bool nova_watch_alarm_render(risc_display_surface_v1*s,bool countdown,bool blocked,

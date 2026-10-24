@@ -17,7 +17,8 @@ receipt={'hardware_tested':False,'baseline':a.baseline,'width':a.width,'height':
 with tempfile.TemporaryDirectory(prefix='watch-confirmation-build-') as temp:
  work=Path(temp);sdk=headers(work,s,u,w)
  original=w/'tests/fast_wake_clock_test.c'
- assert hashlib.sha256(original.read_bytes()).hexdigest()=="85292c7c79aba23e97780c324fe50e3744e321d3ac3a63774556024de493b778", 'Pinned Home fixture changed'
+ expected_fixture="85292c7c79aba23e97780c324fe50e3744e321d3ac3a63774556024de493b778" if a.baseline else "f91c57cacaf8bbc9376610f5c84caa2517f61f3273867e0de6e8430aa149a927"
+ assert hashlib.sha256(original.read_bytes()).hexdigest()==expected_fixture, 'Pinned Home fixture changed'
  text=original.read_text().replace('static const risc_runtime_api_v1 fast_runtime=', 'static risc_runtime_api_v1 fast_runtime=').replace('int main(void){','int inherited_fast_main(void){')
  assert text.count('ended=true;')==4, 'Pinned lifecycle fixture changed'
  text='#include <stdbool.h>\nstatic bool probe_long;\n'+text.replace('ended=true;', 'if(!probe_long)ended=true;')

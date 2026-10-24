@@ -1,0 +1,55 @@
+{
+  "rows": [
+    {
+      "id": "twatch-clock",
+      "file_name": "default.elf",
+      "display_name": "Home",
+      "visible": false
+    },
+    {
+      "id": "twatch-clock-return",
+      "file_name": "clock.elf",
+      "display_name": "twatch-clock-return",
+      "visible": true
+    }
+  ],
+  "visible_count": 1,
+  "selected": [
+    "twatch-clock-return"
+  ],
+  "schema": 1,
+  "input_sha256": {
+    "default.json": "4559b06c1c1539f97a0be6692b1e8a86a40d3dfa38464f7fb302f75b7897155f",
+    "clock.json": "ee26c7ec19cb41daafa76e455c3bd24ca9a1ee6762fe5cf74cd2ddb321fc0bcd"
+  },
+  "negative_control": {
+    "rows": [
+      {
+        "id": "twatch-clock",
+        "file_name": "default.elf",
+        "display_name": "twatch-clock",
+        "visible": true
+      },
+      {
+        "id": "twatch-clock-return",
+        "file_name": "clock.elf",
+        "display_name": "twatch-clock-return",
+        "visible": true
+      }
+    ],
+    "visible_count": 2,
+    "selected": [
+      "twatch-clock",
+      "twatch-clock-return"
+    ]
+  },
+  "hardware_tested": false,
+  "target_instructions_executed": false,
+  "native_policy_admission_tested": false,
+  "runtime_commit": "34716712d4cb7f25fda56a540aafc652c924c995",
+  "runtime_catalog_sha256": "5335d7ab5b48e40c6f73acdf822ed4f7a9996d7b175ad1e7f84e6e4a6f4df443",
+  "probe_source_sha256": "d413bcc17b3a4bfbbb2164098f69ad231c09472d6c8d950a9fbab6f2db26023c",
+  "qualifier_source_sha256": "b60b10340b0a8d054fe135156b0454f109ed24f6adb63f763713989823abb7eb",
+  "sanitized": true,
+  "leak_detection_enabled": false
+}

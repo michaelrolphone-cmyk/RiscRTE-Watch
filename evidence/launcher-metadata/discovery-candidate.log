@@ -1,0 +1,18 @@
+.......F.............................
+======================================================================
+FAIL: test_backend_manifest (test_shared_default_proof.ProofTests.test_backend_manifest)
+----------------------------------------------------------------------
+ValueError: Optional removable-volume declaration differs from selected provisioning feature
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/watch-launcher-metadata-20261020/watch/tests/test_shared_default_proof.py", line 82, in test_backend_manifest
+    with self.assertRaisesRegex(ValueError, 'backend-specific contract'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "backend-specific contract" does not match "Optional removable-volume declaration differs from selected provisioning feature"
+
+----------------------------------------------------------------------
+Ran 37 tests in 0.097s
+
+FAILED (failures=1)
