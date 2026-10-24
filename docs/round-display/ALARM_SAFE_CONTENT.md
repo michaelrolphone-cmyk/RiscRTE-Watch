@@ -36,3 +36,12 @@ Quick and other content callers remain separate. The tests use conservative
 rectangles, not a new contour ABI or device-specific layout branch. Board drivers,
 provisioning, exact product memory/boot and physical display/touch/sleep validation
 remain port work. No device was flashed or hardware behavior qualified here.
+
+## Inherited harness pin reconciliation
+
+Initial hosted Universal run40053493003 passed the new renderer and Home cases,
+then rejected the intentionally extended Home fixture against its old digest.
+Confirmation and transfer-exit harnesses now retain the historical fixture hash
+for baseline mode and separately require the exact current fixture hash for
+current/feature-off modes. No hash guard is removed and historical sources are
+not rewritten. Production alarm changes are unchanged by this harness repair.
