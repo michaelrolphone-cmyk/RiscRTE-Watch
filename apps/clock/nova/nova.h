@@ -69,6 +69,8 @@ bool nova_watch_picker_collections_render(risc_display_surface_v1 *surface, cons
     const char *status, unsigned pulse_face, unsigned pulse_scale_q8, nova_watch_picker_cache *cache);
 /* Optional service-provided label, bounded to 23 characters; NULL preserves
  * the existing ALARM/COUNTDOWN title. No recurrence lookup occurs here. */
+bool nova_watch_alarm_label_render_safe(risc_display_surface_v1 *surface,const risc_display_rect_v1 *safe,const char *label,
+    bool countdown,bool blocked,bool rtc_error,bool dismissing,bool uncertain,bool occurrence);
 bool nova_watch_alarm_label_render(risc_display_surface_v1 *surface,const char *label,
     bool countdown,bool blocked,bool rtc_error,bool dismissing,bool uncertain,bool occurrence);
 bool nova_watch_alarm_render(risc_display_surface_v1 *surface,bool countdown,bool blocked,

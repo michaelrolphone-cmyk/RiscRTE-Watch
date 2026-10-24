@@ -70,7 +70,8 @@ static bool saved_face;static uint8_t saved_blob[4];
 static bool health(risc_runtime_health_v1 *h){h->uptime_ms=clock_ms;return !launched && clock_ms<(scenario==24?10000u:scenario>=8?6000u:3000u);}
 static void yield(uint32_t n){assert(n>=1&&n<=20);clock_ms+=n;}
 static bool diagnostic(const char*s){if(strstr(s,"ready")){ready=true;ready_time=clock_ms;}return true;}
-static bool info(void*c,risc_display_info_v1*i){(void)c;*i=(risc_display_info_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT,.supported_formats=RISC_DISPLAY_FORMAT_BIT(RISC_DISPLAY_FORMAT_RGB565)};return true;}
+static risc_display_insets_v1 fixture_safe_insets;
+static bool info(void*c,risc_display_info_v1*i){(void)c;*i=(risc_display_info_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT,.safe_insets=fixture_safe_insets,.supported_formats=RISC_DISPLAY_FORMAT_BIT(RISC_DISPLAY_FORMAT_RGB565)};return true;}
 static bool acquire_frame(void*c,uint32_t f,risc_display_surface_v1*s){(void)c;assert(f==5&&!owned&&!pending);owned=true;*s=(risc_display_surface_v1){1,pixels,TEST_WIDTH,TEST_HEIGHT,TEST_WIDTH*2,sizeof(pixels),5};return true;}
 static void release_frame(void*c,uint64_t f){(void)c;assert(f==1&&owned);owned=false;released++;}
 static bool submit_frame(void*c,uint64_t f,const risc_display_rect_v1*d,size_t n,const risc_display_present_options_v1*o,uint64_t*t){(void)c;(void)d;(void)n;(void)o;assert(owned&&!pending&&f==1);

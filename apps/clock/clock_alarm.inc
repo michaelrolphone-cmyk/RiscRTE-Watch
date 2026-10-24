@@ -104,7 +104,9 @@ static bool clock_alarm_foreground(void) {
     for(;;) {
         if(redraw) {
             risc_display_surface_v1 s={0};
-            if(!frame(&s) || !nova_watch_alarm_label_render(&s,clock_alarm.status.label,clock_alarm.status.occurrence.kind==ALARM_KIND_COUNTDOWN,
+            const watch_layout_rect *bounds=&clock_viewport.layout.safe;
+            const risc_display_rect_v1 safe={bounds->x,bounds->y,bounds->width,bounds->height};
+            if(!frame(&s) || !nova_watch_alarm_label_render_safe(&s,&safe,clock_alarm.status.label,clock_alarm.status.occurrence.kind==ALARM_KIND_COUNTDOWN,
                clock_alarm.status.state==ALARM_STATE_BLOCKED,clock_alarm.status.error==ALARM_RTC,
                clock_alarm.status.state==ALARM_STATE_DISMISSING,clock_alarm.status.output_uncertain,
                clock_alarm.status.occurrence.generation!=0) || !present() ||
@@ -120,8 +122,9 @@ static bool clock_alarm_foreground(void) {
         if(!clock_key_read(&events,"WATCH_KEY stage=alarm-modal"))return clock_alarm_failure();
         portable_touch_sample sample;portable_touch_read(&alert_touch,&sample);
         bool tap=sample.valid && sample.released && sample.tap_eligible && !sample.cancelled && !sample.moved;
-        bool retry=tap && sample.y>=watch_home_alarm_retry_at(clock_viewport.width,clock_viewport.height);
-        bool dismiss=(events&3u) || (tap && sample.y>=watch_home_alarm_dismiss_at(clock_viewport.width,clock_viewport.height) && sample.y<watch_home_alarm_retry_at(clock_viewport.width,clock_viewport.height));
+        unsigned action=tap?watch_home_alarm_action(&clock_viewport.layout.safe,sample.x,sample.y):0u;
+        bool retry=action==2u;
+        bool dismiss=(events&3u) || action==1u;
         if(clock_alarm.status.state==ALARM_STATE_BLOCKED && retry) {
             (void)clock_alarm.api->refresh(clock_alarm.api->context);alert_touch.neutral=alert_touch.down=false;redraw=true;
         } else if(dismiss) {

@@ -330,7 +330,7 @@ static bool fast_launch(const char*path){check_io();assert(!held&&!pending);
  else{assert(!strcmp(path,"springboard.elf")&&!touch.subscription);ended=true;}
  launches++;return true;}
 static unsigned alarm_touch_y(void) {
- return alarm_touch_phase<=2?alarm_touch_wrong_y:watch_home_alarm_dismiss_at(TEST_WIDTH,TEST_HEIGHT);
+ return alarm_touch_phase<=2?alarm_touch_wrong_y:(unsigned)clock_viewport.layout.safe.y+watch_home_alarm_dismiss_at(clock_viewport.layout.safe.width,clock_viewport.layout.safe.height);
 }
 static bool fast_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();(void)c;
  *out=(risc_touch_snapshot_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT};
@@ -366,6 +366,7 @@ static bool fast_launch_failure(risc_runtime_launch_failure_v1 *out){
 static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=RISC_RUNTIME_SERVICE_CHECKPOINT_V1_SIZE,.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
+ fixture_safe_insets=(risc_display_insets_v1){0};
 #ifdef WATCH_AUTOMATIC_PROVISION
  fixture_provision_mode=fixture_provision_scans=fixture_volume_acquires=0;
 #endif
@@ -748,6 +749,18 @@ int main(void){
   app_main();check_clean();assert(alarm_touch_phase==4&&!alarm_view.occurrence.generation&&alarm_frames);
  }
  puts("Alarm native touch: just-above-dismiss and retry-row taps stay inert; exact dismiss boundary acknowledges through raw event queue PASS");
+ for(unsigned boundary=0;boundary<3;boundary++) {
+  reset_case();alarm_touch_test=true;
+  unsigned inset=TEST_WIDTH*15u/100u;
+  fixture_safe_insets=(risc_display_insets_v1){inset,inset,inset,inset};
+  unsigned w=TEST_WIDTH-2u*inset,h=TEST_HEIGHT-2u*inset;
+  alarm_touch_wrong_y=boundary==0?inset+watch_home_alarm_dismiss_at(w,h)-1u:
+      boundary==1?inset+watch_home_alarm_retry_at(w,h):TEST_HEIGHT-1u;
+  alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;
+  app_main();check_clean();assert(alarm_touch_phase==4&&!alarm_view.occurrence.generation&&alarm_frames);
+ }
+ puts("Alarm provider insets: actual Home modal rejects above-dismiss/retry/gutter taps then accepts translated dismiss boundary PASS");
+
  for(unsigned kind=1;kind<=2;kind++){
   reset_case();launch_failure_kind=kind;app_main();check_clean();
   assert(first_seen&&launch_failure_reads==1&&!launch_failure_kind);

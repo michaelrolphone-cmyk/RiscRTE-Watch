@@ -74,6 +74,7 @@ jobs:
           python3 scripts/test_packed_atlas_codec.py
           python3 scripts/test_packed_atlas_render.py
           python3 scripts/test_packed_atlas_render.py --sanitize
+          python3 scripts/test_alarm_safe_area.py
           python3 scripts/test_native_faces.py
           python3 scripts/test_native_effects.py
           python3 scripts/test_crown_native_lifecycle.py --system-apps .source/system --utilities .source/utilities
