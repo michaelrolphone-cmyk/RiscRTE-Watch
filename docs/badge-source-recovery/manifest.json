@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "repository": "michaelrolphone-cmyk/RiscRTE-Watch",
+  "source_commit": "f550d559d3eaae9a6a15ef27b5ea7f82e741e54a",
+  "source_tree": "fddcfbd7bafcaaa7f9109e7af05bdb53e19a0c60",
+  "object_count": 1808,
+  "pack_sha256": "e9ee316f74b9cad24f2bec03fb05b1c8b29dafd77d185c0d757bb62025fba043",
+  "parts": [
+    {
+      "path": "objects-000.packpart",
+      "bytes": 524288,
+      "sha256": "4095e7f734d13cd608a9d508aca1e97ef9458b269e7c7f21168628654967b6d3"
+    },
+    {
+      "path": "objects-001.packpart",
+      "bytes": 524288,
+      "sha256": "0ce783b546b9af9046a96ed49bbab236440e6248fb005ee7fd9d81960b3c90c4"
+    },
+    {
+      "path": "objects-002.packpart",
+      "bytes": 524288,
+      "sha256": "fce6d34a835ff3403ffdb894a5119e5a69ef7285130b6f9b7a5e0d78dcf7e83f"
+    },
+    {
+      "path": "objects-003.packpart",
+      "bytes": 524288,
+      "sha256": "cd713b1cb6666571303746d3fe2b7500c719096ccb032b73a03dc09b15481342"
+    },
+    {
+      "path": "objects-004.packpart",
+      "bytes": 524288,
+      "sha256": "262b81d7d4a6ee4a24b31e42f465fddb928bf5a277eceeb7aacf9b4f05eb2cd7"
+    },
+    {
+      "path": "objects-005.packpart",
+      "bytes": 86041,
+      "sha256": "4c31406a5877bf841d25ff33e6c7d592ca60b7ec4d75441c8566213b2449f9e6"
+    }
+  ],
+  "shallow_boundaries": [
+    "03aa63fb4830987c854e05a878c00c8cdde9577c",
+    "0ec555f17360ff63b659803677fbc78d61bd93c4",
+    "447b94f13ad963701414d2f17223d0218ee85b5f",
+    "5d46eba6368597da8072956677a04528e6f6484d",
+    "605d5e7d4e2b46f6b33ff2f195582db6f882535c",
+    "c41c2b7f9e6902ab8e6f4f73a7ec70ea171be9b6",
+    "e012406deff782ea382724e2102e22c2a29e59a4",
+    "e969a34ec6c3133fa5f0a04bf7b7d9446aec5455",
+    "f10fcdcce10c16681e4e0fa1660abee267f9410d",
+    "831d34f2380d1043aa1d29384948aa935b9b15b8"
+  ],
+  "scope": "Exact original Git objects recovered from source checkpoints, including canonical SDK and selected dependency anchors. Shallow boundaries are explicit; unavailable ancestors are not invented. Publication commit identity differs from original source identity."
+}
