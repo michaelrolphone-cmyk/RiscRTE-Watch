@@ -15,10 +15,23 @@ static const wifi_api_v1* wifi(const risc_runtime_capability_v1*g) {
 }
 static void reflect(const pqa_radios*s,pqa_state*u) {
  u->radio_controls=true;u->radios_valid=s->valid&&s->available;
+ #ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ u->wifi_available=s->wifi_available;u->bluetooth_available=s->bluetooth_available;
+ u->wifi_valid=s->valid&&s->wifi_available;u->bluetooth_valid=s->valid&&s->bluetooth_available;
+#endif
  u->wifi_enabled=!!(s->flags&PORTABLE_RADIO_WIFI);u->bluetooth_enabled=!!(s->flags&PORTABLE_RADIO_BLUETOOTH);u->airplane=!!(s->flags&PORTABLE_RADIO_AIRPLANE);
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ u->airplane=u->airplane&&u->radios_valid;
+#endif
 }
 static bool set_hardware(const wifi_api_v1*w,const portable_bluetooth_control_v1*b,uint8_t flags,bool preserve) {
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ if(w){wifi_link_t observed=w->status(w->context);if(observed!=WIFI_LINK_DOWN&&observed!=WIFI_LINK_JOINING&&observed!=WIFI_LINK_UP)return false;}
+ if(w && !(flags&PORTABLE_RADIO_WIFI) && (!w->disconnect_checked(w->context)||w->status(w->context)!=WIFI_LINK_DOWN))return false;
+ if(!b)return true;
+#else
  if(!(flags&PORTABLE_RADIO_WIFI) && (!w->disconnect_checked(w->context)||w->status(w->context)!=WIFI_LINK_DOWN))return false;
+ #endif
  uint8_t actual=PORTABLE_BLUETOOTH_RETAINED;
  const uint8_t desired=(flags&PORTABLE_RADIO_BLUETOOTH)?PORTABLE_BLUETOOTH_ON:PORTABLE_BLUETOOTH_OFF;
  /* Re-entering an ordinary app must not reset a healthy provider-owned BLE
@@ -36,10 +49,19 @@ bool pqa_radios_load(pqa_radios*s,pqa_state*u,const risc_runtime_api_v1*rt) {
  /* An unreadable/corrupt desired state must not leave a previously enabled
   * controller running behind disabled controls. Prove both radios Off without
   * overwriting the bad record; failed cleanup retains the invocation. */
- s->available=w&&b;bool ok=!s->available||set_hardware(w,b,s->valid?s->flags:0,true);
+ s->available=w&&b;
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ s->wifi_available=wg.api!=NULL;s->bluetooth_available=bg.api!=NULL;
+ bool ok=(!wg.api||w)&&(!bg.api||b)&&set_hardware(w,b,s->valid?s->flags:0,true);
+#else
+ bool ok=!s->available||set_hardware(w,b,s->valid?s->flags:0,true);
+#endif
  if(!s->valid)u->error_flags|=PQA_ERROR_RADIO|PQA_ERROR_SAVE;
  if(bg.api&&!rt->release(&bg))ok=false;
  if(wg.api&&!rt->release(&wg))ok=false;
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ if(!ok)s->valid=false;
+#endif
  reflect(s,u);if(!ok)u->error_flags|=PQA_ERROR_RADIO;
  return ok;
 }
@@ -49,7 +71,13 @@ bool pqa_radios_apply_user(pqa_radios*s,pqa_state*u,const risc_runtime_api_v1*rt
 bool pqa_radios_apply(pqa_radios*s,pqa_state*u,const risc_runtime_api_v1*rt,uint32_t actions) {
 #endif
  if(!(actions&(PQA_WIFI|PQA_BLUETOOTH|PQA_AIRPLANE)))return true;
- if(!s->valid||!s->available){u->error_flags|=PQA_ERROR_RADIO;return true;}
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ bool supported=(actions&PQA_AIRPLANE)?s->available:(actions&PQA_WIFI)?s->wifi_available:s->bluetooth_available;
+ if(!s->valid||!supported)
+#else
+ if(!s->valid||!s->available)
+#endif
+ {u->error_flags|=PQA_ERROR_RADIO;return true;}
  uint8_t next=s->flags;
  if(actions&PQA_AIRPLANE) {
   if(next&PORTABLE_RADIO_AIRPLANE)next=(uint8_t)((next>>3)&3u);
@@ -65,7 +93,12 @@ bool pqa_radios_apply(pqa_radios*s,pqa_state*u,const risc_runtime_api_v1*rt,uint
  risc_runtime_capability_v1 kg;(void)bind(rt,&kg,RISC_KEY_VALUE_CAPABILITY,1);
 #endif
  const wifi_api_v1*w=wifi(&wg);const portable_bluetooth_control_v1*b=ble(&bg);
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ bool providers=(!wg.api||w)&&(!bg.api||b)&&((actions&PQA_AIRPLANE)?w&&b:(actions&PQA_WIFI)?w!=NULL:b!=NULL);
+ bool changed=providers&&set_hardware(w,b,next,false);bool ok=true;
+#else
  bool changed=w&&b&&set_hardware(w,b,next,false);bool ok=true;
+#endif
 #ifdef PORTABLE_QUICK_ATOMIC_PREFERENCES
  const uint8_t record[]={0x51,1,next,(uint8_t)(next^0xa5u)};
  bool saved=changed&&save&&save(context,PORTABLE_RADIO_KEY,record,4,NULL);
@@ -79,7 +112,11 @@ bool pqa_radios_apply(pqa_radios*s,pqa_state*u,const risc_runtime_api_v1*rt,uint
   /* An explicit operation failed. Prove restoration; otherwise retain the
    * invocation instead of claiming Off or proceeding into native sleep. */
   u->error_flags|=PQA_ERROR_RADIO|PQA_ERROR_SAVE;
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+  ok=providers&&set_hardware(w,b,s->flags,false);
+#else
   ok=w&&b&&set_hardware(w,b,s->flags,false);
+#endif
  }
 #ifndef PORTABLE_QUICK_ATOMIC_PREFERENCES
  if(kg.api&&!rt->release(&kg))ok=false;

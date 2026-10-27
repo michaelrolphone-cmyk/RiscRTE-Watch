@@ -41,20 +41,27 @@ static bool prepare_compact_assets(void){return true;}
 #define MUTED 0x6bf0u
 #define ORANGE 0xfce3u
 
+#include "native_reuse_admission.h"
 typedef struct { uint8_t *pixels; uint32_t stride,height,width;
 #ifdef WATCH_CONTEXTS_CLIENT
     bool (*capture)(void *);void *context;unsigned operations;bool failed;uint8_t sink[2];
 #endif
 } canvas;
 #ifdef WATCH_CONTEXTS_CLIENT
-#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height,(s)->width,(state)?(state)->capture_audio:NULL,(state)?(state)->capture_context:NULL,0,false,{0,0}}
+#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height,native_reuse_width((s)->width,(s)->height),(state)?(state)->capture_audio:NULL,(state)?(state)->capture_context:NULL,0,false,{0,0}}
 #define CANVAS_OK(c) (!(c).failed)
 static bool canvas_checkpoint(canvas*c) {
     if(c->failed)return false;
     if(c->capture&&!c->capture(c->context))c->failed=true;
     return !c->failed;
 }
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+static bool damage_planning;
+#endif
 static bool canvas_clear(canvas*c) {
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+    if(damage_planning)return canvas_checkpoint(c);
+#endif
     for(unsigned y=0;y<c->height;y++){
         if(!(y&7u)&&!canvas_checkpoint(c))return false;
         memset(c->pixels+y*c->stride,0,c->width*2u);
@@ -63,7 +70,7 @@ static bool canvas_clear(canvas*c) {
 }
 #define CANVAS_CLEAR(c) do {if(!canvas_clear(&(c)))return false;}while(0)
 #else
-#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height,(s)->width}
+#define CANVAS_INIT(s,state) {(uint8_t*)(s)->pixels,(s)->stride_bytes,(s)->height,native_reuse_width((s)->width,(s)->height)}
 #define CANVAS_OK(c) true
 #define CANVAS_CLEAR(c) for(unsigned y=0;y<(c).height;y++)memset(at(&(c),0,y),0,(c).width*2u)
 #endif
@@ -71,7 +78,14 @@ static bool canvas_clear(canvas*c) {
 #define CANVAS_WIDTH(c) ((c)->width)
 /* Design geometry is resolved before rasterization. The canvas and every
  * destination pixel remain native; there is no completed-view resampling. */
-static int native_q(const canvas *c,int value) { return (int)((int64_t)value*c->width/240); }
+static int native_q(const canvas *c,int value) {
+    int64_t product=(int64_t)value*c->width;
+    /* Native design coordinates normally fit a signed machine word. Keep the
+     * exact wide fallback; both divisions truncate toward zero, including for
+     * offscreen negative geometry. Avoid software 64-bit division per vertex. */
+    if(product>=INT32_MIN && product<=INT32_MAX)return (int32_t)product/240;
+    return (int)(product/240);
+}
 static int floor_q8(int value) { return value>=0?value/256:(value-255)/256; }
 static bool home_surface_valid(const risc_display_surface_v1 *s) {
     return s && s->pixels && s->pixel_format==RISC_DISPLAY_FORMAT_RGB565 &&
@@ -112,11 +126,21 @@ void nova_watch_format(const nova_watch_state *s, nova_watch_labels *out) {
         else { out->battery[0]=(char)('0'+n);out->battery[1]='%';out->battery[2]=0; }
     }
 }
+#include "native_damage_decl.h"
 static uint8_t *at(canvas *c, unsigned x, unsigned y) {
 #ifdef WATCH_CONTEXTS_CLIENT
     if(c->failed||(!(++c->operations&255u)&&!canvas_checkpoint(c)))return c->sink;
 #endif
     return c->pixels+y*c->stride+2*x;
+}
+static inline __attribute__((always_inline)) uint8_t *at_mode(canvas*c,unsigned x,unsigned y,bool clipped) {
+    uint8_t*p=at(c,x,y);
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+    if(clipped&&!damage_allowed(x,y))return c->sink;
+#else
+    (void)clipped;
+#endif
+    return p;
 }
 static uint8_t *indexed(canvas *c, unsigned i) {
     #ifdef WATCH_CONTEXTS_CLIENT
@@ -130,6 +154,8 @@ static void blend(uint8_t *p, uint16_t color, unsigned alpha) {
     if (!alpha) return;
     if (alpha==255) { put(p,color); return; }
     unsigned old=p[0]|((unsigned)p[1]<<8),inv=255-alpha;
+    /* Rounded component blend is an exact fixed point when both inks match. */
+    if (old==color) return;
     unsigned r=(((old>>11)*inv+(color>>11)*alpha+127)/255);
     unsigned g=((((old>>5)&63)*inv+((color>>5)&63)*alpha+127)/255);
     unsigned b=(((old&31)*inv+(color&31)*alpha+127)/255);
@@ -137,8 +163,54 @@ static void blend(uint8_t *p, uint16_t color, unsigned alpha) {
 }
 /* Reconstruct each glyph's coverage directly at its physical destination.
  * This operates on a glyph mask, never on a rendered application framebuffer. */
-static void native_alpha(canvas *c,const uint8_t *mask,unsigned w,unsigned h,
-        int left,int top,int sx,int sy,uint16_t color,unsigned opacity) {
+#include "native_alpha_coordinate.h"
+#ifdef WATCH_NATIVE_COVERAGE_CACHE
+#define COVERAGE_BYTES 65536u
+#define COVERAGE_SLOTS 128u
+typedef struct { const void *bank; uint32_t offset; unsigned w,h; int sx,sy,rx,ry,dx,dy; unsigned begin; bool valid; } coverage_entry;
+typedef struct { coverage_entry entries[COVERAGE_SLOTS]; uint8_t bytes[COVERAGE_BYTES]; unsigned used,count; } coverage_store;
+static coverage_store *coverage_cache;
+static bool coverage_attempted;
+#ifndef WATCH_COVERAGE_ALLOC
+#define WATCH_COVERAGE_ALLOC malloc
+#define WATCH_COVERAGE_FREE free
+#endif
+#define coverage_entries (coverage_cache->entries)
+#define coverage_bytes (coverage_cache->bytes)
+#define coverage_used (coverage_cache->used)
+#define coverage_count (coverage_cache->count)
+#ifdef WATCH_COVERAGE_TEST
+static unsigned coverage_hits,coverage_misses;
+static bool coverage_enabled=true;
+#define COVERAGE_COUNT(n) (coverage_##n++)
+#else
+#define COVERAGE_COUNT(n) ((void)0)
+#endif
+#endif
+#ifdef WATCH_NATIVE_STROKE_CACHE
+static void stroke_release(void);
+#endif
+/* Optional owned coverage, never a provider lease or composed RGB image. */
+void nova_watch_raster_cache_release(void) {
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+    damage_release();
+#endif
+#if defined(WATCH_NATIVE_COVERAGE_CACHE) || defined(WATCH_NATIVE_STROKE_CACHE)
+    native_reuse_reset();
+#endif
+#ifdef WATCH_NATIVE_STROKE_CACHE
+    stroke_release();
+#endif
+#ifdef WATCH_NATIVE_COVERAGE_CACHE
+    if(coverage_cache)WATCH_COVERAGE_FREE(coverage_cache);
+    coverage_cache=NULL;coverage_attempted=false;
+#endif
+}
+static inline __attribute__((always_inline)) void native_alpha_impl(canvas *c,const uint8_t *mask,unsigned w,unsigned h,
+        int left,int top,int sx,int sy,uint16_t color,unsigned opacity,const void *bank,uint32_t offset,bool use_cache,bool clipped) {
+#ifndef WATCH_NATIVE_COVERAGE_CACHE
+    (void)use_cache;
+#endif
     if(sx<=0 || sy<=0 || !w || !h)return;
     int x0=floor_q8(left),x1=floor_q8(left+(int)w*sx+255);
     int y0=floor_q8(top),y1=floor_q8(top+(int)h*sy+255);
@@ -146,11 +218,38 @@ static void native_alpha(canvas *c,const uint8_t *mask,unsigned w,unsigned h,
     if(y0<0)y0=0;
     if(x1>(int)c->width)x1=(int)c->width;
     if(y1>(int)c->height)y1=(int)c->height;
+#ifdef WATCH_NATIVE_COVERAGE_CACHE
+    bool coverage_allowed=use_cache;
+#ifdef WATCH_CONTEXTS_CLIENT
+    coverage_allowed=coverage_allowed&&!c->failed;
+#endif
+    if(coverage_allowed&&!coverage_attempted) {coverage_attempted=true;coverage_cache=WATCH_COVERAGE_ALLOC(sizeof(*coverage_cache));if(coverage_cache)memset(coverage_cache,0,sizeof(*coverage_cache));}
+    coverage_entry key={.bank=bank,.offset=offset,.w=w,.h=h,.sx=sx,.sy=sy,.rx=x0*256-left,.ry=y0*256-top,.dx=x1-x0,.dy=y1-y0};
+    coverage_entry *entry=NULL;bool hit=false;
+    unsigned area=(x1>x0&&y1>y0)?(unsigned)(x1-x0)*(unsigned)(y1-y0):0;
+    if(coverage_allowed&&coverage_cache&&area&&area<=COVERAGE_BYTES
+#ifdef WATCH_COVERAGE_TEST
+        &&coverage_enabled
+#endif
+    ) {
+        for(unsigned i=0;i<coverage_count;i++) {coverage_entry *e=&coverage_entries[i];
+            if(e->valid&&e->bank==bank&&e->offset==offset&&e->w==w&&e->h==h&&e->sx==sx&&e->sy==sy&&e->rx==key.rx&&e->ry==key.ry&&e->dx==key.dx&&e->dy==key.dy){entry=e;hit=true;break;}}
+        if(!entry) {if(coverage_count==COVERAGE_SLOTS||area>COVERAGE_BYTES-coverage_used){coverage_count=coverage_used=0;}
+            entry=&coverage_entries[coverage_count++];*entry=key;entry->begin=coverage_used;coverage_used+=area;COVERAGE_COUNT(misses);
+        }else COVERAGE_COUNT(hits);
+    }
+    if(hit){for(int y=y0;y<y1;y++)for(int x=x0;x<x1;x++){unsigned a=coverage_bytes[entry->begin+(unsigned)(y-y0)*(unsigned)(x1-x0)+(unsigned)(x-x0)]*opacity/255;if(a)blend(at_mode(c,(unsigned)x,(unsigned)y,clipped),color,a);}return;}
+#else
+    (void)bank;(void)offset;
+#endif
+    const native_alpha_axis first=native_alpha_axis_begin(((int64_t)x0*256+128-left)*256,sx);
+    native_alpha_axis vertical=native_alpha_axis_begin(((int64_t)y0*256+128-top)*256,sy);
     for(int y=y0;y<y1;y++) {
-        int v=(int)(((int64_t)y*256+128-top)*256/sy)-128;
+        native_alpha_axis axis=first;
+        int v=(int)native_alpha_axis_next(&vertical)-128;
         int iy=floor_q8(v);unsigned fy=(unsigned)(v-iy*256);
         for(int x=x0;x<x1;x++) {
-            int u=(int)(((int64_t)x*256+128-left)*256/sx)-128;
+            int u=(int)native_alpha_axis_next(&axis)-128;
             int ix=floor_q8(u);unsigned fx=(unsigned)(u-ix*256);
             unsigned a=0,b=0,d=0,e=0;
             if(iy>=0 && iy<(int)h) {
@@ -163,11 +262,39 @@ static void native_alpha(canvas *c,const uint8_t *mask,unsigned w,unsigned h,
             }
             unsigned hi=(a*(256-fx)+b*fx+128)>>8;
             unsigned lo=(d*(256-fx)+e*fx+128)>>8;
-            unsigned coverage=((hi*(256-fy)+lo*fy+128)>>8)*opacity/255;
-            if(coverage)blend(at(c,(unsigned)x,(unsigned)y),color,coverage);
+            unsigned base=(hi*(256-fy)+lo*fy+128)>>8;
+#ifdef WATCH_NATIVE_COVERAGE_CACHE
+            if(entry)coverage_bytes[entry->begin+(unsigned)(y-y0)*(unsigned)(x1-x0)+(unsigned)(x-x0)]=(uint8_t)base;
+#endif
+            unsigned coverage=base*opacity/255;
+            if(coverage)blend(at_mode(c,(unsigned)x,(unsigned)y,clipped),color,coverage);
         }
     }
+#ifdef WATCH_NATIVE_COVERAGE_CACHE
+    if(entry) {
+#ifdef WATCH_CONTEXTS_CLIENT
+        entry->valid=!c->failed;
+#else
+        entry->valid=true;
+#endif
+    }
+#endif
 }
+static inline __attribute__((always_inline)) void native_alpha_keyed_mode(canvas*c,const uint8_t*mask,unsigned w,unsigned h,int left,int top,int sx,int sy,uint16_t color,unsigned opacity,const void*bank,uint32_t offset,bool clipped) {
+#ifdef WATCH_NATIVE_COVERAGE_CACHE
+    if(
+#ifdef WATCH_COVERAGE_TEST
+       coverage_enabled&&
+#endif
+       native_reuse_allowed(c->width,c->height)){native_alpha_impl(c,mask,w,h,left,top,sx,sy,color,opacity,bank,offset,true,clipped);return;}
+#endif
+    native_alpha_impl(c,mask,w,h,left,top,sx,sy,color,opacity,bank,offset,false,clipped);
+}
+static void native_alpha_keyed(canvas*c,const uint8_t*mask,unsigned w,unsigned h,int left,int top,int sx,int sy,uint16_t color,unsigned opacity,const void*bank,uint32_t offset) {
+    native_alpha_keyed_mode(c,mask,w,h,left,top,sx,sy,color,opacity,bank,offset,false);
+}
+
+static void native_alpha(canvas*c,const uint8_t*mask,unsigned w,unsigned h,int left,int top,int sx,int sy,uint16_t color,unsigned opacity){native_alpha_keyed(c,mask,w,h,left,top,sx,sy,color,opacity,mask,0);}
 static const nova_glyph *glyph(const nova_glyph *set, unsigned count, char ch) {
     for (unsigned i=0;i<count;i++) if (set[i].character==(uint8_t)ch) return &set[i];
     return NULL;

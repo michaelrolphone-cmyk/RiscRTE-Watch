@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 static uint32_t width,height,stride;
+static risc_display_insets_v1 safe_insets;
 static uint16_t *pixels;
 static bool borrowed,reject_submit,bad_surface;
 static unsigned submits,releases;
@@ -12,7 +13,7 @@ static risc_touch_event_v1 event;
 static risc_touch_snapshot_v1 snapshot;
 static bool native_info(void *ctx,risc_display_info_v1 *out) {
     (void)ctx;*out=(risc_display_info_v1){.api_version=1,.struct_size=sizeof(*out),.width=width,.height=height,
-      .supported_formats=RISC_DISPLAY_FORMAT_BIT(RISC_DISPLAY_FORMAT_RGB565)};return true;
+      .supported_formats=RISC_DISPLAY_FORMAT_BIT(RISC_DISPLAY_FORMAT_RGB565),.safe_insets=safe_insets};return true;
 }
 static bool native_acquire(void *ctx,uint32_t format,risc_display_surface_v1 *out) {
     (void)ctx;assert(format==RISC_DISPLAY_FORMAT_RGB565);if(borrowed)return false;borrowed=true;
@@ -88,7 +89,49 @@ static void exercise(unsigned w,unsigned h) {
     assert(!borrowed&&releases==3&&!v.native);
     watch_viewport_close(&v);free(pixels);
 }
+static void exercise_safe_area(void) {
+    width=height=466;
+    /* A provider can conservatively advertise an inscribed rectangle without
+     * adding a device identity or a circle field to display.output v1. */
+    safe_insets=(risc_display_insets_v1){69,69,69,69};
+    watch_viewport v={0};assert(watch_viewport_open(&v,&native));
+    assert(v.width==466&&v.height==466&&v.layout.native);
+    assert(v.layout.safe.x==69&&v.layout.safe.y==69);
+    assert(v.layout.safe.width==328&&v.layout.safe.height==328);
+    watch_layout_stack stack;
+    assert(watch_layout_vertical(&v.layout,4,24,24,4,&stack));
+    const watch_layout_rect rects[]={stack.header,stack.content,stack.footer};
+    for(unsigned n=0;n<3;n++) {
+        assert(watch_layout_contains(&v.layout.safe,rects[n].x,rects[n].y));
+        assert(watch_layout_contains(&v.layout.safe,rects[n].x+rects[n].width-1,rects[n].y+rects[n].height-1));
+        for(unsigned corner=0;corner<4;corner++) {
+            int x=rects[n].x+((corner&1)?(int)rects[n].width-1:0);
+            int y=rects[n].y+((corner&2)?(int)rects[n].height-1:0);
+            int dx=2*x-465,dy=2*y-465;
+            assert(dx*dx+dy*dy<=466*466);
+        }
+    }
+    risc_display_info_v1 info={0};assert(v.display.get_info(v.display.context,&info));
+    assert(!memcmp(&info.safe_insets,&safe_insets,sizeof(safe_insets)));
+    /* Insets constrain content layout, not physical coordinates or gestures.
+     * Do not clamp edge touches into controls or crop the provider surface. */
+    uint16_t x=0,y=0;assert(watch_viewport_map(&v,&x,&y)&&x==0&&y==0);
+    x=465;y=465;assert(watch_viewport_map(&v,&x,&y)&&x==465&&y==465);
+    watch_viewport_close(&v);
+    width=410;height=502;safe_insets=(risc_display_insets_v1){11,13,17,19};
+    assert(watch_viewport_open(&v,&native));
+    assert(v.layout.safe.x==19&&v.layout.safe.y==11&&v.layout.safe.width==378&&v.layout.safe.height==474);
+    watch_viewport_close(&v);
+    safe_insets=(risc_display_insets_v1){0,205,0,205};
+    assert(!watch_viewport_open(&v,&native)&&!v.native);
+    safe_insets=(risc_display_insets_v1){251,0,251,0};
+    assert(!watch_viewport_open(&v,&native)&&!v.native);
+    safe_insets=(risc_display_insets_v1){UINT16_MAX,0,UINT16_MAX,0};
+    assert(!watch_viewport_open(&v,&native)&&!v.native);
+    safe_insets=(risc_display_insets_v1){0};
+}
 int main(void) {
+    exercise_safe_area();
     exercise(240,240);exercise(410,502);exercise(502,410);exercise(480,480);exercise(120,150);exercise(241,295);exercise(240,294);exercise(2048,2048);
     width=0;height=502;watch_viewport v={0};assert(!watch_viewport_open(&v,&native));
     width=3000;assert(!watch_viewport_open(&v,&native));

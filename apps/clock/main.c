@@ -1,4 +1,5 @@
 #include "RiscRuntimeV1.h"
+#include "RiscRuntimeClockV1.h"
 #include "render.h"
 
 static bool display_valid(const risc_display_output_api_v1 *d) {
@@ -37,8 +38,8 @@ __attribute__((visibility("default"))) void app_main(void) {
     uint32_t last_draw=0,present_started=0;
     risc_display_present_token_v1 token=0;
     for(;;) {
-        risc_runtime_health_v1 health={.struct_size=sizeof(health)};
-        if(!runtime->health(&health))break;
+        uint32_t now=0;
+        if(!risc_runtime_monotonic_ms_v1(runtime,&now))break;
         if(pending) {
             risc_display_present_status_v1 status={0};
             if(!display->present_status(display->context,token,&status) ||
@@ -49,13 +50,13 @@ __attribute__((visibility("default"))) void app_main(void) {
             if(status.state==RISC_DISPLAY_PRESENT_COMPLETE) {
                 pending=false;
                 if(!reported){runtime->diagnostic(last_valid?"WATCH_CLOCK ready time=rtc":"WATCH_CLOCK ready time=unset");reported=true;}
-            } else if((uint32_t)(health.uptime_ms-present_started)>10000) {
+            } else if((uint32_t)(now-present_started)>10000) {
                 /* Submit consumed the frame. No app buffer remains borrowed;
                  * runtime/provider quiescence owns any still-pending transfer. */
                 runtime->diagnostic("WATCH_CLOCK error=present-timeout");break;
             }
         }
-        if(!pending && (first || (uint32_t)(health.uptime_ms-last_draw)>=1000)) {
+        if(!pending && (first || (uint32_t)(now-last_draw)>=1000)) {
             twatch_rtc_time_v1 time={0};
             bool valid=rtc && rtc->read(rtc->context,&time) && tw_valid_time(&time);
             if(first || valid!=last_valid)reported=false;
@@ -65,7 +66,7 @@ __attribute__((visibility("default"))) void app_main(void) {
                 runtime->diagnostic("WATCH_CLOCK error=frame-acquire");break;
             }
             held=surface.frame;
-            if(!held || !watch_clock_render(&surface,&time,valid,health.uptime_ms/1000)) {
+            if(!held || !watch_clock_render(&surface,&time,valid,now/1000)) {
                 runtime->diagnostic("WATCH_CLOCK error=frame-layout");break;
             }
             const risc_display_present_options_v1 options={RISC_DISPLAY_PRESENT_DEFAULT,RISC_DISPLAY_QUEUE_FIFO,0};
@@ -73,7 +74,7 @@ __attribute__((visibility("default"))) void app_main(void) {
                 runtime->diagnostic("WATCH_CLOCK error=frame-submit");break;
             }
             held=0; /* successful submit consumes the lease */
-            pending=true;first=false;last_draw=health.uptime_ms;present_started=health.uptime_ms;
+            pending=true;first=false;last_draw=now;present_started=now;
         }
         /* Pending display work needs frequent provider polls; idle waits yield
          * in20ms slices. No direct calls to driver poll or raw CPU APIs. */

@@ -25,7 +25,7 @@ def git_commit(path):
 def fixture_files(directory, crash_report):
     source = (ROOT / 'tests/fast_wake_clock_test.c').read_text()
     replacements = {
-        'int main(void){': 'int inherited_fast_fixture_main(void){',
+        'int WATCH_FAST_WAKE_TEST_ENTRY(void){': 'int inherited_fast_fixture_main(void){',
         'const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version)':
             'const risc_runtime_api_v1*fixture_base_runtime_get_api(uint32_t version)',
     }
@@ -37,7 +37,7 @@ def fixture_files(directory, crash_report):
         'INVALID_RUNTIME': '!rt->health || !rt->yield_ms ||',
         'INITIAL_HEALTH': 'if(!alive(&clock_wake_started))',
         'DISPLAY_ACQUIRE': 'if (!have_d)',
-        'RENDER_FAILURE': 'if (!frame(&s) || !draw_clock(now,&s) || !present() || !pace_frame(now))',
+        'RENDER_FAILURE': 'if (!frame(&s) || !draw_clock(now,&s) || !present())',
         'NORMAL_END': 'while(alive) ended without an earlier reason',
         'RTC_CUSTODY': 'if(!watch_runtime_snapshot(&native_clock,&remaining)){clock_exit_checkpoint(__LINE__);goto done;}',
     }
@@ -69,6 +69,7 @@ def main():
     parser.add_argument('--atomic', action='store_true')
     parser.add_argument('--crash-report', action='store_true')
     parser.add_argument('--automatic-provision', action='store_true')
+    parser.add_argument('--native-damage-replay', action='store_true')
     args = parser.parse_args()
     assert (args.width is None) == (args.height is None), 'specify both width and height'
     dimensions = [(args.width, args.height)] if args.width else [(410, 502), (240, 240)]
@@ -125,6 +126,8 @@ def main():
                              '-DPORTABLE_WATCH_NATIVE_HEIGHT', '-DPORTABLE_RTC_UTC8_DENVER',
                              f'-DTEST_WIDTH={width}u', f'-DTEST_HEIGHT={height}u',
                              '-O1', '-g1', '-Wall', '-Wextra', '-Werror']
+                    if args.native_damage_replay:
+                        flags += ['-DWATCH_NATIVE_DAMAGE_REPLAY','-DWATCH_NATIVE_STROKE_CACHE','-DWATCH_NATIVE_COVERAGE_CACHE','-DWATCH_PICKER_COMPOSITOR_PLAN']
                     flags += ['-I' + str(path) for path in (out, sdk, ROOT / 'include', ROOT / 'tests', ROOT)]
                     if args.atomic:
                         flags += ['-DWATCH_ATOMIC_PREFERENCES', '-DPORTABLE_QUICK_ATOMIC_PREFERENCES',

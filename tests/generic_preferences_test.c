@@ -77,6 +77,9 @@ static void partial_group(void) {
  assert(quick_atomic_close());
 }
 int main(int argc,char **argv) {
+#ifdef PORTABLE_QUICK_SAFE_CONTENT
+ if(TEST_WIDTH==466&&TEST_HEIGHT==466)fixture_safe_insets=(risc_display_insets_v1){69,69,69,69};
+#endif
  assert(argc==3);preference_flags=(unsigned)strtoul(argv[1],NULL,10);
  assert(preference_flags==4||preference_flags==15);setup_case();
  const char *mode=argv[2];

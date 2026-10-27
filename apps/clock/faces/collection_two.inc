@@ -177,6 +177,7 @@ static void f2giant(canvas*c,const char*digits,int y) {
     }
 }
 static void fcollection_two(canvas*c,const nova_watch_state*state,const nova_watch_labels*l,unsigned id,int sec,int min,int hour,unsigned sub) {
+    WATCH_DAMAGE_BARRIER(c);
     if(id==0) {
         uint64_t ms=state->animation_ms;
         if(l->time_valid)ms=((uint64_t)f2days(&state->time)+10957u)*86400000u+(uint64_t)state->time.hour*3600000u+state->time.minute*60000u+state->time.second*1000u+sub;

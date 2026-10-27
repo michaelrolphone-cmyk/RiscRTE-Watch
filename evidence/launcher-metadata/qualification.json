@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "base_watch_commit": "401fcfd360825ec1cf4ad89e736093aa6ac4c5cc",
+  "runtime_probe_commit": "34716712d4cb7f25fda56a540aafc652c924c995",
+  "runtime_catalog_source_sha256": "5335d7ab5b48e40c6f73acdf822ed4f7a9996d7b175ad1e7f84e6e4a6f4df443",
+  "identical_catalog_source_in_product_runtime_commits": {
+    "waveshare_0.1.64": "b7803e6d32ce08fb4060730acc5443416b30148c",
+    "twatch_1.1.46": "48229bd1593a2e24e95bf4537b495ee615990fd3"
+  },
+  "candidates": {
+    "ordinary": {
+      "default_version": "0.19.4",
+      "artifacts": {
+        "default.elf": {
+          "bytes": 545180,
+          "sha256": "f715604f24b258865c1d8442dd29cbc4db2ed8a290c875ee9e9c4866e6d096c0",
+          "equals_base_build": true
+        },
+        "clock.elf": {
+          "bytes": 1236,
+          "sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+          "equals_base_build": true
+        }
+      },
+      "manifest_sha256": {
+        "default.json": "4559b06c1c1539f97a0be6692b1e8a86a40d3dfa38464f7fb302f75b7897155f",
+        "clock.json": "ee26c7ec19cb41daafa76e455c3bd24ca9a1ee6762fe5cf74cd2ddb321fc0bcd"
+      },
+      "build_receipt_sha256": "b4e1ea6b0879cc28320cf53cdbe4c3e6cf07f27072ee62aa2f6d917407b6ef1f",
+      "compiler": "xtensa-esp-elf-gcc (crosstool-NG esp-15.2.0_20251204) 15.2.0",
+      "compiler_sha256": "f556eb8b42ff8c0bb748243afa391a216b3482b7d3724e5c2aa6870952b76b74",
+      "dependency_lock": {
+        "schema": 1,
+        "extraction": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-T-Watch-S3",
+          "commit": "851b8998e804c57b2c9f42d9f8fd0a69e79f2b41"
+        },
+        "system": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+          "commit": "bb0cadf3cec3445a64e11513b47b2676f3fdd92d"
+        },
+        "utilities": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
+          "commit": "4fdcad2495c33fe63f5f6faca9b11ced3c739a5b"
+        },
+        "generic_power_providers": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-Drivers",
+          "commit": "422e1e81a498fb6bdab9abf086325afc05a532dc",
+          "version": "0.1.0"
+        },
+        "compiler": "xtensa-esp32s3-elf-gcc 15.2.0 esp-15.2.0_20251204"
+      }
+    },
+    "provisioned": {
+      "default_version": "0.20.5",
+      "artifacts": {
+        "default.elf": {
+          "bytes": 556020,
+          "sha256": "01d6e1f845dc34e46ebad9f1646af0c0dafdd98915493557c60f8351cbc299e7",
+          "equals_base_build": true
+        },
+        "clock.elf": {
+          "bytes": 1236,
+          "sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+          "equals_base_build": true
+        }
+      },
+      "manifest_sha256": {
+        "default.json": "99e172232947fbeefe754ab929511263262173f80364f360825ac5754324dbd7",
+        "clock.json": "ee26c7ec19cb41daafa76e455c3bd24ca9a1ee6762fe5cf74cd2ddb321fc0bcd"
+      },
+      "build_receipt_sha256": "97c396d7c358f984a31e31e9daa4938c2f84d1f4ea6f35eaa9567035e969f165",
+      "compiler": "xtensa-esp-elf-gcc (crosstool-NG esp-15.2.0_20251204) 15.2.0",
+      "compiler_sha256": "f556eb8b42ff8c0bb748243afa391a216b3482b7d3724e5c2aa6870952b76b74",
+      "dependency_lock": {
+        "schema": 1,
+        "extraction": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-T-Watch-S3",
+          "commit": "851b8998e804c57b2c9f42d9f8fd0a69e79f2b41"
+        },
+        "system": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+          "commit": "bb0cadf3cec3445a64e11513b47b2676f3fdd92d"
+        },
+        "utilities": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
+          "commit": "4fdcad2495c33fe63f5f6faca9b11ced3c739a5b"
+        },
+        "generic_power_providers": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-Drivers",
+          "commit": "422e1e81a498fb6bdab9abf086325afc05a532dc",
+          "version": "0.1.0"
+        },
+        "compiler": "xtensa-esp32s3-elf-gcc 15.2.0 esp-15.2.0_20251204"
+      }
+    },
+    "transfer": {
+      "default_version": "0.20.6",
+      "artifacts": {
+        "default.elf": {
+          "bytes": 556020,
+          "sha256": "4ab8aaa0293053e5c743f057270d110fb68e43c5b0071b04691e35ebcfed1fa7",
+          "equals_base_build": true
+        },
+        "clock.elf": {
+          "bytes": 1236,
+          "sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+          "equals_base_build": true
+        }
+      },
+      "manifest_sha256": {
+        "default.json": "6d880ccee5789d577f4d2336295cf19c6c6703a38570c71db58e72752bdf6119",
+        "clock.json": "ee26c7ec19cb41daafa76e455c3bd24ca9a1ee6762fe5cf74cd2ddb321fc0bcd"
+      },
+      "build_receipt_sha256": "b51c95b2bfb7f2f382a8bbc0fe0ac0525cf54d62a64085054a3ffac1152e043e",
+      "compiler": "xtensa-esp-elf-gcc (crosstool-NG esp-15.2.0_20251204) 15.2.0",
+      "compiler_sha256": "f556eb8b42ff8c0bb748243afa391a216b3482b7d3724e5c2aa6870952b76b74",
+      "dependency_lock": {
+        "schema": 1,
+        "extraction": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-T-Watch-S3",
+          "commit": "851b8998e804c57b2c9f42d9f8fd0a69e79f2b41"
+        },
+        "system": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+          "commit": "bb0cadf3cec3445a64e11513b47b2676f3fdd92d"
+        },
+        "utilities": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
+          "commit": "4fdcad2495c33fe63f5f6faca9b11ced3c739a5b"
+        },
+        "generic_power_providers": {
+          "repository": "michaelrolphone-cmyk/RiscRTE-Drivers",
+          "commit": "422e1e81a498fb6bdab9abf086325afc05a532dc",
+          "version": "0.1.0"
+        },
+        "compiler": "xtensa-esp32s3-elf-gcc 15.2.0 esp-15.2.0_20251204"
+      }
+    }
+  },
+  "products": {
+    "wave064": {
+      "source_store_sha256": "0d6a414a15ad34c92cc3d5a511b601fa2cbc1e1c7ba6b1b29e9c18b8ec596f93",
+      "default_sha256": "a04474687d09a2efb3c441958cadb1ce1b4cb27bcd91279fa9398091f5b1dd14",
+      "clock_sha256": "03b4da54072f12b743e406beaa47bb1ae83df9e684d1bd645e8b1cf7538dc1ea",
+      "clock_visibility_preserved": false,
+      "before_visible": 24,
+      "after_visible": 23,
+      "removed_ids": [
+        "twatch-clock"
+      ],
+      "clock_identity": "twatch-clock-return",
+      "all_other_visible_ids_unchanged": true,
+      "unrelated_payload_bytes_unchanged": true
+    },
+    "twatch146": {
+      "source_store_sha256": "e50d26000dc0366be61abbf480cd39ee98323ea5ef489536baf0cf7c4097b126",
+      "default_sha256": "12762dbb1e07c3d00015b5d0a780dad723fb2d1a4daa38cad04c044c148193b9",
+      "clock_sha256": "33e03ec855ebede1dee15d789b19333281843e781a7c4efe526e1030ceb588ed",
+      "clock_visibility_preserved": true,
+      "before_visible": 24,
+      "after_visible": 23,
+      "removed_ids": [
+        "twatch-clock"
+      ],
+      "clock_identity": "twatch-clock-return",
+      "all_other_visible_ids_unchanged": true,
+      "unrelated_payload_bytes_unchanged": true
+    }
+  },
+  "tests": {
+    "focused_contracts": "29 passed: 2 build-input, 23 composition, 4 metadata contract",
+    "full_python_discovery": "36 passed, 1 pre-existing assertion-message failure",
+    "exact_base_discovery": "28 passed, same 1 assertion-message failure",
+    "actual_runtime_catalog": "ordinary/provisioning/transfer plus both staged product inventories, ASan+UBSan",
+    "production_return_lifecycle": "passed, ASan+UBSan",
+    "generic_capabilities": "passed, ASan+UBSan",
+    "viewport": "passed, ASan+UBSan",
+    "capability_boundaries": "passed",
+    "target_builds": "all three final and base modes passed production ELF validation"
+  },
+  "limits": {
+    "hardware_tested": false,
+    "target_instructions_executed": false,
+    "native_policy_admission_tested_by_catalog_probe": false,
+    "sealed_product_candidate_created": false,
+    "ci_executed": false,
+    "leak_sanitizer": "Initial environment/ptrace fatal errors retained; local ASan/UBSan reruns use detect_leaks=0",
+    "initial_leak_sanitizer_error": "==56==LeakSanitizer has encountered a fatal error.\n==56==HINT: For debugging, try setting environment variable LSAN_OPTIONS=verbosity=1:log_threads=1\n==56==HINT: LeakSanitizer does not work under ptrace (strace, gdb, etc)"
+  },
+  "changes_excluded": [
+    "released stores/assets",
+    "product pins",
+    "Runtime sources",
+    "held Runtime PRs",
+    "native product fixture",
+    "serial behavior"
+  ],
+  "sources": [
+    "https://github.com/michaelrolphone-cmyk/RiscRTE-Wavshare-S3-Touch-AMOLED-2.06/releases/tag/test-sd-apps-0.1.64",
+    "https://github.com/michaelrolphone-cmyk/RiscRTE-T-Watch-S3/releases/tag/test-provisioning-1.1.46",
+    "https://github.com/michaelrolphone-cmyk/RiscRTE/blob/34716712d4cb7f25fda56a540aafc652c924c995/src/bootstrap/AppCatalogRuntime.inc"
+  ],
+  "qualified_at_utc": "2026-10-20T06:38:00Z"
+}

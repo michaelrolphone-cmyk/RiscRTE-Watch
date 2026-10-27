@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "purpose": "explicit-native-quick-safe-content-copied-preferences-home",
+  "system": "50684639efd155042d599ba8edc10c3268aac82d",
+  "utilities": "7dd868591e1bdffb1d36fd6ff79be0b829aad952",
+  "runtime_interface": "273bdbccf65647a803ab0586a418f8283732baec",
+  "alarm_api": 2,
+  "ticket_epoch": "UTC seconds since 2000-01-01",
+  "no_schedule": "preserve selected sleep policy: Hybrid timed Light then GPIO Deep; explicit Light/Deep untimed GPIO",
+  "physical_verified": false,
+  "clock_edit_authority": true,
+  "editor_callbacks": "Shared Settings and Wi-Fi UTC commit; Home retains regular schedule duties",
+  "clock_edit_sdk_anchor": "bbafc2c3aebe8c3b9805639f873341e31296c8fb",
+  "native_quick_actions": true,
+  "preferences": "copied synchronous facade; product broker and namespace1 grant required",
+  "pending_feedback": "Completed SAVE NOT CONFIRMED frame before user persistence/radio mutation; retained unknown never repaints and may have persisted",
+  "shared_clock_helper": "37fca3e2244bf71ac64bd8cd7e62eb94f4c09a9d"
+}

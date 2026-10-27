@@ -62,6 +62,7 @@ static uint16_t fc_dim(uint16_t color,unsigned a) {
 }
 /* Q4 rounded rectangle, clipped before coverage evaluation. */
 static void fc_round_rect(canvas*c,int x,int y,int w,int h,int r,uint16_t color) {
+    WATCH_DAMAGE_BARRIER(c);
     x=native_q(c,x);y=native_q(c,y);w=native_q(c,w);h=native_q(c,h);r=native_q(c,r);
     if(w<=0||h<=0)return;
     if(r>w/2)r=w/2;
@@ -113,6 +114,7 @@ static void fc_fade(canvas*c) {
     }
 }
 static void fcalendar_collection(canvas*c,const nova_watch_state*state,const nova_watch_labels*l,unsigned id,int sec,int min,int hour,unsigned sub) {
+    WATCH_DAMAGE_BARRIER(c);
     (void)sec;(void)min;(void)hour;
     bool valid=l->time_valid;const twatch_rtc_time_v1*t=&state->time;
     unsigned year=valid?t->year:2000,month=valid?t->month:1,day=valid?t->day:1;

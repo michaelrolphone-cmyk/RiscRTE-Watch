@@ -42,7 +42,7 @@ static const face_glyph *fglyph(const face_font *font,char ch) {
 #ifdef WATCH_FACE_TEXT_TEST
 static void face_text_test(const face_font*,const char*,int,int,int,int,const uint8_t*);
 #endif
-static void ftext_alpha(canvas *c,const face_font *font,const char *s,int cx,int y,int spacing,int fit,uint16_t color,uint16_t colon,const uint8_t*alpha) {
+static inline __attribute__((always_inline)) void ftext_alpha_draw(canvas *c,const face_font *font,const char *s,int cx,int y,int spacing,int fit,uint16_t color,uint16_t colon,const uint8_t*alpha,bool clipped) {
 #ifdef WATCH_COMPACT_NOVA_ASSETS
     if(!prepare_compact_assets())return;
 #endif
@@ -73,9 +73,9 @@ static void ftext_alpha(canvas *c,const face_font *font,const char *s,int cx,int
 #endif
         glyph_alpha=alpha+g->data;
         if(c->width!=240u) {
-            native_alpha(c,glyph_alpha,g->width,g->height,native_q(c,pen+g->left*scale),
+            native_alpha_keyed_mode(c,glyph_alpha,g->width,g->height,native_q(c,pen+g->left*scale),
                 native_q(c,(y+g->top)*256),native_q(c,scale),native_q(c,256),
-                *s==':'&&colon?colon:color,255);
+                *s==':'&&colon?colon:color,255,alpha,g->data,clipped);
             pen+=(g->advance+spacing)*scale/256;continue;
         }
         int left=pen+g->left*scale,first=left>=0?left/256:(left-255)/256,last=(left+g->width*scale+255)/256;
@@ -86,29 +86,59 @@ static void ftext_alpha(canvas *c,const face_font *font,const char *s,int cx,int
                 int dy=y+g->top+(int)gy;if(dy<0||dy>=(int)CANVAS_HEIGHT(c))continue;
                 const uint8_t*row=glyph_alpha+gy*g->width;
                 unsigned a=sx>=0&&sx<g->width?row[sx]:0,b=sx+1>=0&&sx+1<g->width?row[sx+1]:0;
-                blend(at(c,(unsigned)dx,(unsigned)dy),*s==':'&&colon?colon:color,(a*(256-frac)+b*frac+128)>>8);
+                blend(at_mode(c,(unsigned)dx,(unsigned)dy,clipped),*s==':'&&colon?colon:color,(a*(256-frac)+b*frac+128)>>8);
             }
         }
         pen+=(g->advance+spacing)*scale/256;
     }
 }
+static void ftext_alpha(canvas *c,const face_font *font,const char *s,int cx,int y,int spacing,int fit,uint16_t color,uint16_t colon,const uint8_t*alpha) {
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+    intptr_t key[8]={cx,y,spacing,fit,color,colon,(intptr_t)font,(intptr_t)alpha};if(damage_record(c,4,key,s))return;
+#endif
+    ftext_alpha_draw(c,font,s,cx,y,spacing,fit,color,colon,alpha,false);
+}
+
 static void ftext(canvas*c,const face_font*font,const char*s,int cx,int y,int spacing,int fit,uint16_t color,uint16_t colon) {
     ftext_alpha(c,font,s,cx,y,spacing,fit,color,colon,face_alpha);
 }
-static void frect(canvas*c,int x,int y,int w,int h,uint16_t color) {
+static inline __attribute__((always_inline)) void frect_draw(canvas*c,int x,int y,int w,int h,uint16_t color,bool clipped) {
     int right=native_q(c,x+w),bottom=native_q(c,y+h);
     x=native_q(c,x);y=native_q(c,y);
     if(x<0)x=0;
     if(y<0)y=0;
     if(right>(int)c->width)right=(int)c->width;
     if(bottom>(int)c->height)bottom=(int)c->height;
-    for(int j=y;j<bottom;j++)for(int i=x;i<right;i++)put(at(c,i,j),color);
+    for(int j=y;j<bottom;j++)for(int i=x;i<right;i++)put(at_mode(c,i,j,clipped),color);
+}
+static void frect(canvas*c,int x,int y,int w,int h,uint16_t color) {
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+    intptr_t key[8]={x,y,w,h,color};if(damage_record(c,3,key,NULL))return;
+#endif
+    frect_draw(c,x,y,w,h,color,false);
+}
+
+static void fmeridiem(canvas *c,const char *label) {
+        /* Shared circular-face footer, in width-scaled design coordinates.
+         * A corner is outside the aperture even though the native lease is
+         * rectangular. Keep the complete label plus its quiet background
+         * inside the inscribed circle at every native size; no board/size
+         * identity or completed-frame resampling is introduced. */
+        frect(c,108,219,24,14,0);
+        ftext(c,&ff_r9,label,120,229,128,0,FMUTED,0);
 }
 /* Q4 round strokes, with four coverage samples per destination pixel. */
 #ifdef WATCH_FACE_RENDER_TEST
 static unsigned face_test_calls,face_test_line_pixels;static uint64_t face_test_mask;
 #endif
-static void fline(canvas*c,int x1,int y1,int x2,int y2,int width,uint16_t color) {
+#include "annulus_spans.h"
+#ifdef WATCH_NATIVE_STROKE_CACHE
+#include "../nova/native_stroke_cache.h"
+#endif
+static inline __attribute__((always_inline)) void fline_impl(canvas*c,int x1,int y1,int x2,int y2,int width,uint16_t color,bool use_cache,bool clipped) {
+#ifndef WATCH_NATIVE_STROKE_CACHE
+    (void)use_cache;
+#endif
     x1=native_q(c,x1);y1=native_q(c,y1);x2=native_q(c,x2);y2=native_q(c,y2);width=native_q(c,width);
     int dx=x2-x1,dy=y2-y1,r=width/2;int64_t len=(int64_t)dx*dx+(int64_t)dy*dy;
     int minx=((x1<x2?x1:x2)-r-16)/16,maxx=((x1>x2?x1:x2)+r+16)/16;
@@ -117,6 +147,32 @@ static void fline(canvas*c,int x1,int y1,int x2,int y2,int width,uint16_t color)
     if(miny<0)miny=0;
     if(maxx>=(int)c->width)maxx=(int)c->width-1;
     if(maxy>=(int)CANVAS_HEIGHT(c))maxy=(int)CANVAS_HEIGHT(c)-1;
+#ifdef WATCH_NATIVE_STROKE_CACHE
+    stroke_key key={x1-minx*16,y1-miny*16,dx,dy,r,maxx-minx+1,maxy-miny+1};bool stroke_hit=false;unsigned stroke_slot=0;
+    stroke_entry *stroke=NULL;
+#ifdef WATCH_CONTEXTS_CLIENT
+    if(!c->failed)
+#endif
+        if(use_cache)stroke=stroke_begin(&key,&stroke_hit,&stroke_slot);
+    if(stroke_hit){for(int y=miny;y<=maxy;y++)for(int x=minx;x<=maxx;x++){unsigned a=stroke_get(stroke,(unsigned)(x-minx),(unsigned)(y-miny));if(a)blend(at_mode(c,x,y,clipped),color,a*255/4);}return;}
+#endif
+    /* Triangle-inequality bound covers all four samples and the row's final
+     * recurrence step. Keep the exact wide path for larger/clipped geometry.
+     * extent+delta <= floor(sqrt(INT32_MAX)) additionally bounds both
+     * endpoint squared sums. Separate comparisons avoid bound overflow.
+     * Radius bound also makes the newly eager r*r*len evaluation safe. */
+    int64_t ax=(int64_t)minx*16+4-x1,bx=(int64_t)(maxx+1)*16+12-x1;
+    int64_t ay=(int64_t)miny*16+4-y1,by=(int64_t)maxy*16+12-y1;
+    if(ax<0)ax=-ax;
+    if(bx<0)bx=-bx;
+    if(ay<0)ay=-ay;
+    if(by<0)by=-by;
+    int64_t extent=(ax>bx?ax:bx)+(ay>by?ay:by);
+    int64_t delta=(dx<0?-(int64_t)dx:dx)+(dy<0?-(int64_t)dy:dy);
+    bool narrow=r>=-46340 && r<=46340 && len<=INT32_MAX &&
+        extent<=46340 && delta<=46340-extent;
+    uint64_t cross_limit=narrow?watch_circle_root((uint64_t)((int64_t)r*r*len)):0;
+    int32_t limit32=cross_limit>INT32_MAX?INT32_MAX:(int32_t)cross_limit;
     /* Every covered sample lies within r of a point on the segment. Limit
      * each row to the segment's x range for that row's y +/- r, then expand
      * by r. The extra Q4 unit/pixel makes truncating division conservative.
@@ -136,6 +192,31 @@ static void fline(canvas*c,int x1,int y1,int x2,int y2,int width,uint16_t color)
             if(left>first)first=left;
             if(right<last)last=right;
         }
+        if(first>last)continue;
+        if(narrow) {
+            const int32_t len32=(int32_t)len;
+            int32_t dot0=(first*16+4-x1)*dx+(y*16+4-y1)*dy;
+            int32_t cross0=(first*16+4-x1)*dy-(y*16+4-y1)*dx;
+            for(int x=first;x<=last;x++,dot0+=16*dx,cross0+=16*dy) {
+#ifdef WATCH_FACE_RENDER_TEST
+                face_test_line_pixels++;
+#endif
+                unsigned a=0;
+                for(int sy=0;sy<2;sy++) {
+                    int xx=x*16+4-x1,yy=y*16+4+sy*8-y1;
+                    int32_t dot=dot0+sy*8*dy,cross=cross0-sy*8*dx;
+                    for(int sx=0;sx<2;sx++,xx+=8,dot+=8*dx,cross+=8*dy) {
+                        if(!len32||dot<=0)a+=xx*xx+yy*yy<=r*r;
+                        else if(dot>=len32){int ex=xx-dx,ey=yy-dy;a+=ex*ex+ey*ey<=r*r;}
+                        else a+=cross>=-limit32&&cross<=limit32;
+                    }
+                }
+                #ifdef WATCH_NATIVE_STROKE_CACHE
+                if(stroke)stroke_put(stroke,(unsigned)(x-minx),(unsigned)(y-miny),a);
+#endif
+                if(a)blend(at_mode(c,x,y,clipped),color,a*255/4);
+            }
+        } else {
         for(int x=first;x<=last;x++) {
 #ifdef WATCH_FACE_RENDER_TEST
         face_test_line_pixels++;
@@ -147,23 +228,68 @@ static void fline(canvas*c,int x1,int y1,int x2,int y2,int width,uint16_t color)
             else if(dot>=len){xx-=dx;yy-=dy;a+=xx*xx+yy*yy<=r*r;}
             else{int64_t cross=(int64_t)xx*dy-(int64_t)yy*dx;a+=cross*cross<=(int64_t)r*r*len;}
         }
-        if(a)blend(at(c,x,y),color,a*255/4);
+        #ifdef WATCH_NATIVE_STROKE_CACHE
+                if(stroke)stroke_put(stroke,(unsigned)(x-minx),(unsigned)(y-miny),a);
+#endif
+                if(a)blend(at_mode(c,x,y,clipped),color,a*255/4);
+        }
         }
     }
+#ifdef WATCH_NATIVE_STROKE_CACHE
+    if(stroke
+#ifdef WATCH_CONTEXTS_CLIENT
+       &&!c->failed
+#endif
+    )stroke_cache->hash[stroke_slot]=(uint16_t)(stroke-stroke_cache->entries+1);
+#endif
 }
-static void fcirc(canvas*c,int cx,int cy,int radius,int width,uint16_t color) {
+static inline __attribute__((always_inline)) void fline_draw(canvas*c,int x1,int y1,int x2,int y2,int width,uint16_t color,bool clipped) {
+#ifdef WATCH_NATIVE_STROKE_CACHE
+    /* Constant specializations remove all per-pixel cache branches when
+     * changing geometry bypasses reuse; one source preserves raster parity. */
+    if(
+#ifdef WATCH_STROKE_TEST
+       stroke_enabled&&
+#endif
+       native_reuse_allowed(c->width,c->height)){fline_impl(c,x1,y1,x2,y2,width,color,true,clipped);return;}
+#endif
+    fline_impl(c,x1,y1,x2,y2,width,color,false,clipped);
+}
+static void fline(canvas*c,int x1,int y1,int x2,int y2,int width,uint16_t color) {
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+    intptr_t key[8]={x1,y1,x2,y2,width,color};if(damage_record(c,1,key,NULL))return;
+#endif
+    fline_draw(c,x1,y1,x2,y2,width,color,false);
+}
+
+static inline __attribute__((always_inline)) void fcirc_draw(canvas*c,int cx,int cy,int radius,int width,uint16_t color,bool clipped) {
     cx=native_q(c,cx);cy=native_q(c,cy);radius=native_q(c,radius);width=native_q(c,width);
     int outer=radius+width/2,inner=radius-width/2;
     if(!width){outer=radius;inner=0;}
-    for(int y=(cy-outer-16)/16;y<=(cy+outer+16)/16;y++)if(y>=0&&y<(int)CANVAS_HEIGHT(c))
-    for(int x=(cx-outer-16)/16;x<=(cx+outer+16)/16;x++)if(x>=0&&x<(int)c->width) {
+    int minx=(cx-outer-16)/16,maxx=(cx+outer+16)/16;
+    if(minx<0)minx=0;
+    if(maxx>=(int)c->width)maxx=(int)c->width-1;
+    for(int y=(cy-outer-16)/16;y<=(cy+outer+16)/16;y++)if(y>=0&&y<(int)CANVAS_HEIGHT(c)) {
+    int first[2]={minx,0},last[2]={maxx,0};
+    /* With no rejected inner disk, keep the original short filled-circle
+     * path rather than pay a root for a small outer-corner reduction. */
+    unsigned spans=inner>12?watch_circle_spans(cx,cy,outer,inner,y,minx,maxx,first,last):1u;
+    for(unsigned span=0;span<spans;span++)for(int x=first[span];x<=last[span];x++) {
         int tx=x*16+8-cx,ty=y*16+8-cy,dist=tx*tx+ty*ty;
         if(dist>(outer+12)*(outer+12)||(inner>12&&dist<(inner-12)*(inner-12)))continue;
         unsigned a=0;
         for(int sy=4;sy<16;sy+=8)for(int sx=4;sx<16;sx+=8){int dx=x*16+sx-cx,dy=y*16+sy-cy,d=dx*dx+dy*dy;a+=d<=outer*outer&&d>=inner*inner;}
-        if(a)blend(at(c,x,y),color,a*255/4);
+        if(a)blend(at_mode(c,x,y,clipped),color,a*255/4);
+    }
     }
 }
+static void fcirc(canvas*c,int cx,int cy,int radius,int width,uint16_t color) {
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+    intptr_t key[8]={cx,cy,radius,width,color};if(damage_record(c,2,key,NULL))return;
+#endif
+    fcirc_draw(c,cx,cy,radius,width,color,false);
+}
+
 static void fpoint(int angle,int radius,int cx,int cy,int*x,int*y) {
     while(angle<0)angle+=360*256;
     *x=cx*16+sine((unsigned)angle)*radius*16/32767;
@@ -225,8 +351,17 @@ static void fcontexts(canvas *c,const nova_watch_state *state,const nova_watch_l
     ftext(c,&ff_r10,labels->battery,120,220,0,0,labels->battery_valid?FGREEN:FMUTED,0);
 }
 #endif
-bool nova_watch_face_render(risc_display_surface_v1*s,const nova_watch_state*state,unsigned id) {
-    if(s && s->height!=s->width)return home_face_render(s,state,id,nova_watch_face_render);
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+#define WATCH_FACE_RENDER_BODY face_render_full
+static bool face_render_full(risc_display_surface_v1*,const nova_watch_state*,unsigned);
+#else
+#define WATCH_FACE_RENDER_BODY nova_watch_face_render
+#endif
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+static
+#endif
+bool WATCH_FACE_RENDER_BODY(risc_display_surface_v1*s,const nova_watch_state*state,unsigned id) {
+    if(s && s->height!=s->width)return home_face_render(s,state,id,WATCH_FACE_RENDER_BODY);
     if(!face_surface_valid(s))return false;
 #ifdef WATCH_FACE_RENDER_TEST
     face_test_calls++;
@@ -306,12 +441,27 @@ bool nova_watch_face_render(risc_display_surface_v1*s,const nova_watch_state*sta
         for(unsigned i=0;i<8;i++)if(hms[i]!=':'){for(unsigned j=0;j<4;j++)fcirc(&c,xs[k]*16,(76+(int)j*26)*16,128,0,l.time_valid&&((hms[i]-'0')>>(3-j)&1)?FAMBER:FC(36,26,5));k++;}
         ftext(&c,&ff_o10,"B C D",120,50,1536,0,FAMBER,0);ftext(&c,&ff_o9,"HH",62,178,0,0,FMUTED,0);ftext(&c,&ff_o9,"MM",122,178,0,0,FMUTED,0);ftext(&c,&ff_o9,"SS",182,178,0,0,FMUTED,0);ftext(&c,&ff_o14,hms,120,198,0,0,FWHITE,0);char bat[10]="BAT ";unsigned i=0;while(l.battery[i]){bat[4+i]=l.battery[i];i++;}bat[4+i]=0;ftext(&c,&ff_o9,bat,120,216,512,0,FGREEN,0);
     }
-    if(id<24&&l.time_valid&&!state->hour_24)ftext(&c,&ff_r9,l.meridiem,217,233,128,0,FMUTED,0);
+    if(id<24&&l.time_valid&&!state->hour_24) {
+        fmeridiem(&c,l.meridiem);
+    }
     return CANVAS_OK(c);
 }
+#ifdef WATCH_NATIVE_DAMAGE_REPLAY
+#include "damage_replay.inc"
+#endif
 /* Rendered previews are the exact same production face function. Scratch is
  * app-owned, allocated only while browsing, and never a provider frame lease.
  * Three full-resolution slots preserve sampling at every card scale. */
+#ifdef WATCH_PICKER_COST_TEST
+static clock_t picker_face_ticks,picker_composite_ticks;
+#endif
+#include "picker_compositor.h"
+#ifdef WATCH_PICKER_COMPOSITOR_PLAN
+#ifndef WATCH_PICKER_PLAN_ALLOC
+#define WATCH_PICKER_PLAN_ALLOC malloc
+#define WATCH_PICKER_PLAN_FREE free
+#endif
+#endif
 nova_watch_picker_cache *nova_watch_picker_cache_create(unsigned width,unsigned height) {
     if(!width||!height||width>WATCH_LAYOUT_MAX_SIDE||height>WATCH_LAYOUT_MAX_SIDE)return NULL;
     unsigned side=width<height?width:height,capacity=(side*143u+239u)/240u;
@@ -320,10 +470,19 @@ nova_watch_picker_cache *nova_watch_picker_cache_create(unsigned width,unsigned 
     if(slots>WATCH_FACE_COUNT)slots=WATCH_FACE_COUNT;
     size_t bytes=sizeof(nova_watch_picker_cache)+slots*capacity*capacity*sizeof(uint16_t);
     nova_watch_picker_cache *cache=malloc(bytes);
-    if(cache){memset(cache,0,sizeof(*cache));cache->capacity=(uint16_t)capacity;cache->slots=(uint8_t)slots;}
+    if(cache){memset(cache,0,sizeof(*cache));cache->capacity=(uint16_t)capacity;cache->slots=(uint8_t)slots;
+#ifdef WATCH_PICKER_COMPOSITOR_PLAN
+        cache->composition_columns=WATCH_PICKER_PLAN_ALLOC(capacity*sizeof(uint32_t));
+#endif
+    }
     return cache;
 }
-void nova_watch_picker_cache_destroy(nova_watch_picker_cache *cache) { free(cache); }
+void nova_watch_picker_cache_destroy(nova_watch_picker_cache *cache) {
+#ifdef WATCH_PICKER_COMPOSITOR_PLAN
+    if(cache&&cache->composition_columns)WATCH_PICKER_PLAN_FREE(cache->composition_columns);
+#endif
+    free(cache);
+}
 static int picker_pitch(unsigned side) { int pitch=(int)(side*108u/240u);return (pitch?pitch:1)*256; }
 static canvas home_ui_canvas(canvas c) {
     unsigned side=c.width<c.height?c.width:c.height;
@@ -406,21 +565,30 @@ static bool picker_layers_render(risc_display_surface_v1*s,const nova_watch_stat
         uint16_t*scratch=cache->pixels+slot*cache->capacity*cache->capacity;
         if(!cached||id==live_face||cache->sizes[slot]!=render_size) {
             risc_display_surface_v1 tmp={0,scratch,render_size,render_size,render_size*2,render_size*render_size*2,5};
-            if(!nova_watch_face_render(&tmp,state,id))return false;
+#ifdef WATCH_PICKER_COST_TEST
+            clock_t face_started=clock();
+#endif
+            /* Preview composition owns its existing exact-size scratch cache; do not
+             * populate the full-face completed-image owner from changing cards. */
+            if(!WATCH_FACE_RENDER_BODY(&tmp,state,id))return false;
+#ifdef WATCH_PICKER_COST_TEST
+            picker_face_ticks+=clock()-face_started;
+#endif
             cache->face_ids[slot]=(uint8_t)id;cache->sizes[slot]=(uint16_t)render_size;cache->valid_mask|=(UINT64_C(1)<<slot);
         }
         int radius=(int)((int64_t)14*side*scale/(240*256)),border=(int)((int64_t)(id==selected?2:1)*side*scale/(240*256));if(border<1)border=1;
         unsigned opacity=255-(unsigned)(abs<pitch?abs:pitch)*128/(unsigned)pitch;
-        for(int y=0;y<size;y++)for(int x=0;x<size;x++)if(x+x0>=0&&x+x0<(int)s->width&&y+y0>=0&&y+y0<(int)s->height){
-            int edge=x<radius?radius-x:x>=size-radius?x-(size-radius-1):0,ey=y<radius?radius-y:y>=size-radius?y-(size-radius-1):0;
-            if(edge&&ey&&edge*edge+ey*ey>radius*radius)continue;
-            uint16_t col=scratch[legacy?(y*240/size)*240+x*240/size:y*size+x];
-            unsigned fade=s->width*46u/240u;if(!fade)fade=1;
-            int xx=x+x0;unsigned mask=(unsigned)xx<fade?(unsigned)xx*255/fade:
-                xx>(int)(s->width-fade)?(s->width-1u-(unsigned)xx)*255/(fade>1?fade-1:1):255;
-            blend(at(&c,x+x0,y+y0),col,opacity*mask/255);
-            if(x<border||x>=size-border||y<border||y>=size-border||(edge&&ey&&edge*edge+ey*ey>=(radius-border)*(radius-border)))blend(at(&c,x+x0,y+y0),id==selected?FCYAN:FC(34,48,52),opacity*mask/255);
-        }
+#ifdef WATCH_PICKER_COST_TEST
+        clock_t composite_started=clock();
+#endif
+#ifdef WATCH_PICKER_COMPOSITOR_PLAN
+        picker_composite_planned(&c,scratch,size,x0,y0,radius,border,opacity,id==selected?FCYAN:FC(34,48,52),legacy,cache->composition_columns,cache->capacity);
+#else
+        picker_composite_reference(&c,scratch,size,x0,y0,radius,border,opacity,id==selected?FCYAN:FC(34,48,52),legacy);
+#endif
+#ifdef WATCH_PICKER_COST_TEST
+        picker_composite_ticks+=clock()-composite_started;
+#endif
     }
     ftext(&ui,&ff_o13,face_names[page->ids[near]],120,ui_y(&ui,(int)s->height+dy)-57,532,0,FWHITE,0);
     ftext(&ui,&ff_rp11,status?status:(page->ids[near]==selected?"CURRENT":"TAP TO SET"),120,ui_y(&ui,(int)s->height+dy)-39,563,0,status?FORANGE:page->ids[near]==selected?FGREEN:FC(107,130,136),0);
@@ -459,12 +627,22 @@ bool nova_watch_picker_collections_render(risc_display_surface_v1*s,const nova_w
 }
 
 /* Pure alert view reuses the picker fonts and canvas; no service calls here. */
-bool nova_watch_alarm_label_render(risc_display_surface_v1*s,const char*label,bool countdown,bool blocked,
+bool nova_watch_alarm_label_render_safe(risc_display_surface_v1*s,const risc_display_rect_v1*safe,const char*label,bool countdown,bool blocked,
         bool rtc_error,bool dismissing,bool uncertain,bool occurrence) {
     if(!home_surface_valid(s))return false;
     canvas c=CANVAS_INIT(s,((const nova_watch_state*)NULL));
-    CANVAS_CLEAR(c);c=home_ui_canvas(c);
-    const int ui_height=ui_y(&c,(int)s->height);
+    /* Validate before clearing or offsetting any pixel pointer. */
+    if(safe && (safe->x<0 || safe->y<0 || !safe->width || !safe->height ||
+       (uint32_t)safe->x>=s->width || (uint32_t)safe->y>=s->height ||
+       safe->width>s->width-(uint32_t)safe->x || safe->height>s->height-(uint32_t)safe->y))return false;
+    CANVAS_CLEAR(c);
+    if(safe) {
+        c.pixels+=(size_t)safe->y*c.stride+(size_t)safe->x*2u;
+        c.width=safe->width;c.height=safe->height;
+    }
+    const unsigned content_height=c.height;
+    c=home_ui_canvas(c);
+    const int ui_height=ui_y(&c,(int)content_height);
     char title[24];unsigned title_length=0;
     if(label)while(title_length<23&&label[title_length]){char ch=label[title_length];title[title_length++]=ch>='a'&&ch<='z'?(char)(ch-'a'+'A'):ch;}
     title[title_length]=0;
@@ -476,6 +654,11 @@ bool nova_watch_alarm_label_render(risc_display_surface_v1*s,const char*label,bo
     ftext(&c,&ff_o13,occurrence?"DISMISS":"BACK",120,ui_height-61,256,0,FWHITE,0);
     if(blocked)ftext(&c,&ff_r12,"RETRY",120,ui_height-20,256,0,FCYAN,0);
     return CANVAS_OK(c);
+}
+
+bool nova_watch_alarm_label_render(risc_display_surface_v1*s,const char*label,bool countdown,bool blocked,
+        bool rtc_error,bool dismissing,bool uncertain,bool occurrence) {
+    return nova_watch_alarm_label_render_safe(s,NULL,label,countdown,blocked,rtc_error,dismissing,uncertain,occurrence);
 }
 
 bool nova_watch_alarm_render(risc_display_surface_v1*s,bool countdown,bool blocked,

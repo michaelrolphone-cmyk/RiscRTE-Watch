@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "purpose": "explicit-native-utc-tagged-editor-aware-alarm-home-development",
+  "system": "f53d6456f270a15248df23243030fc0e4b21cf93",
+  "utilities": "ce33416f6981270958da63780f18961b2f2ec9e0",
+  "runtime_interface": "273bdbccf65647a803ab0586a418f8283732baec",
+  "alarm_api": 2,
+  "ticket_epoch": "UTC seconds since 2000-01-01",
+  "no_schedule": "preserve selected sleep policy: Hybrid timed Light then GPIO Deep; explicit Light/Deep untimed GPIO",
+  "physical_verified": false,
+  "clock_edit_authority": true,
+  "editor_callbacks": "Settings-only; Home validates descriptor and retains regular schedule duties",
+  "clock_edit_sdk_anchor": "bbafc2c3aebe8c3b9805639f873341e31296c8fb"
+}

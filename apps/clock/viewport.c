@@ -64,7 +64,11 @@ bool watch_viewport_open(watch_viewport *v,const risc_display_output_api_v1 *nat
     if(!native->get_info(native->context,&i) || !i.width || !i.height || i.width>WATCH_VIEWPORT_MAX_SIDE ||
        i.height>WATCH_VIEWPORT_MAX_SIDE || !(i.supported_formats&RISC_DISPLAY_FORMAT_BIT(RISC_DISPLAY_FORMAT_RGB565)))return false;
     *v=(watch_viewport){.native=native,.width=i.width,.height=i.height};
-    if(!watch_layout_native_open(&v->layout,i.width,i.height,NULL)){*v=(watch_viewport){0};return false;}
+    /* Provider-owned content bounds; retain the full native raster and touch
+     * coordinate space. No board identity or display-shape inference. */
+    const watch_layout_insets safe={i.safe_insets.top,i.safe_insets.right,
+        i.safe_insets.bottom,i.safe_insets.left};
+    if(!watch_layout_native_open(&v->layout,i.width,i.height,&safe)){*v=(watch_viewport){0};return false;}
     v->display=(risc_display_output_api_v1){1,sizeof(v->display),v,info,acquire,release,submit,status,wait,brightness};
     return true;
 }

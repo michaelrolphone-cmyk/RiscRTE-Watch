@@ -19,6 +19,7 @@ def main():
     p.add_argument('--width', type=int)
     p.add_argument('--height', type=int)
     p.add_argument('--normal-only', action='store_true')
+    p.add_argument('--native-quick-actions', action='store_true')
     args = p.parse_args()
     assert (args.width is None) == (args.height is None)
     results = []
@@ -40,6 +41,8 @@ def main():
                     '-DPORTABLE_PREFERENCE_STORE', '-DPORTABLE_QUICK_ATOMIC_PREFERENCES',
                     '-DWATCH_QUICK_RADIOS', '-DPORTABLE_QUICK_RADIOS',
                     *['-I'+str(x) for x in (sdk, args.system/'lib/PortableApps/src', ROOT/'include', ROOT)]]
+                if args.native_quick_actions:
+                    flags += ['-DPORTABLE_QUICK_CAPABILITY_SAFE', '-DPORTABLE_QUICK_SAFE_CONTENT']
                 if sanitized:
                     flags += ['-fsanitize=address,undefined', '-fno-sanitize-recover=all', '-fno-omit-frame-pointer', '-no-pie']
                 objects = []
@@ -71,7 +74,7 @@ def main():
         inputs = [*sources, ROOT/'tests/quick_clock_test.c', Path(__file__).resolve(),
             *sdk.glob('*.h'), *[args.system/'lib/PortableApps/src'/n for n in ('quick_atomic.inc', 'home_automatic.inc')],
             ROOT/'apps/clock/crown.c', ROOT/'apps/clock/clock_atomic.inc']
-        receipt = {'hardware_tested':False, 'scope':'Real Home and Quick controllers with provider doubles; same compiled binary receives flags4/15 at runtime',
+        receipt = {'native_quick_actions':args.native_quick_actions, 'hardware_tested':False, 'scope':'Real Home and Quick controllers with provider doubles; same compiled binary receives flags4/15 at runtime',
             'compilations':compilations, 'runs':results, 'source_sha256':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in inputs}}
         (args.output/'receipt.json').write_text(json.dumps(receipt, indent=2)+'\n')
 if __name__ == '__main__':

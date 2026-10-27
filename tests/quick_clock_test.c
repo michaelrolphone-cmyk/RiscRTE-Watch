@@ -1,3 +1,6 @@
+#ifndef FIXTURE_AUTHORITY_CHECK
+#define FIXTURE_AUTHORITY_CHECK() ((void)0)
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -32,6 +35,9 @@ static void fixture_expected_face(bool with_status) {
  if(with_status&&sleep_status[0])assert(nova_watch_sleep_status(&expected,sleep_status));
 }
 static unsigned last_complete,swipe_submitted,swipe_time;
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+static unsigned last_pending_complete,pending_mutations;
+#endif
 static unsigned clock_ms,submitted,released,grants,ungrants,subscribed,unsubscribed,polls,launches,sleeps,scenario;
 static bool ready,owned,pending,launched;
 static unsigned touch_step,ready_time,face_writes,face_reads,frame_started;
@@ -54,10 +60,10 @@ static bool quick_saved[3];static uint8_t quick_values[3];
 static int quick_key(const char*k){return !strcmp(k,"brightness")?0:!strcmp(k,"alarm_volume")?1:!strcmp(k,"quick_volume")?2:-1;}
 #ifdef WATCH_QUICK_RADIOS
 static uint8_t radio_bytes[4],ble_state;static bool radio_saved;
-static bool ble_enable(void*c,bool on){(void)c;ble_state=on?1:0;return true;}
-static bool ble_status(void*c,uint8_t*out){(void)c;*out=ble_state;return true;}
-static bool wifi_off(void*c){(void)c;return true;}
-static wifi_link_t wifi_status(void*c){(void)c;return WIFI_LINK_DOWN;}
+static bool ble_enable(void*c,bool on){FIXTURE_AUTHORITY_CHECK();(void)c;ble_state=on?1:0;return true;}
+static bool ble_status(void*c,uint8_t*out){FIXTURE_AUTHORITY_CHECK();(void)c;*out=ble_state;return true;}
+static bool wifi_off(void*c){FIXTURE_AUTHORITY_CHECK();(void)c;return true;}
+static wifi_link_t wifi_status(void*c){FIXTURE_AUTHORITY_CHECK();(void)c;return WIFI_LINK_DOWN;}
 static const portable_bluetooth_control_v1 qa_ble={.api_version=1,.struct_size=sizeof(qa_ble),.set_enabled=ble_enable,.status=ble_status};
 static const wifi_api_v1 qa_wifi={.api_version=1,.struct_size=sizeof(qa_wifi),.status=wifi_status,.disconnect_checked=wifi_off};
 #endif
@@ -67,40 +73,45 @@ static unsigned low_percent=55,low_flags;static bool low_read_fail;
 static int low_key(const char *key){return !strcmp(key,PORTABLE_LOW_BATTERY_KEY)?0:!strcmp(key,PORTABLE_SLEEP_IDLE_KEY)?1:!strcmp(key,PORTABLE_SLEEP_DEEP_KEY)?2:-1;}
 #endif
 static bool saved_face;static uint8_t saved_blob[4];
-static bool health(risc_runtime_health_v1 *h){h->uptime_ms=clock_ms;return !launched && clock_ms<(scenario==24?10000u:scenario>=8?6000u:3000u);}
-static void yield(uint32_t n){assert(n>=1&&n<=20);clock_ms+=n;}
-static bool diagnostic(const char*s){if(strstr(s,"ready")){ready=true;ready_time=clock_ms;}return true;}
-static bool info(void*c,risc_display_info_v1*i){(void)c;*i=(risc_display_info_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT,.supported_formats=RISC_DISPLAY_FORMAT_BIT(RISC_DISPLAY_FORMAT_RGB565)};return true;}
-static bool acquire_frame(void*c,uint32_t f,risc_display_surface_v1*s){(void)c;assert(f==5&&!owned&&!pending);owned=true;*s=(risc_display_surface_v1){1,pixels,TEST_WIDTH,TEST_HEIGHT,TEST_WIDTH*2,sizeof(pixels),5};return true;}
-static void release_frame(void*c,uint64_t f){(void)c;assert(f==1&&owned);owned=false;released++;}
-static bool submit_frame(void*c,uint64_t f,const risc_display_rect_v1*d,size_t n,const risc_display_present_options_v1*o,uint64_t*t){(void)c;(void)d;(void)n;(void)o;assert(owned&&!pending&&f==1);
+static bool health(risc_runtime_health_v1 *h){FIXTURE_AUTHORITY_CHECK();h->uptime_ms=clock_ms;return !launched && clock_ms<(scenario==24?10000u:scenario>=8?6000u:3000u);}
+static void yield(uint32_t n){FIXTURE_AUTHORITY_CHECK();assert(n>=1&&n<=20);clock_ms+=n;}
+static bool diagnostic(const char*s){FIXTURE_AUTHORITY_CHECK();if(strstr(s,"ready")){ready=true;ready_time=clock_ms;}return true;}
+static risc_display_insets_v1 fixture_safe_insets;
+static bool info(void*c,risc_display_info_v1*i){FIXTURE_AUTHORITY_CHECK();(void)c;*i=(risc_display_info_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT,.safe_insets=fixture_safe_insets,.supported_formats=RISC_DISPLAY_FORMAT_BIT(RISC_DISPLAY_FORMAT_RGB565)};return true;}
+static bool acquire_frame(void*c,uint32_t f,risc_display_surface_v1*s){FIXTURE_AUTHORITY_CHECK();(void)c;assert(f==5&&!owned&&!pending);owned=true;*s=(risc_display_surface_v1){1,pixels,TEST_WIDTH,TEST_HEIGHT,TEST_WIDTH*2,sizeof(pixels),5};return true;}
+static void release_frame(void*c,uint64_t f){FIXTURE_AUTHORITY_CHECK();(void)c;assert(f==1&&owned);owned=false;released++;}
+static bool submit_frame(void*c,uint64_t f,const risc_display_rect_v1*d,size_t n,const risc_display_present_options_v1*o,uint64_t*t){FIXTURE_AUTHORITY_CHECK();(void)c;(void)d;(void)n;(void)o;assert(owned&&!pending&&f==1);
  if(face_writes&&scenario!=11&&scenario!=15){
   assert(!picker.open&&!picker_scratch);
   fixture_expected_face(true);
   assert(!memcmp(pixels,expected_pixels,sizeof(pixels)));
  }
  owned=false;pending=true;frame_started=clock_ms;*t=++submitted;return true;}
-static bool status(void*c,uint64_t t,risc_display_present_status_v1*s){(void)c;assert(t==submitted&&pending);if((scenario==14||scenario==19)&&clock_ms-frame_started<95){s->state=RISC_DISPLAY_PRESENT_ACTIVE;return true;}pending=false;s->state=scenario==5 && touch_step>=2?RISC_DISPLAY_PRESENT_FAILED:RISC_DISPLAY_PRESENT_COMPLETE;
- if(s->state==RISC_DISPLAY_PRESENT_COMPLETE){memcpy(completed_pixels,pixels,sizeof(pixels));last_complete=submitted;}return true;}
-static bool brightness(void*c,uint16_t a,uint16_t b){(void)c;assert(a<=100&&b==100);hardware_brightness=a;if(a)assert(submitted&&!pending);return true;}
-static bool prepare(void*c){(void)c;assert(!owned&&!pending&&!touch.subscription);
+static bool status(void*c,uint64_t t,risc_display_present_status_v1*s){FIXTURE_AUTHORITY_CHECK();(void)c;assert(t==submitted&&pending);if((scenario==14||scenario==19)&&clock_ms-frame_started<95){s->state=RISC_DISPLAY_PRESENT_ACTIVE;return true;}pending=false;s->state=scenario==5 && touch_step>=2?RISC_DISPLAY_PRESENT_FAILED:RISC_DISPLAY_PRESENT_COMPLETE;
+ if(s->state==RISC_DISPLAY_PRESENT_COMPLETE){memcpy(completed_pixels,pixels,sizeof(pixels));last_complete=submitted;
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ if(clock_quick.ui.save_pending)last_pending_complete=submitted;
+#endif
+ }return true;}
+static bool brightness(void*c,uint16_t a,uint16_t b){FIXTURE_AUTHORITY_CHECK();(void)c;assert(a<=100&&b==100);hardware_brightness=a;if(a)assert(submitted&&!pending);return true;}
+static bool prepare(void*c){FIXTURE_AUTHORITY_CHECK();(void)c;assert(!owned&&!pending&&!touch.subscription);
 #ifdef WATCH_QUICK_RADIOS
 assert(!ble_state);
 #endif
 return true;}
-static bool resume(void*c){(void)c;return true;}
-static bool key(void*c,uint32_t*e){(void)c;*e=(scenario==7&&ready&&!sleeps&&clock_ms>2400)||(scenario==24&&ready&&!sleeps&&clock_ms-ready_time>2400)?2:((scenario==10&&clock_ms-ready_time==2000)||(scenario==20&&clock_ms-ready_time>=960&&clock_ms-ready_time<1000))&&ready?1:0;return true;}
-static int32_t sleep_now(void*c,risc_light_sleep_result_v1*r){(void)c;(void)r;assert(!touch.subscription);sleeps++;return RISC_LIGHT_SLEEP_ACTIVE_WAKE;}
-static int32_t sleep_timed(void*c,uint32_t ms,risc_light_sleep_result_v1*r){assert(ms==
+static bool resume(void*c){FIXTURE_AUTHORITY_CHECK();(void)c;return true;}
+static bool key(void*c,uint32_t*e){FIXTURE_AUTHORITY_CHECK();(void)c;*e=(scenario==7&&ready&&!sleeps&&clock_ms>2400)||(scenario==24&&ready&&!sleeps&&clock_ms-ready_time>2400)?2:((scenario==10&&clock_ms-ready_time==2000)||(scenario==20&&clock_ms-ready_time>=960&&clock_ms-ready_time<1000))&&ready?1:0;return true;}
+static int32_t sleep_now(void*c,risc_light_sleep_result_v1*r){FIXTURE_AUTHORITY_CHECK();(void)c;(void)r;assert(!touch.subscription);sleeps++;return RISC_LIGHT_SLEEP_ACTIVE_WAKE;}
+static int32_t sleep_timed(void*c,uint32_t ms,risc_light_sleep_result_v1*r){FIXTURE_AUTHORITY_CHECK();assert(ms==
 #ifdef PORTABLE_LOW_BATTERY
 watch_sleep_light_ms
 #else
 300000
 #endif
 );return sleep_now(c,r);}
-static bool wake_pending(void*c,bool*p){(void)c;*p=false;return true;}
-static bool rtc_read(void*c,twatch_rtc_time_v1*t){(void)c;*t=(twatch_rtc_time_v1){2026,10,4,0,0,40,0};return true;}
-static bool battery(void*c,risc_battery_sample_v1*s){(void)c;
+static bool wake_pending(void*c,bool*p){FIXTURE_AUTHORITY_CHECK();(void)c;*p=false;return true;}
+static bool rtc_read(void*c,twatch_rtc_time_v1*t){FIXTURE_AUTHORITY_CHECK();(void)c;*t=(twatch_rtc_time_v1){2026,10,4,0,0,40,0};return true;}
+static bool battery(void*c,risc_battery_sample_v1*s){FIXTURE_AUTHORITY_CHECK();(void)c;
 #ifdef PORTABLE_LOW_BATTERY
 if(low_read_fail)return false;
 *s=(risc_battery_sample_v1){3900,(uint8_t)low_percent,(uint8_t)low_flags};
@@ -108,11 +119,11 @@ if(low_read_fail)return false;
 *s=(risc_battery_sample_v1){3900,55,0};
 #endif
 return true;}
-static uint64_t subscribe(void*c){(void)c;subscribed++;return subscribed;}
-static bool unsubscribe(void*c,uint64_t h){(void)c;assert(h);unsubscribed++;return true;}
-static bool poll(void*c,size_t n){(void)c;assert(n==1);polls++;touch_step++;return true;}
-static int32_t next(void*c,uint64_t h,risc_touch_event_v1*e){(void)c;(void)h;(void)e;return scenario==3&&touch_step==3?-1:0;}
-static bool snapshot(void*c,risc_touch_snapshot_v1*s){
+static uint64_t subscribe(void*c){FIXTURE_AUTHORITY_CHECK();(void)c;subscribed++;return subscribed;}
+static bool unsubscribe(void*c,uint64_t h){FIXTURE_AUTHORITY_CHECK();(void)c;assert(h);unsubscribed++;return true;}
+static bool poll(void*c,size_t n){FIXTURE_AUTHORITY_CHECK();(void)c;assert(n==1);polls++;touch_step++;return true;}
+static int32_t next(void*c,uint64_t h,risc_touch_event_v1*e){FIXTURE_AUTHORITY_CHECK();(void)c;(void)h;(void)e;return scenario==3&&touch_step==3?-1:0;}
+static bool snapshot(void*c,risc_touch_snapshot_v1*s){FIXTURE_AUTHORITY_CHECK();
  (void)c;*s=(risc_touch_snapshot_v1){.width=240,.height=240};
  unsigned step=touch_step;
  if(scenario>=8){
@@ -169,7 +180,7 @@ static risc_touch_api_v1 ta={1,sizeof(ta),NULL,subscribe,unsubscribe,poll,next,s
 static twatch_panel_power_v1 da={{1,TWATCH_PANEL_LIGHT_SLEEP_SIZE,NULL,info,acquire_frame,release_frame,submit_frame,status,NULL,brightness},prepare,resume,NULL,NULL};
 static twatch_pmu_api_v1 pa={{1,sizeof(pa),NULL,battery},key,prepare,resume,sleep_now,NULL,sleep_timed,wake_pending,NULL,NULL,NULL};
 static twatch_rtc_api_v1 ra={2,sizeof(ra),NULL,rtc_read,NULL,NULL,NULL};
-static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){(void)c;*z=0;
+static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){FIXTURE_AUTHORITY_CHECK();(void)c;*z=0;
 #ifdef PORTABLE_LOW_BATTERY
 int low=low_key(k);if(low>=0){*z=low_lengths[low];if(!*z)return RISC_KEY_VALUE_NOT_FOUND;if(n<*z)return RISC_KEY_VALUE_BUFFER_SMALL;memcpy(b,low_bytes[low],*z);return RISC_KEY_VALUE_OK;}
 #endif
@@ -187,7 +198,7 @@ static unsigned preference_flags=15,preference_fault,generic_acquires,atomic_acq
 static risc_key_value_atomic_receipt_v1 preference_receipt;
 #endif
 #endif
-static int32_t face_put(void*c,const char*k,const void*b,uint32_t n){(void)c;
+static int32_t face_put(void*c,const char*k,const void*b,uint32_t n){FIXTURE_AUTHORITY_CHECK();(void)c;
 #ifdef WATCH_ATOMIC_PREFERENCES
 assert(atomic_publishing);
 #endif
@@ -205,14 +216,14 @@ static risc_display_power_api_v1 test_display_power;
 #ifdef WATCH_ATOMIC_PREFERENCES
 static uint64_t atomic_revision=7,atomic_token;
 static uint32_t atomic_count;static char atomic_keys[2][16];static uint8_t atomic_values[2][64];static uint32_t atomic_sizes[2];
-static int32_t atomic_state(void*c,risc_key_value_atomic_state_v1*s){(void)c;assert(!owned&&!pending);
+static int32_t atomic_state(void*c,risc_key_value_atomic_state_v1*s){FIXTURE_AUTHORITY_CHECK();(void)c;assert(!owned&&!pending);
  unsigned flags=3;
 #ifdef PORTABLE_PREFERENCE_STORE
  if(preference_fault==PREF_STATE_IO)return RISC_ATOMIC_IO;
  flags=preference_fault==PREF_BAD_FLAGS?0:preference_flags;
 #endif
  *s=(risc_key_value_atomic_state_v1){sizeof(*s),flags,1,16,64,4096,1024,0,atomic_revision};return RISC_ATOMIC_OK;}
-static int32_t atomic_get(void*c,uint64_t rev,const char*k,void*out,uint32_t cap,uint32_t*size){
+static int32_t atomic_get(void*c,uint64_t rev,const char*k,void*out,uint32_t cap,uint32_t*size){FIXTURE_AUTHORITY_CHECK();
  assert(!owned&&!pending);*size=0;
 #ifdef PORTABLE_PREFERENCE_STORE
  if(preference_fault==PREF_READ_IO)return RISC_ATOMIC_IO;
@@ -223,8 +234,14 @@ static int32_t atomic_get(void*c,uint64_t rev,const char*k,void*out,uint32_t cap
  if(rc)return RISC_ATOMIC_IO;
  *size=n;if(cap<n)return RISC_ATOMIC_BUFFER_SMALL;memcpy(out,data,n);return RISC_ATOMIC_OK;
 }
-static int32_t atomic_submit(void*c,uint64_t rev,const risc_key_value_atomic_mutation_v1*m,uint32_t count,const void*intent,uint32_t bytes,uint64_t*token){
+static int32_t atomic_submit(void*c,uint64_t rev,const risc_key_value_atomic_mutation_v1*m,uint32_t count,const void*intent,uint32_t bytes,uint64_t*token){FIXTURE_AUTHORITY_CHECK();
  (void)c;assert(!owned&&!pending&&!atomic_token&&count&&count<=2&&bytes==176);*token=0;
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ if(scenario>=21&&scenario<=24) {
+  assert(clock_quick.ui.save_pending&&last_pending_complete&&last_pending_complete==last_complete);
+  ++pending_mutations;
+ }
+#endif
  const uint8_t*p=intent;assert(((!memcmp(p,"PFI0001",8)&&p[8]==PORTABLE_PREFERENCE_USER)||(!memcmp(p,"PFA0001",8)&&p[8]==PORTABLE_PREFERENCE_AUTOMATIC)));
  unsigned intended=0;
 #ifdef PORTABLE_PREFERENCE_STORE
@@ -253,7 +270,7 @@ static int32_t atomic_submit(void*c,uint64_t rev,const risc_key_value_atomic_mut
 #endif
  return RISC_ATOMIC_OK;
 }
-static int32_t atomic_collect(void*c,uint64_t token,risc_key_value_atomic_receipt_v1*r){
+static int32_t atomic_collect(void*c,uint64_t token,risc_key_value_atomic_receipt_v1*r){FIXTURE_AUTHORITY_CHECK();
  (void)c;assert(!owned&&!pending&&token==atomic_token&&token);
 #ifdef PORTABLE_PREFERENCE_STORE
  if(preference_fault==PREF_COLLECT_IO)return RISC_ATOMIC_IO;
@@ -265,10 +282,10 @@ static int32_t atomic_collect(void*c,uint64_t token,risc_key_value_atomic_receip
  atomic_publishing=false;atomic_token=0;
  *r=(risc_key_value_atomic_receipt_v1){sizeof(*r),RISC_ATOMIC_OK,++atomic_revision,atomic_revision};return RISC_ATOMIC_OK;
 }
-static int32_t atomic_cancel(void*c,uint64_t t){(void)c;assert(t==atomic_token);return RISC_ATOMIC_OK;}
+static int32_t atomic_cancel(void*c,uint64_t t){FIXTURE_AUTHORITY_CHECK();(void)c;assert(t==atomic_token);return RISC_ATOMIC_OK;}
 static const risc_key_value_atomic_v1 atomic_api={1,sizeof(atomic_api),NULL,atomic_state,atomic_get,atomic_submit,atomic_collect,atomic_cancel};
 #endif
-static bool acquire_cap(const char*n,uint32_t v,uint64_t id,risc_runtime_capability_v1*g){(void)v;
+static bool acquire_cap(const char*n,uint32_t v,uint64_t id,risc_runtime_capability_v1*g){FIXTURE_AUTHORITY_CHECK();(void)v;
 #ifdef WATCH_ATOMIC_PREFERENCES
 #ifdef PORTABLE_PREFERENCE_STORE
 if(!strcmp(n,RISC_KEY_VALUE_ATOMIC_CAPABILITY)){atomic_acquires++;return false;}
@@ -293,13 +310,31 @@ if(!strcmp(n,"net.wifi")){assert(id==0);g->api=&qa_wifi;grants++;return true;}
 if(!strcmp(n,"bluetooth.hci")){assert(id==0);g->api=&qa_ble;grants++;return true;}
 #endif
 if(!strcmp(n,RISC_KEY_VALUE_CAPABILITY)){if(scenario<8)return false;assert(id==1);grants++;g->api=&face_kv;return true;}assert(!id);grants++;if(!strcmp(n,"display.output"))g->api=&da;else if(!strcmp(n,"board.battery"))g->api=&pa;else if(!strcmp(n,"rtc.clock"))g->api=&ra;else{assert(!strcmp(n,"input.touch.raw"));g->api=&ta;}return true;}
-static bool release_cap(risc_runtime_capability_v1*g){assert(g->api&&!owned&&!pending);g->api=NULL;g->slot=0;g->generation=0;ungrants++;return true;}
-static bool launch(const char*p){assert(!strcmp(p,"springboard.elf")&&!owned&&!pending&&!touch.subscription);assert(submitted==last_complete&&submitted==swipe_submitted&&clock_ms==swipe_time);
+static bool release_cap(risc_runtime_capability_v1*g){FIXTURE_AUTHORITY_CHECK();assert(g->api&&!owned&&!pending);g->api=NULL;g->slot=0;g->generation=0;ungrants++;return true;}
+static bool launch(const char*p){FIXTURE_AUTHORITY_CHECK();assert(!strcmp(p,"springboard.elf")&&!owned&&!pending&&!touch.subscription);assert(submitted==last_complete&&submitted==swipe_submitted&&clock_ms==swipe_time);
  assert(!memcmp(completed_pixels,pixels,sizeof(pixels)));
  fixture_expected_face(true);
   assert(!memcmp(pixels,expected_pixels,sizeof(pixels)));
  launches++;if(scenario==6)return false;launched=true;return true;}
-static const risc_runtime_api_v1 runtime={.api_version=1,.struct_size=RISC_RUNTIME_SERVICE_CHECKPOINT_V1_SIZE,.health=health,.yield_ms=yield,.diagnostic=diagnostic,.request_launch=launch,.acquire=acquire_cap,.release=release_cap};
+#ifdef WATCH_PERFORMANCE_TRACE
+static unsigned fixture_perf_calls,fixture_perf_complete,fixture_perf_dispatch;
+static uint32_t fixture_perf_trace(uint32_t id,uint32_t phase,uint32_t value){FIXTURE_AUTHORITY_CHECK();
+ assert(!id&&clock_interaction_safe());(void)value;++fixture_perf_calls;
+ if(phase==RISC_PERF_COMPLETE)++fixture_perf_complete;
+ if(phase==RISC_PERF_DISPATCHED)++fixture_perf_dispatch;
+ return 1;
+}
+#define FIXTURE_PERF_TRACE .trace=fixture_perf_trace,
+#else
+#define FIXTURE_PERF_TRACE
+#endif
+#ifdef TEST_HOME_MONOTONIC
+static bool fixture_monotonic(uint32_t*out){*out=clock_ms;return !launched && clock_ms<(scenario==24?10000u:scenario>=8?6000u:3000u);}
+#define FIXTURE_MONOTONIC .monotonic_ms=fixture_monotonic,
+#else
+#define FIXTURE_MONOTONIC
+#endif
+static const risc_runtime_api_v1 runtime={FIXTURE_PERF_TRACE FIXTURE_MONOTONIC .api_version=1,.struct_size=RISC_RUNTIME_SERVICE_CHECKPOINT_V1_SIZE,.health=health,.yield_ms=yield,.diagnostic=diagnostic,.request_launch=launch,.acquire=acquire_cap,.release=release_cap};
 #ifndef WATCH_TEST_RUNTIME_EXTERN
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t v){assert(v==1);return &runtime;}
 #endif
@@ -327,6 +362,9 @@ int main(void){
 #endif
   if(scenario==23){assert(clock_quick.brightness==40&&hardware_brightness==40&&!quick_saved[0]);assert(clock_quick.ui.error_flags&PQA_ERROR_SAVE);}
  }
+#ifdef PORTABLE_QUICK_CAPABILITY_SAFE
+ assert(pending_mutations>=4&&!clock_quick.ui.save_pending);
+#endif
  puts("Current Clock quick controls: top edge, notification volume, brightness, Silent restoration, torch off, reload and failed save passed");
 return 0;
 }

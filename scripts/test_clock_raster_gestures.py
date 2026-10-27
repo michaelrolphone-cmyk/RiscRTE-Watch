@@ -20,6 +20,9 @@ p.add_argument('--output', type=Path, default=ROOT / 'dist/clock-raster-gestures
 p.add_argument('--expect-loss', action='store_true')
 p.add_argument('--mode', choices=('normal', 'sanitized', 'both'), default='both')
 p.add_argument('--native', action='store_true')
+p.add_argument('--performance-trace-runtime',type=Path)
+p.add_argument('--monotonic-clock-test',action='store_true')
+p.add_argument('--clock-authority-fault',action='store_true')
 a = p.parse_args()
 source_root = a.source_root.resolve()
 a.output.mkdir(parents=True, exist_ok=True)
@@ -28,8 +31,14 @@ for sanitize in ((False, True) if a.mode == 'both' else (a.mode == 'sanitized',)
     out = a.output / label
     out.mkdir(parents=True, exist_ok=True)
     sdk=headers(out,a.system_apps,a.utilities,source_root)
+    if a.performance_trace_runtime:
+        import shutil
+        shutil.copyfile(a.performance_trace_runtime/'sdk/app/RiscPerformanceV1.h',sdk/'RiscPerformanceV1.h')
     flags = ['-DPORTABLE_LOW_BATTERY','-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_SHARED_PREFERENCE_HEADERS','-DWATCH_FAST_WAKE','-DPORTABLE_WATCH_NATIVE_HEIGHT', '-DPORTABLE_RTC_UTC8_DENVER', '-O1', '-g',
              '-Wall', '-Wextra', '-Werror']
+    if a.monotonic_clock_test or a.clock_authority_fault:flags+=['-DTEST_HOME_MONOTONIC']
+    if a.clock_authority_fault:flags+=['-DTEST_HOME_CLOCK_FAULT']
+    if a.performance_trace_runtime:flags+=['-DWATCH_PERFORMANCE_TRACE']
     if a.native:
         flags += ['-DTEST_WIDTH=410u', '-DTEST_HEIGHT=502u']
     if a.expect_loss:
@@ -63,11 +72,11 @@ for sanitize in ((False, True) if a.mode == 'both' else (a.mode == 'sanitized',)
     subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++11', *flags,
                     str(source_root / 'apps/clock/effects/boot.cpp'), *objects,
                     '-o', str(binary)], check=True)
-    result = subprocess.run([str(binary)], text=True, capture_output=True,
-                            env={**os.environ, 'ASAN_OPTIONS': 'detect_leaks=0'}, timeout=120)
-    (out / 'stdout.txt').write_text(result.stdout)
-    (out / 'stderr.txt').write_text(result.stderr)
-    print(result.stdout, end='')
-    print(result.stderr, end='')
-    result.check_returncode()
+    commands=([[str(binary),'0',str(n)] for n in (1,2,3,5,10,20,50,100,200,500)]+[[str(binary),str(mode),'0'] for mode in (1,2,3)]) if a.clock_authority_fault else [[str(binary)]]
+    for index,command in enumerate(commands):
+        result=subprocess.run(command,text=True,capture_output=True,env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'},timeout=120)
+        suffix='-'+str(index) if a.clock_authority_fault else ''
+        (out/('stdout'+suffix+'.txt')).write_text(result.stdout)
+        (out/('stderr'+suffix+'.txt')).write_text(result.stderr)
+        print(result.stdout,end='');print(result.stderr,end='');result.check_returncode()
     print(f'{label}: PASS')

@@ -2,6 +2,7 @@
  * generic capabilities. A failed optional test never prevents the first frame.
  * Home owns normal navigation; returning from this child re-enters Home. */
 #include "RiscRuntimeV1.h"
+#include "RiscRuntimeClockV1.h"
 #include "WatchViewport.h"
 #include "RiscBatteryGaugeV1.h"
 #include "twatch_calendar.h"
@@ -60,7 +61,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 
     live[0] = get(rt, "display.output", 1, &grants[0]);
     if (!live[0] || !watch_viewport_open(&viewport, grants[0].api) ||
-            !bringup_layout_open(&layout, viewport.width, viewport.height)) goto cleanup;
+            !bringup_layout_open_safe(&layout, &viewport.layout)) goto cleanup;
     live[1] = get(rt, "input.touch.raw", 1, &grants[1]);
     if (!live[1] || !watch_viewport_touch_open(&touch_view, &viewport, grants[1].api)) goto cleanup;
     touch = &touch_view.api;
@@ -75,8 +76,8 @@ __attribute__((visibility("default"))) void app_main(void) {
     rt->diagnostic("WATCH_TEST opened display=ready touch=ready optional-tests=idle");
 
     for (;;) {
-        risc_runtime_health_v1 health = {.struct_size = sizeof(health)};
-        if (!rt->health(&health)) break;
+        uint32_t now=0;
+        if (!risc_runtime_monotonic_ms_v1(rt,&now)) break;
         if (pending) {
             risc_display_present_status_v1 result = {0};
             if (!viewport.display.present_status(viewport.display.context, token, &result)) break;
@@ -91,7 +92,7 @@ __attribute__((visibility("default"))) void app_main(void) {
                 }
             } else if (result.state != RISC_DISPLAY_PRESENT_ACTIVE && result.state != RISC_DISPLAY_PRESENT_QUEUED) {
                 break;
-            } else if ((uint32_t)(health.uptime_ms - started) > 10000) {
+            } else if ((uint32_t)(now - started) > 10000) {
                 rt->diagnostic("WATCH_TEST display=timeout");
                 break;
             }
@@ -191,7 +192,7 @@ __attribute__((visibility("default"))) void app_main(void) {
             action = 0;
             dirty = true;
         }
-        if (!pending && (dirty || (uint32_t)(health.uptime_ms - last) >= 1000)) {
+        if (!pending && (dirty || (uint32_t)(now - last) >= 1000)) {
             risc_battery_sample_v1 b = {0};
             if (battery) {
                 if (!battery->read(battery->context, &b)) strcpy(battery_text, "BATTERY READ ERROR");
@@ -210,12 +211,12 @@ __attribute__((visibility("default"))) void app_main(void) {
             }
             risc_display_surface_v1 surface = {0};
             if (!viewport.display.acquire(viewport.display.context, RISC_DISPLAY_FORMAT_RGB565, &surface)) break;
-            if (!render(&surface, &layout, health.uptime_ms / 1000, battery_text, rtc_text,
+            if (!render(&surface, &layout, now / 1000, battery_text, rtc_text,
                     motion_text, status_text, tx, ty, touches)) break;
             if (!viewport.display.submit(viewport.display.context, surface.frame, NULL, 0, NULL, &token)) break;
             pending = true;
             dirty = false;
-            started = last = health.uptime_ms;
+            started = last = now;
         }
         rt->yield_ms(pending ? 1 : 10);
     }

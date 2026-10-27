@@ -75,11 +75,37 @@ class ProofTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'compiled into Home'):
             self.verify()
 
-    def test_backend_manifest(self):
+    def test_unselected_removable_volume(self):
         m = copy.deepcopy(self.manifest)
         m['optional'].append({'capability': 'storage.volume', 'api': 1})
         self.write('b', manifest=m)
-        with self.assertRaisesRegex(ValueError, 'backend-specific contract'):
+        with self.assertRaisesRegex(ValueError, 'Optional removable-volume declaration'):
+            self.verify()
+
+    def test_backend_manifest(self):
+        m = copy.deepcopy(self.manifest)
+        m['optional'].append({'capability': 'storage.key-value.atomic', 'api': 1})
+        self.write('b', manifest=m)
+        with self.assertRaisesRegex(ValueError, 'Application declares a preference backend'):
+            self.verify()
+
+    def test_selected_removable_volume(self):
+        m = copy.deepcopy(self.manifest)
+        m['optional'].append({'capability': 'storage.volume', 'api': 1})
+        r = copy.deepcopy(self.record)
+        r['automatic_provision'] = True
+        r['artifacts']['default']['defines'].append('-DWATCH_AUTOMATIC_PROVISION')
+        for name in ('a', 'b'):
+            self.write(name, record=r, manifest=m)
+        self.assertTrue(self.verify()['independent_builds_identical'])
+
+    def test_selected_volume_missing_compiler_flag(self):
+        m = copy.deepcopy(self.manifest)
+        m['optional'].append({'capability': 'storage.volume', 'api': 1})
+        r = copy.deepcopy(self.record)
+        r['automatic_provision'] = True
+        self.write('b', record=r, manifest=m)
+        with self.assertRaisesRegex(ValueError, 'Provisioning selection differs'):
             self.verify()
 
     def test_dependency_drift(self):

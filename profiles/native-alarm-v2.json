@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "purpose": "explicit-native-utc-tagged-alarm-home-development",
+  "system": "9c2a0492cd93b498053f60e23cffb2706c39963e",
+  "utilities": "af68dee70d6c2f463f09b740caf2f21a8527a663",
+  "runtime_interface": "273bdbccf65647a803ab0586a418f8283732baec",
+  "alarm_api": 2,
+  "ticket_epoch": "UTC seconds since 2000-01-01",
+  "no_schedule": "preserve selected sleep policy: Hybrid timed Light then GPIO Deep; explicit Light/Deep untimed GPIO",
+  "physical_verified": false
+}
