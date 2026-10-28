@@ -1,0 +1,17 @@
+# Optional completed-face damage replay
+
+`--native-damage-replay` is default-off and applies only to default Home. It records an exact bounded ordered stream of supported primitives, matches unchanged runs using fixed lookahead, and conservatively damages both removed and added bounds. Every intersecting layer is replayed in original order into a private completed image. Unknown/direct-draw collections, capacity exhaustion, geometry mismatch and optional allocation failure retain the original renderer. Picker previews deliberately use that original path; the owner never snapshots caller overlays.
+
+The original non-clipped raster remains an independent specialization. There is no face-specific admission list, frame dropping, animation throttling or resized thumbnail reuse. A generic conservative replay-area estimate selects full rendering when damage is broad. Callback failure invalidates the image; only a successful complete copy commits reusable state. Existing Home guarded teardown releases storage.
+
+Target ESP32-S3 sizes: command 116 bytes; store 237,600 bytes; 466px private image and tile mask 435,212 bytes; total new optional storage 672,812 bytes. Existing glyph/stroke stores add 174,096 bytes. Six-slot picker plus column plan can add 928,728 bytes, for 1,775,636 bytes combined optional storage before provider/caller and transition frames. This is allocation size, not measured heap availability. Native ordinary malloc follows invocation ownership and configured IDF policy: allocations above 16KiB prefer SPIRAM then may fall back to generic default memory; no guaranteed placement is claimed. Failure preserves normal rendering, and no new runtime import/API is introduced.
+
+Owning tests: `scripts/test_damage_replay.py` compares independent original and selected modules, all faces, changing time/format/context/battery state, geometry, picker/overlay transitions, optional allocation failure and every checkpoint position from measured successful cold/warm traces. `test_fast_wake_clock.py --native-damage-replay` and `test_home_exit_checkpoint.py --native-damage-replay` execute actual Home lifecycle and custody paths. No host timing is a device FPS claim. Whole-product selected qualification remains separate.
+
+## Unsupported-stream admission
+
+A failed planning pass now selects three original-renderer frames before retrying (four-frame interval). This is an empirically chosen bounded performance hint, not a timing or input contract. It is based on observing unsupported commands, not a list of face IDs. Actual selection/geometry changes reset it immediately; state changes under the same selection are rediscovered within the interval, while original full rendering stays authoritative in every intervening frame. This avoids repeatedly generating a prefix that can never be replayed. No animations, input turns, image transfers or frame completion semantics are skipped.
+
+Tests distinguish actual unknown collections from a synthetic prior-admission state that models a future conditional stream becoming supported. Current Points READY state still reaches raw rounded battery drawing and is not falsely counted as a supported transition.
+
+Intervals 4, 8 and 16 all amortized the observed low-cost unsupported planning. Four is selected as the smallest tested interval: 20 planning attempts over 80 frames instead of 80, without imposing the longer rediscovery window where no robust additional gain was established. Host timing is noisy and not a physical target performance measurement.

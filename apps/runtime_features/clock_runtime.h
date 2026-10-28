@@ -7,6 +7,9 @@
 #include "sdk/RiscProviderPromotionV1.h"
 #include "../clock/display_time.h"
 #include <string.h>
+#ifdef WATCH_NATIVE_TIME_AUTHORITY
+#include "PortableTimeZonePreference.h"
+#endif
 #define WATCH_CLOCK_CHECKPOINT_TYPE 0x57434c4bu
 #define WATCH_CLOCK_CHECKPOINT_SCHEMA 1u
 
@@ -19,6 +22,10 @@ typedef struct {
  bool time_live,wake_live,halted,resume;
  bool rtc_reconcile_pending; /* RTC absent/unreadable/unset or seed not accepted. */
  uint32_t cause;
+#ifdef WATCH_NATIVE_TIME_AUTHORITY
+ portable_timezone_rule display_zone;
+ bool display_zone_valid;
+#endif
 } watch_clock_runtime;
 
 /* Canonical append-only Runtime 0.1.54 invocation fence; frozen Watch SDK
@@ -61,7 +68,7 @@ static bool watch_runtime_snapshot(watch_clock_runtime *c,risc_realtime_snapshot
 }
 /* Existing Watch RTC ownership is explicitly fixed UTC+08. The UTC native
  * clock never receives Denver local wall time, compiler time, or an estimate. */
-static bool watch_runtime_epoch(const twatch_rtc_time_v1 *date,int64_t *out) {
+static inline bool watch_runtime_epoch(const twatch_rtc_time_v1 *date,int64_t *out) {
  if(!tw_valid_time(date))return false;
  int64_t days=10957; /* 2000-01-01 minus Unix epoch. */
  for(unsigned y=2000;y<date->year;y++)days+=365u+(y%4==0);
@@ -71,7 +78,7 @@ static bool watch_runtime_epoch(const twatch_rtc_time_v1 *date,int64_t *out) {
  if(epoch<0 || epoch>INT32_MAX)return false;
  *out=epoch;return true;
 }
-static bool watch_runtime_calendar(int64_t epoch,twatch_rtc_time_v1 *out) {
+static inline bool watch_runtime_calendar(int64_t epoch,twatch_rtc_time_v1 *out) {
  if(epoch<946656000 || epoch>INT32_MAX)return false;
  uint32_t local=(uint32_t)(epoch+8*3600),days=local/86400;
  uint32_t remaining=days-10957,seconds=local%86400;
@@ -112,6 +119,13 @@ static bool watch_runtime_open(watch_clock_runtime *c,const risc_runtime_api_v1 
  return true;
 }
 static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *rtc) {
+#ifdef WATCH_NATIVE_TIME_AUTHORITY
+ /* Explicit Runtime-owned time: validate custody and shape, never seed from
+  * an external clock or manufacture a date. A valid UNSET stays UNSET. */
+ (void)rtc;c->fallback=NULL;c->rtc_reconcile_pending=false;
+ risc_realtime_snapshot_v1 sample;
+ return watch_runtime_snapshot(c,&sample);
+#else
  c->rtc_reconcile_pending=true;
  risc_realtime_snapshot_v1 sample;
  if(!watch_runtime_snapshot(c,&sample))return false;
@@ -138,17 +152,66 @@ static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *r
  if(rc==RISC_REALTIME_CONTEXT)watch_runtime_halt(c);
  if(rc==RISC_REALTIME_OK){c->fallback=NULL;c->rtc_reconcile_pending=false;}
  return rc==RISC_REALTIME_OK;
+#endif
 }
+#ifdef WATCH_NATIVE_TIME_AUTHORITY
+/* Read-only shared namespace-1 policy. A missing preference is the same virtual
+ * UTC default as native Settings; malformed/unavailable data is not confirmed. */
+static int watch_runtime_load_zone(watch_clock_runtime *c,const risc_key_value_v1 *kv) {
+ char id[PORTABLE_TIMEZONE_ID_BYTES];
+ int loaded=portable_timezone_preference_load(kv,id);
+ c->display_zone_valid=(loaded==PORTABLE_TIMEZONE_LOADED || loaded==PORTABLE_TIMEZONE_MISSING) &&
+  portable_timezone_resolve(id,sizeof(id),&c->display_zone)==PORTABLE_TIMEZONE_OK;
+ return loaded;
+}
+#endif
+#ifdef WATCH_UNSET_TIME_LOCAL
+#ifndef WATCH_NATIVE_TIME_AUTHORITY
+#error An explicit unset-time default requires native UTC authority
+#endif
+/* Product opt-in only: an owner-selected initial calendar is not synchronized
+ * time. A valid native clock, including Settings updates and retained wake,
+ * always wins. No saved timestamp is mistaken for elapsed powered-off time. */
+static bool watch_runtime_initialize_unset(watch_clock_runtime *c) {
+ risc_realtime_snapshot_v1 sample;
+ if(!watch_runtime_snapshot(c,&sample))return false;
+ if(sample.validity==RISC_REALTIME_VALID)return true;
+ if(!c->display_zone_valid)return true; /* Keep an unconfirmed zone explicit. */
+ const portable_timezone_civil local={WATCH_UNSET_TIME_LOCAL,0};
+ portable_timezone_inverse inverse;
+ if(portable_timezone_local_to_utc(&c->display_zone,&local,&inverse)!=PORTABLE_TIMEZONE_OK ||
+    inverse.count!=1 || inverse.candidate[0].epoch<0 || inverse.candidate[0].epoch>INT32_MAX)return false;
+ const int64_t epoch=inverse.candidate[0].epoch;
+ int rc=c->time->seed(c->time->context,epoch,0);
+ if(rc==RISC_REALTIME_CONTEXT){watch_runtime_halt(c);return false;}
+ if(rc!=RISC_REALTIME_OK || !watch_runtime_snapshot(c,&sample) || sample.validity!=RISC_REALTIME_VALID)return false;
+ /* Same one-second readback budget as explicit native Settings Save. */
+ int64_t delta=sample.epoch_seconds-epoch;
+ if(delta<0 || delta>1 || (delta==1 && sample.nanoseconds))return false;
+ c->runtime->diagnostic("WATCH_CLOCK time=explicit-unset-default verified=true synchronized=false");
+ return true;
+}
+#endif
 static bool watch_runtime_read(watch_clock_runtime *c,twatch_rtc_time_v1 *out,uint16_t *fraction_ms) {
  if(c->halted)return false;
+#ifndef WATCH_NATIVE_TIME_AUTHORITY
  if(c->fallback) {
   twatch_rtc_time_v1 date={0};
   if(!c->fallback->read(c->fallback->context,&date) || !tw_valid_time(&date))return false;
   *out=date;*fraction_ms=0;return true;
  }
+#endif
  risc_realtime_snapshot_v1 sample;
- if(!watch_runtime_snapshot(c,&sample) || sample.validity!=RISC_REALTIME_VALID ||
-    !watch_runtime_calendar(sample.epoch_seconds,out))return false;
+ if(!watch_runtime_snapshot(c,&sample) || sample.validity!=RISC_REALTIME_VALID)return false;
+#ifdef WATCH_NATIVE_TIME_AUTHORITY
+ portable_timezone_civil civil;
+ if(!c->display_zone_valid || portable_timezone_utc_to_local(&c->display_zone,sample.epoch_seconds,&civil,NULL)!=PORTABLE_TIMEZONE_OK)return false;
+ *out=(twatch_rtc_time_v1){.year=(uint16_t)civil.year,.month=civil.month,.day=civil.day,
+  .weekday=civil.weekday,.hour=civil.hour,.minute=civil.minute,.second=civil.second};
+ if(!tw_valid_time(out))return false;
+#else
+ if(!watch_runtime_calendar(sample.epoch_seconds,out))return false;
+#endif
  *fraction_ms=(uint16_t)(sample.nanoseconds/1000000u);return true;
 }
 static bool watch_runtime_stage(watch_clock_runtime *c) {

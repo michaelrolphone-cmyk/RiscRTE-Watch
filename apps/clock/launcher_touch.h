@@ -7,17 +7,31 @@ typedef struct {
     const risc_touch_api_v1 *api;
     watch_viewport_touch viewport;
     uint64_t subscription;
-    bool neutral, down;
+    bool neutral, down, terminal;
     uint8_t id;
     uint16_t x, y;
 } watch_launcher_touch;
+static void launcher_touch_terminal(watch_launcher_touch *t) {
+    t->terminal=true;t->neutral=t->down=false;clock_touch_retain();
+}
+/* snapshot(false) also covers benign geometry/state refusal. Classify it
+ * through the existing typed stream result before any other operation. An
+ * event consumed here is intentionally canceled with this invalid observation;
+ * no contact transition is invented and the next valid snapshot is authoritative. */
+static void launcher_touch_snapshot_refused(watch_launcher_touch *t) {
+    risc_touch_event_v1 ignored={0};
+    if(t->api->next(t->api->context,t->subscription,&ignored)<-1)
+        launcher_touch_terminal(t);
+}
 static bool launcher_touch_close(watch_launcher_touch *t) {
-    if (t->subscription && !t->api->unsubscribe(t->api->context,t->subscription)) return false;
+    if(t->terminal || clock_touch_retained)return false;
+    if (t->subscription && !t->api->unsubscribe(t->api->context,t->subscription)) {launcher_touch_terminal(t);return false;}
     t->subscription=0;
-    if (t->grant.api && !rt->release(&t->grant)) return false;
+    if (t->grant.api && !rt->release(&t->grant)) {launcher_touch_terminal(t);return false;}
     *t=(watch_launcher_touch){0}; return true;
 }
 static bool launcher_touch_open(watch_launcher_touch *t) {
+    if(clock_touch_retained)return false;
     *t=(watch_launcher_touch){.grant={.struct_size=sizeof(t->grant)}};
     if (!rt->acquire("input.touch.raw",1,0,&t->grant)) return false;
     t->api=t->grant.api;
@@ -27,7 +41,8 @@ static bool launcher_touch_open(watch_launcher_touch *t) {
     t->api=&t->viewport.api;
     t->subscription=t->api->subscribe(t->api->context);
     risc_touch_snapshot_v1 s={0};
-    if (!t->subscription || !t->api->snapshot(t->api->context,&s)) return false;
+    if (!t->subscription)return false;
+    if(!t->api->snapshot(t->api->context,&s)){launcher_touch_snapshot_refused(t);return false;}
     t->neutral=s.contact_count==0; return true;
 }
 /* Drain queued notifications, then use the provider's authoritative snapshot.
@@ -42,15 +57,21 @@ typedef struct {
  * these observations, then replay them in order after all frame writes stop. */
 static watch_launcher_observation launcher_touch_capture(watch_launcher_touch *t,uint32_t now) {
     watch_launcher_observation o={.now=now};
-    if(!t->subscription)return o;
+    if(t->terminal || clock_touch_retained || !t->subscription)return o;
     bool ok=t->api->poll(t->api->context,1);
     for(unsigned n=0;n<RISC_TOUCH_QUEUE_LENGTH;n++) {
         risc_touch_event_v1 e={0};int32_t count=t->api->next(t->api->context,t->subscription,&e);
+        if(count < -1){launcher_touch_terminal(t);return o;}
         if(count<=0){if(count<0)ok=false;break;}o.activity=true;
     }
+    /* Failed service/GAP cancels the observation, but is not terminal. A
+     * later successful poll owns recovery of an authoritative snapshot. */
+    if(!ok){CLOCK_PERF_SAMPLE(false,false);return o;}
     risc_touch_snapshot_v1 s={0};
-    o.valid=t->api->snapshot(t->api->context,&s)&&ok&&s.width==clock_viewport.width&&s.height==clock_viewport.height;
+    if(!t->api->snapshot(t->api->context,&s)){launcher_touch_snapshot_refused(t);return o;}
+    o.valid=s.width==clock_viewport.width&&s.height==clock_viewport.height;
     o.count=s.contact_count;o.id=s.contacts[0].id;o.x=s.contacts[0].x;o.y=s.contacts[0].y;
+    CLOCK_PERF_SAMPLE(o.valid,o.count==1);
     if(o.count)o.activity=true;
     return o;
 }
@@ -69,6 +90,7 @@ static unsigned launcher_touch_observe(watch_face_picker *picker,const watch_lau
 static unsigned launcher_touch_sample(watch_launcher_touch *t,watch_face_picker *picker,uint32_t now,bool *activity) {
     *activity=false;if(!t->subscription)return WATCH_FACE_NONE;
     watch_launcher_observation o=launcher_touch_capture(t,now);
+    if(t->terminal || clock_touch_retained)return WATCH_FACE_NONE;
     *activity=o.activity;
     return launcher_touch_observe(picker,&o);
 }

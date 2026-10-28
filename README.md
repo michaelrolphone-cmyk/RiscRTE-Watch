@@ -14,6 +14,9 @@ Absent optional services do not fabricate hardware support: no battery gives unk
 
 See `docs/CAPABILITY_BOUNDARIES.md` for API and provisioning details.
 
+The persisted `twatch-clock` identity is presented as hidden Home. Device-owned
+Clock shortcut visibility stays unchanged. See `docs/LAUNCHER_METADATA.md`.
+
 ## Settled native services
 
 Home optionally calls Runtime's append-only service checkpoint once at a settled
@@ -35,7 +38,9 @@ Circular faces use the smaller display axis, centered without distortion; tall
 screens retain the face title and live next-Point summary. Picker previews are
 rendered at their physical card dimensions and touch uses the same geometry.
 Quick controls, alarms, boot effects, sleep blanking and return snapshots share
-the native frame. Existing 240px golden images remain unchanged.
+the native frame. The earlier native migration preserved 240px golden artwork. The later shared
+AM/PM footer repair deliberately moves only that overlay/background inside
+the circular aperture; historical golden files are not rewritten.
 
 See `docs/NATIVE_FACES.md` for coverage and device-validation limits.
 
@@ -66,8 +71,77 @@ python3 scripts/check_capability_boundaries.py
 python3 scripts/build.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities --cc /path/to/xtensa-esp32s3-elf-gcc
 ```
 
+Home builds can opt into generic fallback defaults without a board-specific app:
+
+```sh
+python3 scripts/build.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities --cc /path/to/xtensa-esp32s3-elf-gcc --default-sleep-mode deep --default-idle-seconds 15
+python3 scripts/test_sleep_defaults.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities
+```
+
+`--default-sleep-mode` accepts `deep`, `light` or `hybrid`;
+`--default-idle-seconds` accepts integer seconds from 5 to 3600. Omit either flag
+to retain its Hybrid/60-second default. Valid saved preferences always win,
+including an explicitly saved 60-second idle value. Missing, malformed or
+unreadable records select the configured fallback without writing storage.
+The five-minute Hybrid deep-transition fallback is unchanged. The effective
+Home fallbacks are recorded in `build.json`; sleep diagnostics report the
+actual fallback and load status. These options do not change hardware wake
+support or guarantee physical sleep/wake operation.
+
+The app-local Quick translation unit includes the pinned shared controller and
+substitutes only the timer reader, so reloads after Contexts or low-battery work
+use the same policy without a second storage read. Dependency sources and
+persistence formats are unchanged. These are Home defaults, not a rewrite of
+System Settings: its missing-record display may retain its own default until a
+user saves an explicit preference.
+
+For a deployment whose clock authority is Runtime's native UTC service rather
+than an external RTC, add `--time-authority native`. The default remains
+`external-rtc` with the existing UTC+08 RTC reconciliation and Denver display
+policy. Native mode:
+
+- Reads and validates Runtime snapshots at startup and after light sleep;
+  preserves explicit UNSET and the Runtime owner/custody fence.
+- Never acquires/reads an external RTC. Without an explicit unset-time default
+  it never calls native seed. Its generated Home
+  manifest omits `rtc.clock`; other independently declared requirements remain.
+- Converts UTC directly using the shared Settings `time_zone` preference in
+  namespace 1, loaded before the first face and again on light wake. Missing
+  means the shared virtual UTC default. Invalid/unavailable zone records are
+  visibly unconfirmed rather than silently applying Denver.
+- Does not compile the legacy UTC+08/Denver policy. Display and Points civil
+  dates use the selected local zone. Valid time is not a claim of clock accuracy
+  or battery-backed cold-start persistence.
+
+Run the focused native-authority qualification:
+
+```sh
+python3 scripts/test_native_time_authority.py --system ../RiscRTE-System-Apps --utilities ../RiscRTE-Utilities
+```
+
+It exercises real Home startup/wake paths, snapshot malformation/custody checks
+and exact UTC, Denver, Tokyo and DST expectations.
+
 CI checks public header parity, all 16 independent service-presence combinations, base-only battery tables, generic sleep restoration, arbitrary motion profiles, malformed APIs and grant cleanup. It also exercises the viewport and compatibility providers with ASan/UBSan, then builds both app roles and all three adapters against the actual ELF loader validator. Builds do not modify repository sources.
 
 ## Integration status
 
 This is component source/build integration, not a complete device firmware release. Both device packages must stage the app, supported capability subset, providers and grants before rebuilding paired metadata; replacing an ELF inside a sealed image is not sufficient. The new compatibility providers also need native provider capacity. Full Waveshare peripheral parity, complete device provisioning, firmware assembly and physical qualification remain unfinished. Existing device firmware/release selections have not been switched.
+
+### Explicit initial time for native-only products
+
+`--time-authority native --unset-time-local 2026-01-01T00:00:00` explicitly
+selects midnight January 1, 2026 as an initial display value, not synchronized
+current time. Home seeds only a validated UNSET Runtime clock, after loading
+the saved shared time zone (missing means UTC), and checks native readback.
+A valid Settings update or retained sleep clock is never overwritten on Home
+reentry or wake. Invalid/unavailable zone data is not silently replaced.
+Other products retain their prior no-seed default unless they opt in.
+
+To set actual time, open Settings, choose Time Zone, then Set Time, edit the
+calendar fields, and Save. Settings verifies Runtime UTC readback; returning
+Home uses the same zone. The ESP32 RTC-backed timer advances through admitted
+deep sleep. A cold power cycle or ordinary software reset currently discards
+native validity and this selected default is used again. No flash timestamp
+can recover elapsed time while the RTC loses power. Wi-Fi time synchronization
+is not implemented by this option.

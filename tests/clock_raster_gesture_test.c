@@ -20,6 +20,13 @@
 #ifndef PORTABLE_LOW_BATTERY
 #define PORTABLE_LOW_BATTERY
 #endif
+#ifdef TEST_HOME_CLOCK_FAULT
+#define WATCH_INTERACTION_TRACE
+static void authority_check(void);
+#define FIXTURE_AUTHORITY_CHECK() authority_check()
+static unsigned authority_calls,authority_fault_at,authority_fault_mode;
+static _Bool authority_lost;
+#endif
 #define main inherited_quick_fixture_main
 #define WATCH_TEST_RUNTIME_EXTERN
 #include <tests/quick_clock_test.c>
@@ -67,7 +74,11 @@ static void check_refusal_pixels(void){
  }
  assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
 }
-static void check_io(void){assert(!retained_fence);}
+#ifdef TEST_HOME_CLOCK_FAULT
+#define WATCH_INTERACTION_TRACE
+static void authority_check(void){assert(!authority_lost);}
+#endif
+static void check_io(void){assert(!retained_fence);FIXTURE_AUTHORITY_CHECK();}
 static risc_realtime_snapshot_v1 native_time;
 static alarm_status_v1 alarm_view;
 static contexts_status_v1 contexts_view;
@@ -81,10 +92,10 @@ static int32_t native_promote(void*c){check_io();(void)c;promotions++;return 0;}
 static const risc_realtime_control_api_v1 native_api={1,sizeof(native_api),NULL,native_read,native_seed};
 static const risc_retained_wake_api_v1 wake_api={1,sizeof(wake_api),NULL,wake_read,wake_stage,wake_clear};
 static const risc_provider_promotion_api_v1 promote_api={1,sizeof(promote_api),NULL,native_promote};
-static bool fast_retain(void){retains++;retained_fence=true;return true;}
+static bool fast_retain(void){FIXTURE_AUTHORITY_CHECK();retains++;retained_fence=true;return true;}
 static bool fast_confirm(void){check_io();assert(!queued_context_handoff);confirmations++;if(service_acquires<4)confirmed_early=true;return true;}
 static bool fast_health(risc_runtime_health_v1*h){check_io();h->uptime_ms=clock_ms;if(fail_next_health){fail_next_health=false;return false;}return !ended&&clock_ms<30000u;}
-static bool fast_diagnostic(const char*s){
+static bool fast_diagnostic(const char*s){FIXTURE_AUTHORITY_CHECK();
  if(!strncmp(s,"WATCH_SLEEP error=",18)){
   const char *expected=fail_sleep_acquire==1?
    "WATCH_SLEEP error=settings-acquire capability=storage.key-value instance=1":
@@ -257,7 +268,25 @@ static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_
  if(!strcmp(k,PORTABLE_CONTEXT_ENABLED_KEY)&&contexts_enabled){assert(n>=4);memcpy(b,(uint8_t[]){0x43,1,1,1^0xa5},4);*z=4;return RISC_KEY_VALUE_OK;}
  return face_get(c,k,b,n,z);}
 static const risc_key_value_v1 fast_kv={1,sizeof(fast_kv),NULL,fast_get,face_put};
-static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=RISC_RUNTIME_SERVICE_CHECKPOINT_V1_SIZE,.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain};
+#undef FIXTURE_MONOTONIC
+#ifdef TEST_HOME_MONOTONIC
+static bool fast_monotonic(uint32_t*out){check_io();
+#ifdef TEST_HOME_CLOCK_FAULT
+ authority_calls++;
+ if((authority_fault_mode==0&&authority_calls==authority_fault_at)||(authority_fault_mode==1&&pending)||(authority_fault_mode==2&&clock_rendering)||(authority_fault_mode==3&&first_seen&&ready)) {authority_lost=true;return false;}
+#endif
+ *out=clock_ms;if(fail_next_health){fail_next_health=false;return false;}return !ended&&clock_ms<30000u;}
+#define FIXTURE_MONOTONIC .monotonic_ms=fast_monotonic,
+#else
+#define FIXTURE_MONOTONIC
+#endif
+#ifdef TEST_HOME_CLOCK_FAULT
+static bool authority_checkpoint(risc_diagnostic_checkpoint_client_v1 *out){(void)out;check_io();return false;}
+#define AUTHORITY_CHECKPOINT .diagnostic_checkpoint_client=authority_checkpoint,
+#else
+#define AUTHORITY_CHECKPOINT
+#endif
+static const risc_runtime_api_v1 fast_runtime={FIXTURE_PERF_TRACE FIXTURE_MONOTONIC AUTHORITY_CHECKPOINT .api_version=1,.struct_size=RISC_RUNTIME_SERVICE_CHECKPOINT_V1_SIZE,.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
  (void)runtime;
@@ -428,8 +457,22 @@ static void run_boundaries(void){
 }
 
 #endif
-int main(void){setbuf(stdout,NULL);run_matrix();
+int main(int argc,char **argv){
+#ifdef TEST_HOME_CLOCK_FAULT
+ (void)run_matrix;(void)run_all_faces;(void)run_boundaries;assert(argc==3);authority_fault_mode=(unsigned)atoi(argv[1]);authority_fault_at=(unsigned)atoi(argv[2]);
+ reset_case();requested_wakes=0;probe_duration=96;probe_offset=8;probe_trajectory=0;
+ clock_runtime_unavailable=true;app_main();assert(authority_lost&&clock_runtime_unavailable&&!clock_touch_retained);
+ uint32_t blocked_time=0;risc_display_surface_v1 blocked_frame={0};clock_exit_checkpoint(__LINE__);assert(!alive(&blocked_time)&&!present()&&!frame(&blocked_frame)&&!pace_frame(0));
+ printf("AUTHORITY stop mode=%u at=%u calls=%u pending=%u owned=%u first=%u no later callback\n",authority_fault_mode,authority_fault_at,authority_calls,pending,owned,first_seen);return 0;
+#else
+ (void)argc;(void)argv;setbuf(stdout,NULL);run_matrix();
 #ifndef WATCH_RASTER_EXPECT_LOSS
 run_all_faces();run_boundaries();
 #endif
-return 0;}
+#ifdef WATCH_PERFORMANCE_TRACE
+ assert(fixture_perf_calls&&fixture_perf_complete&&fixture_perf_dispatch);
+ printf("Home RAM trace observed callbacks=%u complete=%u dispatch=%u\n",fixture_perf_calls,fixture_perf_complete,fixture_perf_dispatch);
+#endif
+ return 0;
+#endif
+}

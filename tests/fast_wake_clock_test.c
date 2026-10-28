@@ -46,6 +46,8 @@ static uint32_t wake_count,requested_wakes,alarm_frames,seed_calls;
 static bool ended,early_launch,first_seen,fail_display,fail_release;
 static bool unreadable_rtc;
 static bool fail_context_pause,confirmed_early,unset_time;
+static unsigned touch_fault_kind,touch_fault_seen;
+static bool touch_poll_failed;
 static bool retained_fence,swipe_during_frame,swipe_latched,low_on_wake;
 static bool broadcast_live,contexts_live,contexts_enabled,alarm_on_wake;
 static bool fail_broadcast_restart,fail_ble_enable,early_sleep;
@@ -118,7 +120,9 @@ static const risc_retained_wake_api_v1 wake_api={1,sizeof(wake_api),NULL,wake_re
 static const risc_provider_promotion_api_v1 promote_api={1,sizeof(promote_api),NULL,native_promote};
 static bool fast_retain(void){retains++;retained_fence=true;return true;}
 static bool fast_confirm(void){check_io();assert(!queued_context_handoff);confirmations++;if(service_acquires<4)confirmed_early=true;return true;}
-static bool fast_health(risc_runtime_health_v1*h){check_io();h->uptime_ms=clock_ms;if(fail_next_health){fail_next_health=false;return false;}return !ended&&clock_ms<30000u;}
+static bool fast_health(risc_runtime_health_v1*h){check_io();
+ if(touch_fault_kind==2&&clock_rendering){clock_ms+=8;} /* modeled raster work */
+ h->uptime_ms=clock_ms;if(fail_next_health){fail_next_health=false;return false;}return !ended&&clock_ms<30000u;}
 static bool fast_diagnostic(const char*s){
  if(!strncmp(s,"WATCH_KEY ",10)){
   assert(++key_trace_count<=24);
@@ -156,7 +160,13 @@ static bool fast_diagnostic(const char*s){
   first_time_valid=face.time_valid;first_time_warning=!strcmp(sleep_status,"TIME CHECK ERR");
   assert(hardware_brightness==clock_quick.brightness&&!pending&&!owned&&touch.subscription&&last_complete==submitted);assert(service_acquires==0);
   assert(points_loads==1&&face.points==&clock_points_view&&!sleep_setting_reads&&!alarm_acquires&&!alarm_frames);
-  if(face.time_valid){twatch_rtc_time_v1 raw={0},expected={0};assert(watch_runtime_calendar(native_time.epoch_seconds,&raw));assert(watch_display_time(&raw,&expected));assert(!memcmp(&face.time,&expected,sizeof(expected)));}
+  if(face.time_valid){twatch_rtc_time_v1 expected={0};
+#ifdef WATCH_NATIVE_TIME_AUTHORITY
+   uint16_t fraction;assert(watch_runtime_read(&native_clock,&expected,&fraction));
+#else
+   twatch_rtc_time_v1 raw={0};assert(watch_runtime_calendar(native_time.epoch_seconds,&raw));assert(watch_display_time(&raw,&expected));
+#endif
+   assert(!memcmp(&face.time,&expected,sizeof(expected)));}
   fixture_expected_face(true);assert(!memcmp(completed_pixels,expected_pixels,sizeof(expected_pixels)));
   if(early_launch)launcher_swipe_pending=true;
  }
@@ -330,9 +340,25 @@ static bool fast_launch(const char*path){check_io();assert(!held&&!pending);
  else{assert(!strcmp(path,"springboard.elf")&&!touch.subscription);ended=true;}
  launches++;return true;}
 static unsigned alarm_touch_y(void) {
- return alarm_touch_phase<=2?alarm_touch_wrong_y:watch_home_alarm_dismiss_at(TEST_WIDTH,TEST_HEIGHT);
+ return alarm_touch_phase<=2?alarm_touch_wrong_y:(unsigned)clock_viewport.layout.safe.y+watch_home_alarm_dismiss_at(clock_viewport.layout.safe.width,clock_viewport.layout.safe.height);
+}
+static bool fast_touch_poll(void*c,size_t n) {
+ check_io();touch_poll_failed=false;
+ if(first_seen && !touch_fault_seen && (touch_fault_kind==6 || touch_fault_kind==7)) {
+  touch_poll_failed=true;return false;
+ }
+ return poll(c,n);
+}
+static uint64_t fast_touch_subscribe(void*c){check_io();return subscribe(c);}
+static bool fast_touch_unsubscribe(void*c,uint64_t id) {
+ check_io();if(touch_fault_kind==4&&!touch_fault_seen){touch_fault_seen++;return false;}
+ return unsubscribe(c,id);
 }
 static bool fast_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();(void)c;
+ assert(!touch_poll_failed);
+ if(!touch_fault_seen && (((touch_fault_kind==3||touch_fault_kind>=8)&&first_seen) || (touch_fault_kind==5&&wake_count))) {
+  touch_fault_seen++;return false;
+ }
  *out=(risc_touch_snapshot_v1){.width=TEST_WIDTH,.height=TEST_HEIGHT};
  if(alarm_touch_test){
   out->sequence=alarm_touch_phase;
@@ -341,6 +367,16 @@ static bool fast_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();(void)c;
  return true;
 }
 static int32_t fast_touch_next(void*c,uint64_t id,risc_touch_event_v1*out){
+ check_io();
+ if(touch_fault_seen && (touch_fault_kind==3 || touch_fault_kind==5))return -2;
+ if(touch_fault_seen==1 && touch_fault_kind>=8){
+  touch_fault_seen++;return touch_fault_kind==8?0:touch_fault_kind==9?-1:1;
+ }
+ if(!touch_fault_seen && ((touch_fault_kind==1&&first_seen&&!clock_rendering) ||
+       (touch_fault_kind==2&&clock_rendering) || (touch_fault_kind==7&&touch_poll_failed))) {
+  touch_fault_seen++;return -2;
+ }
+ if(touch_fault_kind==6&&touch_poll_failed){touch_fault_seen++;return -1;}
  if(!alarm_touch_test)return next(c,id,out);
  if(!clock_alarm_modal||!alarm_frames||alarm_touch_phase>=4)return 0;
  ++alarm_touch_phase;
@@ -351,6 +387,9 @@ static bool fast_ble_enable(void*c,bool enabled){check_io();radio_apply_count++;
 static bool fast_ble_status(void*c,uint8_t*out){check_io();return ble_status(c,out);}
 static const portable_bluetooth_control_v1 fast_ble={.api_version=1,.struct_size=sizeof(fast_ble),.set_enabled=fast_ble_enable,.status=fast_ble_status};
 static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_io();
+#ifdef WATCH_TEST_TIMEZONE_GET
+ if(!strcmp(k,"time_zone"))return WATCH_TEST_TIMEZONE_GET(c,k,b,n,z);
+#endif
  if(!strcmp(k,PORTABLE_SLEEP_KEY)){sleep_setting_reads++;clock_ms+=sleep_setting_cost;}
  if(!strcmp(k,PORTABLE_CONTEXT_ENABLED_KEY)&&contexts_enabled){assert(n>=4);memcpy(b,(uint8_t[]){0x43,1,1,1^0xa5},4);*z=4;return RISC_KEY_VALUE_OK;}
  return face_get(c,k,b,n,z);}
@@ -366,6 +405,8 @@ static bool fast_launch_failure(risc_runtime_launch_failure_v1 *out){
 static const risc_runtime_api_v1 fast_runtime={.api_version=1,.struct_size=RISC_RUNTIME_SERVICE_CHECKPOINT_V1_SIZE,.health=fast_health,.yield_ms=yield,.diagnostic=fast_diagnostic,.request_launch=fast_launch,.acquire=fast_acquire,.release=fast_release,.confirm_boot=fast_confirm,.retain_invocation=fast_retain,.take_launch_failure=fast_launch_failure,.initial_default=fast_initial_default};
 const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version){assert(version==1);return &fast_runtime;}
 static void reset_case(void){
+ touch_fault_kind=touch_fault_seen=0;touch_poll_failed=false;
+ fixture_safe_insets=(risc_display_insets_v1){0};
 #ifdef WATCH_AUTOMATIC_PROVISION
  fixture_provision_mode=fixture_provision_scans=fixture_volume_acquires=0;
 #endif
@@ -405,7 +446,7 @@ static void reset_case(void){
  saved_face=radio_saved=false;ble_state=0;face_writes=face_reads=0;memset(quick_saved,0,sizeof(quick_saved));
  da.base.present_status=fast_status;pa.key_events=fast_key;pa.light_sleep=fast_sleep;pa.light_sleep_for=fast_sleep_timed;ra.read=fast_rtc;
  da.base.acquire=fast_frame_acquire;da.base.set_brightness=fast_brightness;
- pa.light_sleep_set=motion_sleep;pa.deep_sleep_set=motion_deep;ta.snapshot=fast_snapshot;ta.next=fast_touch_next;
+ pa.light_sleep_set=motion_sleep;pa.deep_sleep_set=motion_deep;ta.snapshot=fast_snapshot;ta.next=fast_touch_next;ta.poll=fast_touch_poll;ta.subscribe=fast_touch_subscribe;ta.unsubscribe=fast_touch_unsubscribe;
  native_time=(risc_realtime_snapshot_v1){.struct_size=sizeof(native_time),.validity=RISC_REALTIME_VALID,.epoch_seconds=1791074400};
  alarm_view=(alarm_status_v1){.api_version=1,.struct_size=sizeof(alarm_view),.state=ALARM_STATE_READY};
  contexts_view=(contexts_status_v1){.struct_size=sizeof(contexts_view)};
@@ -730,7 +771,10 @@ static void live_rtc_update_cases(void){
  printf("Live RTC/native update: %u completed-face cases, all faces, forward/backward, DST/leap/year boundaries, modeled <=500ms, clean custody PASS\n",count);
 }
 
-int main(void){
+#ifndef WATCH_FAST_WAKE_TEST_ENTRY
+#define WATCH_FAST_WAKE_TEST_ENTRY main
+#endif
+int WATCH_FAST_WAKE_TEST_ENTRY(void){
  live_rtc_update_cases();
  if(getenv("WATCH_TEST_RTC_UPDATES_ONLY"))return 0;
  for(unsigned cause=0;cause<=RISC_BOOT_DEEP_OTHER;cause++) {
@@ -748,6 +792,18 @@ int main(void){
   app_main();check_clean();assert(alarm_touch_phase==4&&!alarm_view.occurrence.generation&&alarm_frames);
  }
  puts("Alarm native touch: just-above-dismiss and retry-row taps stay inert; exact dismiss boundary acknowledges through raw event queue PASS");
+ for(unsigned boundary=0;boundary<3;boundary++) {
+  reset_case();alarm_touch_test=true;
+  unsigned inset=TEST_WIDTH*15u/100u;
+  fixture_safe_insets=(risc_display_insets_v1){inset,inset,inset,inset};
+  unsigned w=TEST_WIDTH-2u*inset,h=TEST_HEIGHT-2u*inset;
+  alarm_touch_wrong_y=boundary==0?inset+watch_home_alarm_dismiss_at(w,h)-1u:
+      boundary==1?inset+watch_home_alarm_retry_at(w,h):TEST_HEIGHT-1u;
+  alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;
+  app_main();check_clean();assert(alarm_touch_phase==4&&!alarm_view.occurrence.generation&&alarm_frames);
+ }
+ puts("Alarm provider insets: actual Home modal rejects above-dismiss/retry/gutter taps then accepts translated dismiss boundary PASS");
+
  for(unsigned kind=1;kind<=2;kind++){
   reset_case();launch_failure_kind=kind;app_main();check_clean();
   assert(first_seen&&launch_failure_reads==1&&!launch_failure_kind);
@@ -784,5 +840,20 @@ int main(void){
  }
  puts("Actual Home provisioning: first-frame admission, absent/authorized optional SD scans via instance0, saved-radio fence, paused Contexts/broadcast, resumed service phases and clean teardown PASS");
 #endif
+ for(unsigned kind=1;kind<=10;kind++) {
+  reset_case();touch_fault_kind=kind;
+  if(kind==4||kind==5)requested_wakes=1;
+  app_main();fprintf(stderr,"touch fault kind=%u seen=%u retained=%u\n",kind,touch_fault_seen,retains);assert(touch_fault_seen==(kind>=8?2u:1u));
+  if(kind==6||kind>=8){check_clean();continue;}
+  assert(retained_fence&&retains==1&&clock_touch_retained&&touch.terminal&&native_clock.halted);
+  uint32_t ignored=0;risc_display_surface_v1 blocked={0};
+  assert(!alive(&ignored)&&!frame(&blocked)&&!present()&&!pace_frame(0));
+  assert(!clock_render_checkpoint(NULL));sample_launcher_touch(1000,true);
+  assert(!launcher_touch_capture(&touch,1000).valid&&!launcher_touch_close(&touch));
+  assert(!launcher_touch_open(&touch)&&!clock_sleep_failure("terminal-test"));
+  clock_exit_checkpoint(__LINE__);assert(retains==1);
+  retained_reset();
+ }
+ puts("Home touch custody: foreground/render next fault, snapshot/open/close faults, failed-poll fault, benign snapshot status 0/-1/event and recoverable GAP; zero callbacks after retention PASS");
  return 0;
 }

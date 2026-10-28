@@ -40,8 +40,9 @@ void nova_watch_format(const nova_watch_state *state, nova_watch_labels *labels)
  * face titles and live Point-summary content. With a NULL capture
  * callback this is pure. The opt-in owner callback may only drain already-owned
  * audio or journal raw input without UI mutation; false stops frame writes and
- * propagates failure. Face rasterization allocates no memory and uses integer
- * geometry and fixed glyph masks. The picker uses its explicit lifetime cache.
+ * propagates failure. Face rasterization uses integer geometry and fixed glyph
+ * masks; explicitly selected reuse stores may allocate lazily and fall back on
+ * failure. The picker uses its explicit lifetime cache and optional column plan.
  * Writes only active pixels. Stride padding and caller guards are preserved. */
 bool nova_watch_render(risc_display_surface_v1 *surface, const nova_watch_state *state);
 const char *nova_watch_face_name(unsigned id);
@@ -58,6 +59,9 @@ typedef struct {
     uint32_t points_revision, points_next_rtc;
     uint8_t points_status, points_phase;
     uint16_t capacity, sizes[WATCH_FACE_COUNT];
+#ifdef WATCH_PICKER_COMPOSITOR_PLAN
+    uint32_t *composition_columns;
+#endif
     uint16_t pixels[];
 } nova_watch_picker_cache;
 nova_watch_picker_cache *nova_watch_picker_cache_create(unsigned width,unsigned height);
@@ -69,10 +73,14 @@ bool nova_watch_picker_collections_render(risc_display_surface_v1 *surface, cons
     const char *status, unsigned pulse_face, unsigned pulse_scale_q8, nova_watch_picker_cache *cache);
 /* Optional service-provided label, bounded to 23 characters; NULL preserves
  * the existing ALARM/COUNTDOWN title. No recurrence lookup occurs here. */
+bool nova_watch_alarm_label_render_safe(risc_display_surface_v1 *surface,const risc_display_rect_v1 *safe,const char *label,
+    bool countdown,bool blocked,bool rtc_error,bool dismissing,bool uncertain,bool occurrence);
 bool nova_watch_alarm_label_render(risc_display_surface_v1 *surface,const char *label,
     bool countdown,bool blocked,bool rtc_error,bool dismissing,bool uncertain,bool occurrence);
 bool nova_watch_alarm_render(risc_display_surface_v1 *surface,bool countdown,bool blocked,
     bool rtc_error,bool dismissing,bool uncertain,bool occurrence);
+/* Release optional owned native coverage at invocation teardown/memory pressure. */
+void nova_watch_raster_cache_release(void);
 #ifdef __cplusplus
 }
 #endif

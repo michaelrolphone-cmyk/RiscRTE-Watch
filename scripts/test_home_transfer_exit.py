@@ -78,7 +78,9 @@ def main():
             sdk = headers(work, system, utilities, watch)
             inherited = watch / 'tests/fast_wake_clock_test.c'
             source = inherited.read_text()
-            assert digest(inherited) == '85292c7c79aba23e97780c324fe50e3744e321d3ac3a63774556024de493b778'
+            expected_fixture = ('85292c7c79aba23e97780c324fe50e3744e321d3ac3a63774556024de493b778' if args.expect_baseline
+                                else 'f91c57cacaf8bbc9376610f5c84caa2517f61f3273867e0de6e8430aa149a927')
+            assert digest(inherited) == expected_fixture, 'Pinned Home fixture changed'
             replacements = {
                 'int main(void){': 'int inherited_fast_main(void){',
                 'const risc_runtime_api_v1*risc_runtime_get_api(uint32_t version)':

@@ -17,8 +17,15 @@ receipt={'hardware_tested':False,'baseline':a.baseline,'width':a.width,'height':
 with tempfile.TemporaryDirectory(prefix='watch-confirmation-build-') as temp:
  work=Path(temp);sdk=headers(work,s,u,w)
  original=w/'tests/fast_wake_clock_test.c'
- assert hashlib.sha256(original.read_bytes()).hexdigest()=="85292c7c79aba23e97780c324fe50e3744e321d3ac3a63774556024de493b778", 'Pinned Home fixture changed'
- text=original.read_text().replace('static const risc_runtime_api_v1 fast_runtime=', 'static risc_runtime_api_v1 fast_runtime=').replace('int main(void){','int inherited_fast_main(void){')
+ expected_fixture="85292c7c79aba23e97780c324fe50e3744e321d3ac3a63774556024de493b778" if a.baseline else "cdf13b91ac49733c02f30cb715604437e814a0bb13c1300c19ec0c79ceefcaf8"
+ assert hashlib.sha256(original.read_bytes()).hexdigest()==expected_fixture, 'Pinned Home fixture changed'
+ text=original.read_text().replace('static const risc_runtime_api_v1 fast_runtime=', 'static risc_runtime_api_v1 fast_runtime=')
+ if a.baseline:
+  assert text.count('int main(void){')==1
+  text=text.replace('int main(void){','int inherited_fast_main(void){')
+ else:
+  assert text.count('#ifndef WATCH_FAST_WAKE_TEST_ENTRY')==1
+  text='#define WATCH_FAST_WAKE_TEST_ENTRY inherited_fast_main\n'+text
  assert text.count('ended=true;')==4, 'Pinned lifecycle fixture changed'
  text='#include <stdbool.h>\nstatic bool probe_long;\n'+text.replace('ended=true;', 'if(!probe_long)ended=true;')
  text+=(root/'tests/home_confirmation_controls.inc').read_text()

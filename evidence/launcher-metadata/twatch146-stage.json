@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "profile": "twatch146",
+  "flashable": false,
+  "requires_device_assembly": true,
+  "requires_cohort_rebind": true,
+  "applications": 26,
+  "providers_before": 36,
+  "providers_after": 36,
+  "provider_capacity": 36,
+  "changed_files": [
+    "boot.json",
+    "clock.elf",
+    "clock.json",
+    "default.elf",
+    "default.json"
+  ],
+  "added_files": [],
+  "unchanged_files": 120,
+  "home_sha256": "01d6e1f845dc34e46ebad9f1646af0c0dafdd98915493557c60f8351cbc299e7",
+  "return_sha256": "f29065b5a57b88f8fd6c2a328c0865dd2628cc484da30f6c23470a82ae8c87bc",
+  "old_return_bytes": 1232,
+  "return_bytes": 1236,
+  "manifest_sha256": {
+    "default.json": "12762dbb1e07c3d00015b5d0a780dad723fb2d1a4daa38cad04c044c148193b9",
+    "clock.json": "33e03ec855ebede1dee15d789b19333281843e781a7c4efe526e1030ceb588ed"
+  }
+}

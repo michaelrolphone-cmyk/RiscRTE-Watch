@@ -35,3 +35,12 @@ static inline unsigned watch_home_alarm_dismiss_at(unsigned width,unsigned heigh
 static inline unsigned watch_home_alarm_retry_at(unsigned width,unsigned height) {
     return height-watch_home_scale(width,height,42u);
 }
+
+/* Modal content uses provider safe bounds; input stays in physical coordinates.
+ * Return 0 outside content, 1 for dismiss/back, 2 for retry. */
+static inline unsigned watch_home_alarm_action(const watch_layout_rect *safe,unsigned x,unsigned y) {
+    if(!watch_layout_contains(safe,x,y))return 0;
+    const unsigned local_y=y-(unsigned)safe->y;
+    if(local_y>=watch_home_alarm_retry_at(safe->width,safe->height))return 2;
+    return local_y>=watch_home_alarm_dismiss_at(safe->width,safe->height)?1u:0u;
+}

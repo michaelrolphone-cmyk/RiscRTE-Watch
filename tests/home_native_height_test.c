@@ -36,7 +36,7 @@ static nova_watch_state state_for(unsigned n) {
     return state;
 }
 #ifndef HOME_WRITE_GOLDENS
-#include "home_240_goldens.inc"
+#include "home_240_round_safe_goldens.inc"
 #endif
 static unsigned golden_index;
 static void golden(const risc_display_surface_v1 *s) {

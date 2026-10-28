@@ -190,7 +190,9 @@ static bool t_release(risc_runtime_capability_v1 *grant){
     if(slot==0)CHECK(!t.pending&&!t.borrowed);
     t.live&=~(1u<<slot);return true;
 }
-static bool t_health(risc_runtime_health_v1 *out){out->uptime_ms=t.now;if(t.ticks>=t.health_limit){t.healthy_stop=true;return false;}return true;}
+static unsigned fixture_health_calls,fixture_monotonic_calls;
+static bool t_monotonic(uint32_t*out){++fixture_monotonic_calls;*out=t.now;if(t.ticks>=t.health_limit){t.healthy_stop=true;return false;}return true;}
+static bool t_health(risc_runtime_health_v1 *out){++fixture_health_calls;out->uptime_ms=t.now;if(t.ticks>=t.health_limit){t.healthy_stop=true;return false;}return true;}
 static void t_yield(uint32_t ms){if(expect_retained&&t.retained)longjmp(retained_return,1);CHECK(ms&&ms<=100);t.now+=ms;CHECK(t.now<20000);}
 static bool t_log(const char *line){CHECK(line);if(strstr(line,"WATCH_TEST retained="))t.retained=true;if(!strcmp(line,"WATCH_TEST return=home"))t.returned=true;return true;}
 static risc_runtime_api_v1 test_runtime={.api_version=1,.struct_size=sizeof(test_runtime),.health=t_health,.yield_ms=t_yield,.diagnostic=t_log,.acquire=t_get,.release=t_release};
@@ -326,10 +328,27 @@ static void retained_cases(void) {
     }
     puts("Bringup retained cleanup: failed haptic stop, unsubscribe and every reverse-order grant release stop further cleanup and Home return PASS");
 }
+static void safe_bounds_cases(void) {
+    for(unsigned w=240;w<=700;w+=23) for(unsigned h=240;h<=800;h+=29) {
+        watch_layout v;bringup_layout l;const watch_layout_insets in={13,17,19,11};
+        CHECK(watch_layout_native_open(&v,w,h,&in));CHECK(bringup_layout_open_safe(&l,&v));
+        const watch_layout_rect *r[]={&l.title,&l.bars,&l.motion,&l.haptic,&l.back};
+        for(unsigned n=0;n<5;n++){CHECK(r[n]->x>=v.safe.x&&r[n]->y>=v.safe.y);CHECK(r[n]->x+(int)r[n]->width<=v.safe.x+(int)v.safe.width);CHECK(r[n]->y+(int)r[n]->height<=v.safe.y+(int)v.safe.height);}
+        CHECK(!bringup_hit(&l,0,0));CHECK(bringup_hit(&l,l.back.x,l.back.y)==3);
+    }
+    watch_layout v;bringup_layout l;const watch_layout_insets round={69,69,69,69};
+    CHECK(watch_layout_native_open(&v,466,466,&round));CHECK(bringup_layout_open_safe(&l,&v));
+    guarded_surface g=gs_new(466,466);CHECK(render(&g.surface,&l,1,"BATTERY UNKNOWN","NO RTC","MOTION UNAVAILABLE","DEVICE PENDING",233,233,1));gs_check(&g);write_raster(&g);free(g.allocation);
+    puts("Bringup safe bounds: generated geometry, full 466 raster and 328 content controls PASS");
+}
 int main(void){
-    const unsigned dimensions[][2]={{240,240},{410,502},{128,128},{502,410},{320,172}};
+    bool cheap=getenv("WATCH_TEST_MONOTONIC")!=NULL;
+    if(cheap)test_runtime.monotonic_ms=t_monotonic;
+    safe_bounds_cases();
+    const unsigned dimensions[][2]={{466,466},{240,240},{410,502},{128,128},{502,410},{320,172}};
     for(unsigned i=0;i<sizeof(dimensions)/sizeof(*dimensions);i++){renderer_case(dimensions[i][0],dimensions[i][1]);lifecycle_cases(dimensions[i][0],dimensions[i][1]);}
     /* Each scenario re-enters the actual app; repeat the first size after all others. */
     lifecycle_cases(240,240);retained_cases();
+    CHECK(cheap ? (fixture_monotonic_calls>0&&!fixture_health_calls) : (fixture_health_calls>0&&!fixture_monotonic_calls));
     printf("Bringup production renderer and app_main: %u lifecycle cases plus five native rasters PASS; no physical hardware tested\n",fixture_cases);return 0;
 }

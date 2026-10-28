@@ -68,6 +68,18 @@ static bool bringup_layout_open(bringup_layout *out, uint32_t width, uint32_t he
     return true;
 }
 
+/* Position live controls inside provider-owned content bounds while preserving
+ * the full raster and raw touch coordinate system. Zero insets are identical. */
+static bool bringup_layout_open_safe(bringup_layout *out, const watch_layout *v) {
+    if (!out || !watch_layout_valid(v)) return false;
+    bringup_layout l;
+    if (!bringup_layout_open(&l,v->safe.width,v->safe.height)) return false;
+    watch_layout_rect *fixed[]={&l.title,&l.subtitle,&l.bars,&l.motion,&l.haptic,&l.back};
+    for(unsigned n=0;n<sizeof(fixed)/sizeof(*fixed);n++) {fixed[n]->x+=v->safe.x;fixed[n]->y+=v->safe.y;}
+    for(unsigned n=0;n<7;n++) {l.rows[n].x+=v->safe.x;l.rows[n].y+=v->safe.y;}
+    l.width=v->physical_width;l.height=v->physical_height;*out=l;return true;
+}
+
 static unsigned bringup_hit(const bringup_layout *l, uint16_t x, uint16_t y) {
     if (!l || x >= l->width || y >= l->height) return 0;
     if (watch_layout_contains(&l->motion, x, y)) return 1;

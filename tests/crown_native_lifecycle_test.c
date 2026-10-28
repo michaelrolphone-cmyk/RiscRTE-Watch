@@ -39,9 +39,32 @@ static void finish_case(void) {
     fixture_expected_face(true);assert(!memcmp(expected_pixels,pixels,sizeof(pixels)));
     watch_viewport_close(&clock_viewport);
 }
+static unsigned legacy_touch_calls,legacy_touch_retains;
+static bool legacy_touch_poll(void *c,size_t n){(void)c;assert(n==1&&!legacy_touch_retains);legacy_touch_calls++;return true;}
+static int32_t legacy_touch_next(void*c,uint64_t id,risc_touch_event_v1*out){(void)c;(void)out;assert(id==1&&!legacy_touch_retains);legacy_touch_calls++;return -2;}
+static bool legacy_touch_snapshot(void*c,risc_touch_snapshot_v1*out){(void)c;(void)out;assert(false);return false;}
+static bool legacy_touch_retain(void){assert(!legacy_touch_retains);legacy_touch_retains++;return true;}
+static void legacy_terminal_custody(void) {
+ risc_runtime_api_v1 terminal_runtime=runtime;
+ terminal_runtime.retain_invocation=legacy_touch_retain;
+ terminal_runtime.struct_size=RISC_RUNTIME_RETAIN_INVOCATION_V1_SIZE;rt=&terminal_runtime;
+ risc_touch_api_v1 terminal_touch=ta;
+ terminal_touch.poll=legacy_touch_poll;terminal_touch.next=legacy_touch_next;terminal_touch.snapshot=legacy_touch_snapshot;
+ touch=(watch_launcher_touch){.api=&terminal_touch,.subscription=1};clock_touch_retained=false;
+ assert(!launcher_touch_capture(&touch,100).valid&&touch.terminal&&clock_touch_retained);
+ assert(legacy_touch_calls==2&&legacy_touch_retains==1);
+ uint32_t now=0;risc_display_surface_v1 blocked={0};
+ assert(!alive(&now)&&!frame(&blocked)&&!present()&&!pace_frame(0));
+ sample_launcher_touch(100,true);assert(!launcher_touch_close(&touch)&&!launcher_touch_open(&touch));
+ clock_exit_checkpoint(__LINE__);assert(legacy_touch_calls==2&&legacy_touch_retains==1);
+}
 int main(void) {
     prepare_case(true);assert(return_to_clock());finish_case();
     prepare_case(false);assert(logo_to_clock());finish_case();
+    legacy_terminal_custody();
     printf("Crown native lifecycle %ux%u: exact physical retained snapshots, boot blend, final sharp frame, no provider lease/allocation leak PASS\n",TEST_WIDTH,TEST_HEIGHT);
-    return 0;
+    #ifdef WATCH_PERFORMANCE_TRACE
+ assert(fixture_perf_calls&&fixture_perf_complete);
+#endif
+ return 0;
 }

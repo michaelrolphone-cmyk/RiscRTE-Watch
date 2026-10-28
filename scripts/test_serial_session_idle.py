@@ -26,7 +26,9 @@ with tempfile.TemporaryDirectory(prefix='home-serial-idle-') as temp:
  work=Path(temp);sdk=headers(work,a.system,a.utilities,w)
  original=w/'tests/fast_wake_clock_test.c'
  source=original.read_text();assert source.count('static const risc_runtime_api_v1 fast_runtime=')==1
- source=source.replace('static const risc_runtime_api_v1 fast_runtime=','static risc_runtime_api_v1 fast_runtime=').replace('int main(void){','int inherited_fast_main(void){')
+ source=source.replace('static const risc_runtime_api_v1 fast_runtime=','static risc_runtime_api_v1 fast_runtime=')
+ assert source.count('#ifndef WATCH_FAST_WAKE_TEST_ENTRY')==1
+ source='#define WATCH_FAST_WAKE_TEST_ENTRY inherited_fast_main\n'+source
  source='#include <stdbool.h>\nstatic bool probe_long;\n'+source.replace('ended=true;','if(!probe_long)ended=true;')
  source+=(ROOT/'tests'/fixture_name).read_text()
  fixture=work/'serial_session_idle.c';fixture.write_text(source);(a.output/'generated_fixture.c').write_text(source)

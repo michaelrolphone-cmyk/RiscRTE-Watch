@@ -1,8 +1,14 @@
 """Stage one header identity per API, with this application's SDK suffixes last."""
 from pathlib import Path
 import shutil
+import hashlib,json
 
 def headers(output, system, utilities, home):
+    clock=home/'sdk/app/RiscRuntimeClockV1.h'
+    if clock.exists():
+        provenance=json.loads((home/'sdk/app/RiscRuntimeClockV1.provenance.json').read_text())
+        if hashlib.sha256(clock.read_bytes()).hexdigest()!=provenance['sha256']:
+            raise ValueError('Canonical Runtime clock header changed without provenance')
     target = Path(output)/'sdk/include'
     target.mkdir(parents=True, exist_ok=True)
     for source in (system/'lib/PortableApps/include', utilities/'lib/Alarm/include',

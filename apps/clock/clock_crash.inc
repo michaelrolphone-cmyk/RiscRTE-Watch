@@ -34,7 +34,7 @@ static bool clock_crash_step(void) {
  if(!crash_session_read(&clock_crash))return false;
  if(clock_crash.pending && !clock_crash.presented) {
   clock_crash_modal=true;
-  CLOCK_WAKE_MARK("crash-report-begin");
+  if(!CLOCK_WAKE_MARK("crash-report-begin"))return false;
   if(!clock_crash_prepare(NULL))return false;
   uint32_t offset=0,now=0,events=0;
   do {
@@ -58,7 +58,7 @@ static bool clock_crash_step(void) {
   watch_face_reset_contact(&picker);launcher_swipe_pending=launcher_activity_pending=false;
   (void)pqa_input(&clock_quick.ui,now,false,0,0,0,0,false);
   clock_crash_modal=false;
-  CLOCK_WAKE_MARK("crash-report-end");
+  if(!CLOCK_WAKE_MARK("crash-report-end"))return false;
  }
  return crash_session_checkpoint(&clock_crash);
 }

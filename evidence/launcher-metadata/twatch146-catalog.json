@@ -1,0 +1,269 @@
+{
+  "rows": [
+    {
+      "id": "twatch-clock",
+      "file_name": "default.elf",
+      "display_name": "Home",
+      "visible": false
+    },
+    {
+      "id": "twatch-clock-return",
+      "file_name": "clock.elf",
+      "display_name": "twatch-clock-return",
+      "visible": true
+    }
+  ],
+  "visible_count": 1,
+  "selected": [
+    "twatch-clock-return"
+  ],
+  "schema": 1,
+  "input_sha256": {
+    "default.json": "99e172232947fbeefe754ab929511263262173f80364f360825ac5754324dbd7",
+    "clock.json": "ee26c7ec19cb41daafa76e455c3bd24ca9a1ee6762fe5cf74cd2ddb321fc0bcd"
+  },
+  "negative_control": {
+    "rows": [
+      {
+        "id": "twatch-clock",
+        "file_name": "default.elf",
+        "display_name": "twatch-clock",
+        "visible": true
+      },
+      {
+        "id": "twatch-clock-return",
+        "file_name": "clock.elf",
+        "display_name": "twatch-clock-return",
+        "visible": true
+      }
+    ],
+    "visible_count": 2,
+    "selected": [
+      "twatch-clock",
+      "twatch-clock-return"
+    ]
+  },
+  "hardware_tested": false,
+  "target_instructions_executed": false,
+  "native_policy_admission_tested": false,
+  "runtime_commit": "34716712d4cb7f25fda56a540aafc652c924c995",
+  "runtime_catalog_sha256": "5335d7ab5b48e40c6f73acdf822ed4f7a9996d7b175ad1e7f84e6e4a6f4df443",
+  "probe_source_sha256": "d413bcc17b3a4bfbbb2164098f69ad231c09472d6c8d950a9fbab6f2db26023c",
+  "qualifier_source_sha256": "b60b10340b0a8d054fe135156b0454f109ed24f6adb63f763713989823abb7eb",
+  "sanitized": true,
+  "leak_detection_enabled": false,
+  "store_inventory": {
+    "rows": [
+      {
+        "id": "alarms",
+        "file_name": "alarms.elf",
+        "display_name": "Alarms",
+        "visible": true
+      },
+      {
+        "id": "app_store",
+        "file_name": "app_store.elf",
+        "display_name": "App Store",
+        "visible": true
+      },
+      {
+        "id": "audio_spectrum",
+        "file_name": "audio_spectrum.elf",
+        "display_name": "Audio Spectrum",
+        "visible": true
+      },
+      {
+        "id": "battery",
+        "file_name": "battery.elf",
+        "display_name": "Battery",
+        "visible": true
+      },
+      {
+        "id": "ble_buttons",
+        "file_name": "ble_buttons.elf",
+        "display_name": "BLE Buttons",
+        "visible": true
+      },
+      {
+        "id": "ble_scanner",
+        "file_name": "ble_scanner.elf",
+        "display_name": "BLE Scanner",
+        "visible": true
+      },
+      {
+        "id": "ble_touchpad",
+        "file_name": "ble_touchpad.elf",
+        "display_name": "BLE Touchpad",
+        "visible": true
+      },
+      {
+        "id": "watch-bringup",
+        "file_name": "bringup.elf",
+        "display_name": "watch-bringup",
+        "visible": false
+      },
+      {
+        "id": "calculator",
+        "file_name": "calculator.elf",
+        "display_name": "Calculator",
+        "visible": true
+      },
+      {
+        "id": "twatch-clock-return",
+        "file_name": "clock.elf",
+        "display_name": "Clock",
+        "visible": true
+      },
+      {
+        "id": "contexts",
+        "file_name": "contexts.elf",
+        "display_name": "Contexts",
+        "visible": true
+      },
+      {
+        "id": "countdown",
+        "file_name": "countdown.elf",
+        "display_name": "Countdown",
+        "visible": true
+      },
+      {
+        "id": "twatch-clock",
+        "file_name": "default.elf",
+        "display_name": "Home",
+        "visible": false
+      },
+      {
+        "id": "file_browser",
+        "file_name": "file_browser.elf",
+        "display_name": "Files",
+        "visible": true
+      },
+      {
+        "id": "frequency_generator",
+        "file_name": "frequency_generator.elf",
+        "display_name": "Frequency Generator",
+        "visible": true
+      },
+      {
+        "id": "lists",
+        "file_name": "lists.elf",
+        "display_name": "Lists",
+        "visible": true
+      },
+      {
+        "id": "lora_messages",
+        "file_name": "lora_messages.elf",
+        "display_name": "LoRa Messages",
+        "visible": true
+      },
+      {
+        "id": "model_viewer",
+        "file_name": "model_viewer.elf",
+        "display_name": "3D Viewer",
+        "visible": true
+      },
+      {
+        "id": "ota_update",
+        "file_name": "ota_update.elf",
+        "display_name": "Firmware Update",
+        "visible": true
+      },
+      {
+        "id": "points_in_time",
+        "file_name": "points_in_time.elf",
+        "display_name": "Points in Time",
+        "visible": true
+      },
+      {
+        "id": "settings",
+        "file_name": "settings.elf",
+        "display_name": "Settings",
+        "visible": true
+      },
+      {
+        "id": "springboard",
+        "file_name": "springboard.elf",
+        "display_name": "springboard",
+        "visible": false
+      },
+      {
+        "id": "stopwatch",
+        "file_name": "stopwatch.elf",
+        "display_name": "Stopwatch",
+        "visible": true
+      },
+      {
+        "id": "timecard",
+        "file_name": "timecard.elf",
+        "display_name": "Timecard",
+        "visible": true
+      },
+      {
+        "id": "waterfall",
+        "file_name": "waterfall.elf",
+        "display_name": "Waterfall",
+        "visible": true
+      },
+      {
+        "id": "wifi_settings",
+        "file_name": "wifi_settings.elf",
+        "display_name": "Wi-Fi",
+        "visible": true
+      }
+    ],
+    "visible_count": 23,
+    "selected": [
+      "alarms",
+      "app_store",
+      "audio_spectrum",
+      "battery",
+      "ble_buttons",
+      "ble_scanner",
+      "ble_touchpad",
+      "calculator",
+      "twatch-clock-return",
+      "contexts",
+      "countdown",
+      "file_browser",
+      "frequency_generator",
+      "lists",
+      "lora_messages",
+      "model_viewer",
+      "ota_update",
+      "points_in_time",
+      "settings",
+      "stopwatch",
+      "timecard",
+      "waterfall",
+      "wifi_settings"
+    ]
+  },
+  "store_input_sha256": {
+    "alarms.json": "9c98588928bcb88db939f123a2967a5c3390b6f729f73846acdbff00ac912b1f",
+    "app_store.json": "31dbb5acdc2ea8af019c5bde155f8b9f39fc700233dd42360981aaf815dfc4c3",
+    "audio_spectrum.json": "3307b5a79070317954ae6c4012df8213a7371f897bf1f793b4270ed5675caaba",
+    "battery.json": "01120c9f8ddfeaf033618941b3c87dfd018678dc89cf70b8c5a72f2ffac00ab6",
+    "ble_buttons.json": "914e51ab3e0acde142454524351272d60207378d341a466068d194e101a830fc",
+    "ble_scanner.json": "a7fb1101bf7efe3d11a7598759be7a00060667277c38f866f8e5088cfe6f98c3",
+    "ble_touchpad.json": "e3fd2e2acfb663d5cf0f95a5e3e4abd08122c5b495ba0130f278fb40d01963bd",
+    "bringup.json": "51525ccc798256bd0ed55f56dc1b1f56aeb5f2fa93aa24abaf45bae81559efa9",
+    "calculator.json": "630de28a25a8a9383c0682300700a4ff80dc3d40c77a22cc0eadff8c7b234b18",
+    "clock.json": "33e03ec855ebede1dee15d789b19333281843e781a7c4efe526e1030ceb588ed",
+    "contexts.json": "e42d04c6cece6a5f042190ed89114f44ee299f98dfd44384daa6fc75b508bd91",
+    "countdown.json": "e262550a971cfbe0f9ad688eec99c02413c776a192a3f75d1181ff1ae6462547",
+    "default.json": "12762dbb1e07c3d00015b5d0a780dad723fb2d1a4daa38cad04c044c148193b9",
+    "file_browser.json": "4310f161da1f1fb8634bdfce92c3df06cdb4e295936c2a5eebbaa4224f25f633",
+    "frequency_generator.json": "d949acb983646b1dd305d2420baff5df2112fcc1923085b880adbaa338a171b8",
+    "lists.json": "e64999c19aa4c2edc69ff78ed721cc182afbb90e0ebfbace063e5890feca9807",
+    "lora_messages.json": "2c63f3eb4e9d2c96c8adbfc77c0d01a91969ff8cfc0ae7a36d4eed22075ad70c",
+    "model_viewer.json": "5bec2a79d5afe2e90fb89dcffbdf18d325ebdb348502e10ea9a2a9f51d27f835",
+    "ota_update.json": "b9ae2b64689a49c027c74b683ab438549f49c234ad8415974bc2f0d1d545bf50",
+    "points_in_time.json": "07d94c48d95e125e95479ed359f8aa1f60afab684296cfe09d03f251db1940ba",
+    "settings.json": "d0b30f4842b9aec163dac48b0e9c8f555979018a2c3e853840b092dbb6c1ad34",
+    "springboard.json": "ce2cdb2832e83a1e29afd7ca5b9a24ee9cabac3143e226fb89e60c26f782c255",
+    "stopwatch.json": "b64428a58e7bcf2a74e95d09fd4d197aaf14c98fd5991c9ceb702020cbcc33d6",
+    "timecard.json": "b554c7673b251ceee4bc23b1141aa6704eef41defaa14c1db6c65a12449cb0ca",
+    "waterfall.json": "97818c980aa72f948f76f93fe5a0a00b2d121e823032f4d3e0fe9946a2900f8b",
+    "wifi_settings.json": "cb1547703aca540dca05272f52a513a4e5efe44a001254b035506fcdee0ca14b"
+  }
+}
