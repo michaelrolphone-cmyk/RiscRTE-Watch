@@ -59,7 +59,7 @@ jobs:
       - name: Generic contracts, independent services and display classes
         run: |
           for f in RiscPowerSleepV1.h RiscPowerKeyV1.h RiscDisplayPowerV1.h; do cmp "sdk/driver/$f" ".source/drivers/sdk/driver/$f"; done
-          python3 -m unittest discover -s tests -v
+          python3 -m unittest discover -s tests -t . -v
           python3 scripts/test_launcher_metadata.py --runtime .source/runtime --output dist/launcher-source --sanitize
           python3 scripts/check_capability_boundaries.py
           python3 scripts/test_capabilities.py
