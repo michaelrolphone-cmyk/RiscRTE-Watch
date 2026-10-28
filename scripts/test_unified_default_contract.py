@@ -20,7 +20,17 @@ def contract():
             arguments.extend(x.value for x in node.args if isinstance(x,ast.Constant) and isinstance(x.value,str))
         if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FLAGS' for t in node.targets):
             defines=[n.value for n in ast.walk(node.value) if isinstance(n,ast.Constant) and isinstance(n.value,str)]
-    assert set(arguments)-{'--'}=={'--output','--cc','--role','--automatic-provision','--serial-transfer-mode'}, arguments
+    assert set(arguments)-{'--'}=={'--output','--cc','--role','--automatic-provision','--serial-transfer-mode',
+        '--time-authority','--unset-time-local','--native-alarm-v2','--clock-edit-authority',
+        '--native-quick-actions','--native-performance-runtime','--interaction-trace'}, arguments
+    options={node.args[0].value:node for node in ast.walk(tree)
+             if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='add_argument'
+             and node.args and isinstance(node.args[0],ast.Constant)}
+    assert {kw.arg:ast.literal_eval(kw.value) for kw in options['--time-authority'].keywords if kw.arg in ('choices','default')} == {'choices':['external-rtc','native'],'default':'external-rtc'}
+    for option in ('--native-alarm-v2','--clock-edit-authority','--native-quick-actions','--interaction-trace'):
+        assert any(kw.arg=='action' and ast.literal_eval(kw.value)=='store_true' for kw in options[option].keywords)
+        assert not any(kw.arg=='default' and ast.literal_eval(kw.value) for kw in options[option].keywords)
+    assert not any(value in defines for value in ('-DWATCH_NATIVE_TIME_AUTHORITY','-DWATCH_NATIVE_ALARM_V2','-DALARM_SERVICE_CLOCK_EDIT_V2','-DPORTABLE_QUICK_CAPABILITY_SAFE','-DWATCH_PERFORMANCE_TRACE','-DWATCH_INTERACTION_TRACE'))
     transfer=[node for node in ast.walk(tree) if isinstance(node,ast.If) and ast.unparse(node.test)=="role == 'default' and a.serial_transfer_mode"]
     assert len(transfer)==1 and ast.unparse(transfer[0].body[0])=="flags.append('-DWATCH_SERIAL_TRANSFER_MODE')"
     assert not any('WATCH_SERIAL_TRANSFER_MODE' in value for value in defines)
@@ -35,7 +45,7 @@ def contract():
     source=(ROOT/'apps/clock/clock_crash.inc').read_text()
     assert 'hooks.files_enabled=true;hooks.files_instance=0;' in source
     assert 'WATCH_CRASH_REPORT_SD_VOLUME_INSTANCE' not in source
-    print('Unified default contract: fixed common preference route; no board-specific build switches; explicit Home-only transfer option; optional generic files instance0 PASS')
+    print('Unified default contract: fixed common preference route; no board-specific build switches; explicit Home-only transfer/native options; legacy time default retained; optional generic files instance0 PASS')
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)

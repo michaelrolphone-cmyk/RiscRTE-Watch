@@ -1,0 +1,9 @@
+# Badge snapshot CI follow-up
+
+The initial repair head 8b88e733aa73a61fca9a875d5a0dade94bd695bf passed visible RTC, shared native-height and Home serial-navigation workflows. Universal Watch progressed through 42 unit tests and the generic preferences matrix, then found its unified-default contract still allowed only the old five explicit builder options.
+
+The contract now allows the exact seven native/time/trace options already present in the qualified builder. It separately requires external-rtc to remain the default, native action switches to be explicit store_true options without a true default, and native/trace flags to stay absent from unconditional FLAGS. Existing board independence, common preferences, Home-only transfer and generic-files checks remain. No build or application implementation is changed by this follow-up. The complete unified-default crash session suite passed locally in normal and ASan/UBSan (six compositions; optional-files includes seven fault modes per lane). Local scripts explicitly disable leak detection; remote gates keep their existing behavior.
+
+Earlier harness fixes use WATCH_FAST_WAKE_TEST_ENTRY rather than fragile main-source replacement; unittest discovery uses the tests package to avoid a CLI module basename collision. The actual serial-idle suite passed all 28 cases across 240x240 and 410x502 in normal and ASan/UBSan. Serial-navigation passed 56 cases, and sleep defaults passed 16 configuration/lane combinations. These tests used the source-recovered System/Utilities and Runtime fixtures and do not substitute for exact CI dependency pins or physical hardware observations.
+
+No merge or firmware release is implied. The complete Universal Watch workflow must still reach a terminal successful result at the exact published follow-up head.
