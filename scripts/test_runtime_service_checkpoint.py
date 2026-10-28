@@ -27,7 +27,8 @@ def main():
     assert loop < call < source.index('#ifdef WATCH_BLE_BROADCAST', loop)
     exit_check = 'if(risc_runtime_exit_requested_v1(rt)){clock_exit_checkpoint(__LINE__);goto done;}'
     assert source.index(exit_check, call) < source.index('clock_navigation_ready=serviced', call)
-    settled = source.index('if (!frame(&s) || !draw_clock(now,&s) || !present() || !pace_frame(now))', loop)
+    painted = source.index('if (!frame(&s) || !draw_clock(now,&s) || !present())', loop)
+    settled = source.index('if(!pace_frame(now))', painted)
     second = source.index('risc_runtime_service_checkpoint_v1(rt)', call + 1)
     optional = source.index('clock_deferred_step(now,serviced)', settled)
     assert settled < second < source.index(exit_check, second) < optional
