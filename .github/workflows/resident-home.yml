@@ -1,0 +1,91 @@
+name: Shared Home resident controls
+on:
+  pull_request:
+  push:
+    branches: [main, work/shared-resident-controls-20261031]
+permissions:
+  contents: read
+jobs:
+  controller:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: bb0cadf3cec3445a64e11513b47b2676f3fdd92d
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: 4fdcad2495c33fe63f5f6faca9b11ced3c739a5b
+          path: .source/utilities
+          persist-credentials: false
+      - name: Native controls, production-feature alarms and deferred Deep
+        run: |
+          python3 tests/test_build_inputs.py
+          python3 scripts/check_capability_boundaries.py
+          for mode in normal sanitized; do
+            extra=''; [ "$mode" = normal ] || extra='--sanitized'
+            for profile in square native; do
+              geometry=''; [ "$profile" = square ] || geometry='--native'
+              for storage in ordinary atomic; do
+                atomic=''; [ "$storage" = ordinary ] || atomic='--atomic'
+                python3 scripts/test_resident_home.py --system .source/system --utilities .source/utilities --output "dist/controls-$mode-$profile-$storage" $extra $geometry $atomic
+              done
+            done
+            python3 scripts/test_resident_full.py --system .source/system --utilities .source/utilities --output "dist/alarm-$mode" --production-flags $extra
+            python3 scripts/test_resident_deep.py --system .source/system --utilities .source/utilities --output "dist/deep-$mode" $extra
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resident-home-controller-proof
+          path: |
+            dist/**/receipt.json
+            dist/**/*.log
+            dist/**/generated_fixture.c
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        mode: [normal, sanitized]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE
+          ref: 13eca114cb58469cf6004fafc3da84fbd9d29beb
+          path: .source/runtime
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: 734f3171a743bbcefc90fb8d843981b77965bc12
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: 39953161f51c291e7853dd42bdccfce959ce7fe3
+          path: .source/utilities
+          persist-credentials: false
+      - name: Actual Runtime Home and Stopwatch controls round-trip
+        run: |
+          extra=''; [ '${{ matrix.mode }}' = normal ] || extra='--sanitized'
+          python3 scripts/test_resident_runtime.py --runtime .source/runtime --system .source/system --utilities .source/utilities --output dist/runtime $extra
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resident-home-runtime-${{ matrix.mode }}
+          path: |
+            dist/runtime/results.json
+            dist/runtime/dependencies.json
+            dist/runtime/**/*.log

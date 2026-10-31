@@ -38,7 +38,7 @@ static bool clock_context_rules(void){
   bool ok=false;
   if(action.step.kind==CR_MESSAGE){memcpy(clock_context_message,action.step.text,33);ok=true;}
   else if(action.step.kind==CR_TIMER){risc_runtime_capability_v1 g={0};ok=portable_context_timer(rt,clock_alarm.api,action.step.value,&g);if(g.api)return false;}
-  else if(action.step.kind==CR_LAUNCH){ok=rt->request_launch(action.step.text);if(ok)clock_contexts_handoff=true;}
+  else if(action.step.kind==CR_LAUNCH){ok=clock_launch_request(action.step.text);if(!clock_launch_live())return false;if(ok&&!clock_launch_returned())clock_contexts_handoff=true;}
   action.claim=false;action.result=ok?CR_RAN:CR_FAILED;if(!fp->fingerprint(fp->base.context,CONTEXTS_FP_WORKFLOW,&action))return false;
  }
  return true;
@@ -104,13 +104,15 @@ static bool clock_contexts_tick(void) {
         if(!clock_navigation_ready)return true;
         unsigned source=s.export_pending&CONTEXTS_AUDIO?CONTEXTS_AUDIO:CONTEXTS_RADIO;
         if(!clock_background_pause()||!clock_contexts.api->begin_export(clock_contexts.api->context,source))return clock_contexts_failure();
-        if(rt->request_launch(source==CONTEXTS_AUDIO?"audio_spectrum.elf":"waterfall.elf")) {
+        if(clock_launch_request(source==CONTEXTS_AUDIO?"audio_spectrum.elf":"waterfall.elf")) {
+            if(clock_launch_returned())return true;
             clock_contexts_handoff=true;
 #ifdef WATCH_BLE_BROADCAST
             clock_handoff=true;
 #endif
             return true;
         }
+        if(!clock_launch_live())return false;
         return clock_contexts.api->finish_export(clock_contexts.api->context,source,CONTEXTS_EXPORT_UNSUPPORTED);
     }
     if(clock_alarm_modal||picker.open||pqa_visible(&clock_quick.ui)||pqa_capture(&clock_quick.ui))return true;

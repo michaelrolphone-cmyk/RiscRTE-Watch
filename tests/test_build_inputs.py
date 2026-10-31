@@ -20,15 +20,22 @@ class Inputs(unittest.TestCase):
         version=versions[0]
         self.assertIsInstance(version,ast.IfExp)
         self.assertEqual(ast.unparse(version.test),'a.serial_transfer_mode')
-        self.assertEqual(ast.literal_eval(version.body),'0.20.4')
+        self.assertEqual(ast.literal_eval(version.body),'0.21.2')
         version=version.orelse
         self.assertIsInstance(version,ast.IfExp)
         self.assertEqual(ast.unparse(version.test),'a.automatic_provision')
-        self.assertEqual(ast.literal_eval(version.body),'0.20.3')
-        self.assertEqual(ast.literal_eval(version.orelse),'0.19.3')
-        self.assertEqual(json.loads((ROOT/'apps/clock/default.json').read_text())['version'],'0.19.3')
+        self.assertEqual(ast.literal_eval(version.body),'0.21.1')
+        self.assertEqual(ast.literal_eval(version.orelse),'0.21.0')
+        self.assertEqual(json.loads((ROOT/'apps/clock/default.json').read_text())['version'],'0.21.0')
         self.assertEqual(json.loads((ROOT/'apps/clock/clock.json').read_text())['version'],'0.15.0')
         self.assertEqual(json.loads((ROOT/'apps/clock/manifest.json').read_text())['version'],'0.8.0')
+
+    def test_resident_host_export(self):
+        source=(ROOT/'scripts/build.py').read_text()
+        self.assertIn("'-DWATCH_RESIDENT_HOST'",source)
+        self.assertIn("'apps/clock/clock_resident.inc'",source)
+        self.assertIn("{'app_main','risc_resident_app_descriptor_v1'} if role=='default' else {'app_main'}",source)
+        self.assertIn("exports!=exports_expected",source)
 
     def test_pinned_bytes_and_rejection(self):
         with tempfile.TemporaryDirectory() as directory:

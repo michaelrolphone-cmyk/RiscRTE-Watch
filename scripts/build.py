@@ -6,7 +6,7 @@ from compact_current_elf import compact
 from normalize_xtensa_relocations import normalize
 from build_inputs import file_manifest, verify_dependency
 ROOT=Path(__file__).resolve().parents[1]
-FLAGS=['-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DCRASH_REPORT_SESSION_FILES=1','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_PREFERENCE_STORE','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
+FLAGS=['-DWATCH_RESIDENT_HOST','-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DCRASH_REPORT_SESSION_FILES=1','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_PREFERENCE_STORE','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
  '-DWATCH_CLOCK_LAUNCHER','-DWATCH_CLOCK_ALARMS','-DWATCH_CLOCK_POINTS',
  '-DPORTABLE_RTC_UTC8_DENVER','-DWATCH_PAIRED_BOOT_CONFIRM','-DWATCH_QUICK_ACTIONS',
  '-DWATCH_QUICK_RADIOS','-DWATCH_MOTION_WAKE','-DWATCH_ALARM_SLEEP_RESUME','-DWATCH_CONTEXTS_CLIENT',
@@ -32,7 +32,7 @@ home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py
  'include/WatchTapPolicy.h','include/PortableMotionTap.h','include/PortablePowerStatus.h','include/PortableTapSettings.h',
  'include/twatch_calendar.h','include/twatch_caps.h','include/twatch_power.h','include/twatch_util.h',
  'apps/runtime_features/clock_runtime.h','apps/runtime_features/sdk',
- 'apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
+ 'apps/clock/clock_resident.inc','apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
  'apps/clock/points_projection.c','apps/clock/points_projection.h','apps/clock/points_compat.h',
  'apps/clock/nova','apps/clock/faces','apps/clock/transitions','apps/clock/effects/boot.cpp',
  'apps/clock/effects/effects.h','apps/clock/effects/divdi3.c','apps/clock/clock_alarm.inc',
@@ -56,7 +56,7 @@ subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Wextra','-Werror'
 records={'automatic_provision':a.automatic_provision,'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':'runtime-provider','hardware_profile_inputs':False,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
 if a.serial_transfer_mode:records['serial_transfer_mode']=True
 for role in ['default','clock'] if a.role=='both' else [a.role]:
- target=out/(role+'.elf');mapping=out/(role+'.map');mapping.write_text('{ global: app_main; local: *; };\n')
+ target=out/(role+'.elf');mapping=out/(role+'.map');exports_expected={'app_main','risc_resident_app_descriptor_v1'} if role=='default' else {'app_main'};mapping.write_text('{ global: '+ '; '.join(sorted(exports_expected))+'; local: *; };\n')
  flags=list(FLAGS) if role=='default' else []
  if role=='default' and a.automatic_provision:flags.append('-DWATCH_AUTOMATIC_PROVISION')
  if role=='default' and a.serial_transfer_mode:flags.append('-DWATCH_SERIAL_TRANSFER_MODE')
@@ -69,13 +69,13 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  imports={r.split()[-1] for r in symbols.splitlines() if ' U ' in ' '+r}
  exports={r.split()[-1] for r in symbols.splitlines() if len(r.split())>=3 and r.split()[-2] in ('T','D','B','R')}
  allowed={'risc_runtime_get_api','memcpy','memset','memcmp','memmove','strcmp','strncmp','strlen','snprintf','malloc','calloc','free','strcpy','memchr','strrchr'}
- if not imports<=allowed or exports!={'app_main'}:raise RuntimeError(f'Unexpected application ABI: {imports=}, {exports=}')
+ if not imports<=allowed or exports!=exports_expected:raise RuntimeError(f'Unexpected application ABI: {imports=}, {exports=}')
  raw=target.read_bytes()
  if raw[:7]!=b'\x7fELF\x01\x01\x01' or raw[16:20]!=b'\x03\x00\x5e\x00':raise RuntimeError('Not an ESP32-S3 shared ELF')
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.20.4' if a.serial_transfer_mode else ('0.20.3' if a.automatic_provision else '0.19.3')
+  manifest['version']='0.21.2' if a.serial_transfer_mode else ('0.21.1' if a.automatic_provision else '0.21.0')
   if a.automatic_provision:
    manifest['requires'].append({'capability':'software.installed-apps','api':1})
    manifest['optional'].append({'capability':'storage.volume','api':1})
