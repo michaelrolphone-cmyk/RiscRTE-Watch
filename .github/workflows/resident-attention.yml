@@ -1,0 +1,75 @@
+name: Capture-safe Home attention
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: bb0cadf3cec3445a64e11513b47b2676f3fdd92d
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: 4fdcad2495c33fe63f5f6faca9b11ced3c739a5b
+          path: .source/utilities
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE
+          ref: bd51ac6b4b7a0cd74bd76b2df7a9a1c889b3eb43
+          path: .source/runtime-attention
+          persist-credentials: false
+      - name: Exact attention header and controller qualification
+        run: |
+          cmp sdk/app/RiscResidentAttentionV1.h .source/runtime-attention/sdk/app/RiscResidentAttentionV1.h
+          cmp sdk/app/RiscResidentShellV1.h .source/runtime-attention/sdk/app/RiscResidentShellV1.h
+          python3 tests/test_build_inputs.py
+          python3 scripts/test_resident_attention_unit.py --system .source/system --utilities .source/utilities --output dist/unit-normal
+          python3 scripts/test_resident_attention_unit.py --system .source/system --utilities .source/utilities --output dist/unit-sanitized --sanitize
+          python3 scripts/test_resident_attention.py --system .source/system --utilities .source/utilities --output dist/full-normal --production-flags
+          python3 scripts/test_resident_attention.py --system .source/system --utilities .source/utilities --output dist/full-sanitized --production-flags --sanitized
+      - name: Pinned target compiler
+        run: |
+          mkdir -p .source/toolchain
+          curl --fail --location --retry 2 --max-time 180 https://github.com/espressif/crosstool-NG/releases/download/esp-15.2.0_20251204/xtensa-esp-elf-15.2.0_20251204-x86_64-linux-gnu.tar.xz -o "$RUNNER_TEMP/toolchain.tar.xz"
+          echo "3d50f5cd5f173acfd524e07c1cd69bc99585731a415ca2e5bce879997fe602b8  $RUNNER_TEMP/toolchain.tar.xz" | sha256sum --check
+          tar -xJf "$RUNNER_TEMP/toolchain.tar.xz" -C .source/toolchain
+          python3 -m pip install -r scripts/requirements.txt
+      - name: Repeat-qualified Watch and Wave Home targets
+        run: |
+          for variant in watch wave; do
+            extra=''; [ "$variant" = watch ] || extra='--serial-transfer-mode'
+            for copy in first repeat; do
+              python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --automatic-provision --role default --output "dist/$variant-$copy" $extra
+            done
+            python3 scripts/verify_shared_default.py --first "dist/$variant-first" --second "dist/$variant-repeat" --receipt "dist/$variant-first/shared-default-proof.json"
+          done
+          git rev-parse HEAD > dist/COMMIT.txt
+          git archive HEAD | gzip > dist/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: home-resident-attention
+          path: |
+            dist/**/receipt.json
+            dist/**/*.log
+            dist/**/generated_fixture.c
+            dist/**/test
+            dist/**/default.elf
+            dist/**/default.json
+            dist/**/build.json
+            dist/**/shared-default-proof.json
+            dist/COMMIT.txt
+            dist/source.tar.gz
