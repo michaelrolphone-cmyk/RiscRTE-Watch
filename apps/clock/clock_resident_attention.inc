@@ -3,7 +3,13 @@
 #include "RiscResidentAttentionV1.h"
 static bool clock_attention_enabled,clock_attention_observing,clock_attention_alarm;
 static bool clock_attention_sampled;
-static uint32_t clock_attention_at,clock_attention_seconds,clock_attention_deadline,clock_attention_snapshot;
+#ifdef WATCH_CLOCK_ALARMS
+static uint32_t clock_attention_at,clock_attention_seconds;
+#endif
+static uint32_t clock_attention_deadline;
+#ifdef WATCH_CLOCK_ALARMS
+static uint32_t clock_attention_snapshot;
+#endif
 static risc_runtime_capability_v1 clock_attention_rtc_grant;
 static const twatch_rtc_api_v1 *clock_attention_rtc;
 static bool clock_attention_close(void) {
