@@ -8,7 +8,18 @@
 #include "twatch_caps.h"
 #include "PortableSleepPolicy.h"
 enum { WATCH_SLEEP_REFUSED=0, WATCH_SLEEP_WOKE=1, WATCH_SLEEP_FAILED=-1,
-       WATCH_SLEEP_RETAINED=-2 };
+       WATCH_SLEEP_RETAINED=-2, WATCH_SLEEP_DEFERRED=2 };
+#ifdef WATCH_RESIDENT_HOST
+/* A retained foreground may use reversible Light, never terminal Deep.
+ * Defer before any panel pad-hold and restore all prepared owners first. */
+static bool watch_sleep_defer_deep,watch_sleep_deep_deferred;
+static bool watch_deep_boundary(void) {
+    if(!watch_sleep_defer_deep)return true;
+    watch_sleep_deep_deferred=true;return false;
+}
+#else
+static bool watch_deep_boundary(void) { return true; }
+#endif
 /* Standalone policy consumers need not expose the optional Clock diagnostic. */
 static unsigned watch_sleep_stage __attribute__((unused));
 static int32_t watch_sleep_detail __attribute__((unused));
@@ -46,6 +57,9 @@ static bool watch_wake_pending(const risc_power_sleep_api_v1 *pmu,const twatch_m
 static int watch_sleep_motion_prepared(const risc_display_power_api_v1 *panel,
                                const risc_power_sleep_api_v1 *pmu,const twatch_motion_api_v1 *motion,unsigned mode,
                                bool (*diagnostic)(const char *)) {
+#ifdef WATCH_RESIDENT_HOST
+    watch_sleep_deep_deferred=false;
+#endif
     bool deep=mode==PORTABLE_SLEEP_DEEP, hybrid=mode==PORTABLE_SLEEP_HYBRID;
     int32_t rc=RISC_LIGHT_SLEEP_INVALID;
     if(!watch_motion_ready(motion))return WATCH_SLEEP_REFUSED;
@@ -53,7 +67,8 @@ static int watch_sleep_motion_prepared(const risc_display_power_api_v1 *panel,
     bool panel_ok=false;
     if(motion_ok) {
     if (deep) {
-        if(panel->struct_size<RISC_DISPLAY_POWER_DEEP_SLEEP_SIZE || !panel->prepare_deep_sleep ||
+        if(!watch_deep_boundary())rc=RISC_DEEP_SLEEP_ACTIVE_WAKE;
+        else if(panel->struct_size<RISC_DISPLAY_POWER_DEEP_SLEEP_SIZE || !panel->prepare_deep_sleep ||
            pmu->struct_size<RISC_POWER_DEEP_SLEEP_SIZE || !pmu->deep_sleep) rc=RISC_DEEP_SLEEP_UNSUPPORTED;
         else {rc=panel->prepare_deep_sleep(panel->context);panel_ok=rc==0;}
     } else panel_ok=panel->prepare_sleep(panel->context);
@@ -84,7 +99,8 @@ static int watch_sleep_motion_prepared(const risc_display_power_api_v1 *panel,
                      * edges stay latched while the short-press wake is armed. */
                     if(!watch_wake_pending(pmu,motion,&pending))rc=RISC_LIGHT_SLEEP_PLATFORM;
                     else if(!pending) {
-                        if(panel->struct_size<RISC_DISPLAY_POWER_DEEP_SLEEP_SIZE || !panel->prepare_deep_sleep ||
+                        if(!watch_deep_boundary())rc=RISC_DEEP_SLEEP_ACTIVE_WAKE;
+                        else if(panel->struct_size<RISC_DISPLAY_POWER_DEEP_SLEEP_SIZE || !panel->prepare_deep_sleep ||
                            pmu->struct_size<RISC_POWER_DEEP_SLEEP_SIZE || !pmu->deep_sleep)rc=RISC_DEEP_SLEEP_UNSUPPORTED;
                         else {
                             rc=panel->prepare_deep_sleep(panel->context);
@@ -115,6 +131,9 @@ static int watch_sleep_motion_prepared(const risc_display_power_api_v1 *panel,
     if(!pmu_restored || panel_restore!=0) {
         diagnostic("WATCH_CLOCK error=sleep-restore");return WATCH_SLEEP_FAILED;
     }
+#ifdef WATCH_RESIDENT_HOST
+    if(watch_sleep_deep_deferred)return WATCH_SLEEP_DEFERRED;
+#endif
     return rc==RISC_LIGHT_SLEEP_OK && !deep?WATCH_SLEEP_WOKE:WATCH_SLEEP_REFUSED;
 }
 

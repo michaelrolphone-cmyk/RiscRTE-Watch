@@ -1,0 +1,11 @@
+# Real Runtime resident Home witness
+
+`python scripts/test_resident_runtime.py --runtime <Runtime> --system <scene-System> --utilities <Utilities> --output <new-directory> [--sanitized]`
+
+This compiles the production Runtime/ProviderGraph/ELF loader, production shared Home controller and native renderer, production scene provider and production Stopwatch controller into separate host ELFs. Only physical display/input/time/storage backends and the legacy launcher are deterministic test doubles. The harness ends by withdrawing its health signal after the child has finalized, allowing Home to take its ordinary clean exit path. The Home feature subset and every compiled dependency are recorded; this is not a complete product profile, Xtensa target, or physical-device test.
+
+The actual path is Home registration, raw horizontal swipe, legacy `springboard.elf`, ordinary `request_launch` of Stopwatch, fresh Home pending-child continuation, Start, raw top-edge pull, native Home QuickActions, drawer close, child scene reopen, Home-key child exit and clean unload. The stopwatch must remain running with its one acknowledged saved record across controls. A read-only observer registered by Home's test module initializer confirms actual native controls frames; it does not inject a checkpoint, call a private controller action, modify application state or bypass Runtime routing.
+
+Both 240×240 and 410×502 display capability profiles run with demand and demand-retained providers, each with navigation exit (power-key unavailable) and physical-provider long-key exit: eight cases per sanitizer mode. Input coordinates are physical fixture stimuli, not application layout branches. One Home ELF and one Stopwatch ELF are reused across all cases. The tests check all presentation leases and touch subscriptions are closed, real module initialization/finalization/unload counts, and persistence after the controls round-trip. ASan/UBSan mode disables LeakSanitizer only because the container's ptrace environment does not support it.
+
+Short-power-key sleep, physical sleep, deep-retained hardware, alarm service, radio/atomic preferences and the complete product's feature flags require their separately recorded production-profile qualification. A passing result here does not replace those checks or establish deployment.

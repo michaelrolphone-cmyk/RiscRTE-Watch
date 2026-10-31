@@ -53,6 +53,7 @@ static int32_t watch_alarm_enter_deep(const risc_display_power_api_v1 *panel,
        pmu->struct_size<RISC_POWER_TIMED_SLEEP_SIZE || !pmu->sleep_wake_pending ||
        (duration?(pmu->struct_size<RISC_POWER_TIMED_DEEP_SLEEP_SIZE || !pmu->deep_sleep_for):!pmu->deep_sleep))
         return RISC_DEEP_SLEEP_UNSUPPORTED;
+    if(!watch_deep_boundary())return RISC_DEEP_SLEEP_ACTIVE_WAKE;
     int32_t rc=panel->prepare_deep_sleep(panel->context);
     if(rc!=0)return rc;
     bool pending=true;
@@ -64,6 +65,9 @@ static int32_t watch_alarm_enter_deep(const risc_display_power_api_v1 *panel,
 static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *panel,
         const risc_power_sleep_api_v1 *pmu,const twatch_motion_api_v1 *motion,unsigned mode,const alarm_service_v1 *a,
         bool (*diagnostic)(const char *)) {
+#ifdef WATCH_RESIDENT_HOST
+    watch_sleep_deep_deferred=false;
+#endif
     bool deep=mode==PORTABLE_SLEEP_DEEP,hybrid=mode==PORTABLE_SLEEP_HYBRID;
     int32_t rc=RISC_LIGHT_SLEEP_INVALID;
     /* The ordinary panel sleep performs its120ms delay without a native pad
@@ -138,6 +142,9 @@ static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *pa
         return WATCH_SLEEP_FAILED;
     }
     if(!alarm_failed)(void)a->refresh(a->context);
+#ifdef WATCH_RESIDENT_HOST
+    if(!alarm_failed&&watch_sleep_deep_deferred)return WATCH_SLEEP_DEFERRED;
+#endif
     return rc==RISC_LIGHT_SLEEP_OK && !deep?WATCH_SLEEP_WOKE:WATCH_SLEEP_REFUSED;
 }
 

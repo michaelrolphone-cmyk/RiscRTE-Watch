@@ -20,7 +20,7 @@ def check(roots):
             for cap in capabilities(value):
                 if DEVICE.search(cap):raise ValueError(f'Device identity in capability contract: {path}: {cap}')
                 count+=1
-    for name in ['crown.c','capability_clients.c','watch_sleep.h','watch_alarm_sleep.h','watch_motion_client.h','clock_alarm.inc','clock_contexts.inc']:
+    for name in ['crown.c','capability_clients.c','watch_sleep.h','watch_alarm_sleep.h','watch_motion_client.h','clock_alarm.inc','clock_contexts.inc','clock_resident.inc']:
         path=ROOT/'apps/clock'/name;source=path.read_text()
         for private in ['twatch_pmu_api_v1','twatch_panel_power_v1','legacy_battery_power_v1','legacy_display_power_v1']:
             if private in source:raise ValueError(f'Private driver ABI leaked into Home: {name}: {private}')

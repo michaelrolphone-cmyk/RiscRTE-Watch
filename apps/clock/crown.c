@@ -674,6 +674,10 @@ static bool startup(void) {
 #include "watch_motion_client.h"
 #endif
 #endif
+/* All Home launch sites share the same admitted resident/legacy route. */
+static bool clock_launch_request(const char *path);
+static bool clock_launch_returned(void);
+static bool clock_launch_live(void);
 #ifdef WATCH_CONTEXTS_CLIENT
 #include "clock_contexts.inc"
 #endif
@@ -877,6 +881,9 @@ static int sleep_cycle(void) {
 #endif
     if(!watch_capabilities_can_sleep(&device_clients))return clock_sleep_failure("CAPABILITY");
     sleep_status[0]=0;
+#ifdef WATCH_RESIDENT_HOST
+    watch_sleep_deep_deferred=false;
+#endif
 #if defined(WATCH_BLE_BROADCAST) || defined(WATCH_CONTEXTS_CLIENT)
     if(!clock_background_pause())return WATCH_SLEEP_RETAINED;
 #endif
@@ -933,6 +940,7 @@ static int sleep_cycle(void) {
     }
     if(rc==WATCH_SLEEP_RETAINED)return WATCH_SLEEP_RETAINED;
     if(rc<0)return clock_sleep_failure("SLEEP-RESTORE");
+    if(rc==WATCH_SLEEP_DEFERRED)return rc;
     uint32_t cleared=0;
     if(!clock_key_read(&cleared,"WATCH_KEY stage=wake-discard"))return clock_sleep_failure("WAKE-KEY-CLEAR");
 #ifdef WATCH_FAST_WAKE
@@ -992,6 +1000,29 @@ static void clock_launch_feedback(void) {
     rt->diagnostic("WATCH_CLOCK launch=failed action=visible-status");
     rt->diagnostic(failure.application);rt->diagnostic(failure.detail);
 }
+#include "clock_resident.inc"
+static bool clock_launch_request(const char *path) {
+#ifdef WATCH_RESIDENT_HOST
+    int32_t rc=clock_resident_run(path);
+    return rc==RISC_RESIDENT_OK||rc==RISC_RESIDENT_HANDOFF;
+#else
+    return rt->request_launch&&rt->request_launch(path);
+#endif
+}
+static bool clock_launch_returned(void) {
+#ifdef WATCH_RESIDENT_HOST
+    return clock_resident_continued;
+#else
+    return false;
+#endif
+}
+static bool clock_launch_live(void) {
+#ifdef WATCH_RESIDENT_HOST
+    return clock_resident_alive();
+#else
+    return true;
+#endif
+}
 #include "clock_crash.inc"
 #include "clock_provision.inc"
 
@@ -1002,6 +1033,9 @@ static void clock_launch_feedback(void) {
 #include "RiscDiagnosticCheckpointV1.h"
 static unsigned clock_first_exit;
 static void clock_exit_checkpoint(unsigned line) {
+#ifdef WATCH_RESIDENT_HOST
+    if(clock_resident_terminal)return;
+#endif
     if(clock_first_exit)return;
     clock_first_exit=line;
     risc_diagnostic_checkpoint_client_v1 client={.struct_size=sizeof(client)};
@@ -1017,6 +1051,9 @@ static void clock_exit_checkpoint(unsigned line) {
 }
 __attribute__((visibility("default"))) void app_main(void) {
     clock_first_exit=0;clock_navigation_ready=false;
+#ifdef WATCH_RESIDENT_HOST
+    clock_resident_terminal=clock_resident_enabled=clock_resident_child=false;
+#endif
 #ifdef WATCH_AUTOMATIC_PROVISION
     clock_provision_initialized=clock_provision_busy=false;
 #endif
@@ -1204,6 +1241,30 @@ __attribute__((visibility("default"))) void app_main(void) {
     if(!clock_alarm_open_optional() || !launcher_touch_open(&touch) || !clock_alarm_foreground()){clock_exit_checkpoint(__LINE__);goto done;}
 #endif
 #endif
+#ifdef WATCH_RESIDENT_HOST
+    if(!clock_resident_init()){return;}
+    if(clock_resident_enabled) {
+#ifdef WATCH_CLOCK_LAUNCHER
+    /* Read once per fresh Clock invocation, release the grant before sleep.
+     * Settings returns through a fresh Clock, and deep wake boots default. */
+    sleep_mode=PORTABLE_SLEEP_HYBRID;
+    CLOCK_WAKE_MARK("sleep-settings-begin");
+    risc_runtime_capability_v1 sg={.struct_size=sizeof(sg)};
+    if(rt->acquire(RISC_KEY_VALUE_CAPABILITY,RISC_KEY_VALUE_API_V1,PORTABLE_SLEEP_STORE_INSTANCE,&sg)) {
+        int loaded=portable_sleep_load(sg.api,&sleep_mode);
+        if(!rt->release(&sg)){clock_exit_checkpoint(__LINE__);goto done;}
+        if(loaded==PORTABLE_SLEEP_INVALID || loaded==PORTABLE_SLEEP_UNAVAILABLE)
+            rt->diagnostic("WATCH_CLOCK settings=unreadable default=hybrid");
+    } else rt->diagnostic("WATCH_CLOCK settings=unavailable default=hybrid");
+    CLOCK_WAKE_MARK("sleep-settings-end");
+    rt->diagnostic(sleep_mode==PORTABLE_SLEEP_DEEP?"WATCH_CLOCK mode=deep":sleep_mode==PORTABLE_SLEEP_LIGHT?"WATCH_CLOCK mode=light":"WATCH_CLOCK mode=hybrid");
+#endif
+        int32_t resumed=clock_resident_run(NULL);
+        if(resumed==RISC_RESIDENT_RETAINED)return;
+        if(resumed==RISC_RESIDENT_HANDOFF)goto done;
+        if(resumed!=RISC_RESIDENT_OK&&resumed!=RISC_RESIDENT_NO_PENDING)goto done;
+    }
+#endif
     clock_launch_feedback();
     uint32_t discarded,now,armed_at=0,last_activity=0;
     if (!clock_key_read(&discarded,"WATCH_KEY stage=startup-discard") ||
@@ -1229,11 +1290,14 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef WATCH_CLOCK_ALARMS
     if(!rt->request_launch){clock_exit_checkpoint(__LINE__);goto done;}
 #else
-    if(!rt->request_launch || !launcher_touch_open(&touch)) {clock_exit_checkpoint(__LINE__);goto done;}
+    if(!rt->request_launch || (!touch.subscription&&!launcher_touch_open(&touch))) {clock_exit_checkpoint(__LINE__);goto done;}
 #endif
 #endif
     clock_key_trace("WATCH_KEY arming=start interval-ms=250");
     last_activity=armed_at;
+#ifdef WATCH_RESIDENT_HOST
+    if(!clock_resident_enabled) {
+#endif
 #ifdef WATCH_CLOCK_LAUNCHER
     /* Read once per fresh Clock invocation, release the grant before sleep.
      * Settings returns through a fresh Clock, and deep wake boots default. */
@@ -1248,6 +1312,9 @@ __attribute__((visibility("default"))) void app_main(void) {
     } else rt->diagnostic("WATCH_CLOCK settings=unavailable default=hybrid");
     CLOCK_WAKE_MARK("sleep-settings-end");
     rt->diagnostic(sleep_mode==PORTABLE_SLEEP_DEEP?"WATCH_CLOCK mode=deep":sleep_mode==PORTABLE_SLEEP_LIGHT?"WATCH_CLOCK mode=light":"WATCH_CLOCK mode=hybrid");
+#endif
+#ifdef WATCH_RESIDENT_HOST
+    }
 #endif
 #if defined(WATCH_PAIRED_BOOT_CONFIRM) && !defined(WATCH_CLOCK_RETURN) && !defined(WATCH_FAST_WAKE)
     /* Startup has presented a complete frame and admitted all startup services.
@@ -1427,14 +1494,16 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef WATCH_AUTOMATIC_PROVISION
             if(!clock_provision_close()){clock_exit_checkpoint(__LINE__);break;}
 #endif
-            if(rt->request_launch("wifi_settings.elf")) {
+            if(clock_launch_request("wifi_settings.elf")) {
+                if(clock_launch_returned()){if(!alive(&last_activity))goto done;continue;}
 #ifdef WATCH_BLE_BROADCAST
                 clock_handoff=true;
 #endif
                 {clock_exit_checkpoint(__LINE__);break;}
             }
+            if(!clock_launch_live())return;
             clock_quick.ui.error_flags|=PQA_ERROR_WIFI;
-            if(!launcher_touch_open(&touch)){clock_exit_checkpoint(__LINE__);break;}
+            if(!touch.subscription&&!launcher_touch_open(&touch)){clock_exit_checkpoint(__LINE__);break;}
         }
 #endif
 #ifdef WATCH_ATOMIC_PREFERENCES
@@ -1490,15 +1559,17 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef WATCH_AUTOMATIC_PROVISION
                 if(!clock_provision_close()){clock_exit_checkpoint(__LINE__);break;}
 #endif
-                if(rt->request_launch("springboard.elf")) {
+                if(clock_launch_request("springboard.elf")) {
+                if(clock_launch_returned()){if(!alive(&last_activity))goto done;continue;}
 #ifdef WATCH_BLE_BROADCAST
                     clock_handoff=true;
 #endif
                     {clock_exit_checkpoint(__LINE__);break;}
                 }
+                if(!clock_launch_live())return;
                 memcpy(sleep_status,"NAVIGATION UNAVAILABLE",sizeof("NAVIGATION UNAVAILABLE"));
                 rt->diagnostic("WATCH_CLOCK error=launcher-request");
-                if(!launcher_touch_open(&touch) || !alive(&now)) {clock_exit_checkpoint(__LINE__);break;}
+                if((!touch.subscription&&!launcher_touch_open(&touch)) || !alive(&now)) {clock_exit_checkpoint(__LINE__);break;}
                 last_activity=now;
             }
         }
@@ -1592,6 +1663,9 @@ __attribute__((visibility("default"))) void app_main(void) {
     }
     clock_exit_checkpoint(__LINE__); /* while(alive) ended without an earlier reason */
 done:
+#ifdef WATCH_RESIDENT_HOST
+    if(clock_resident_terminal)return;
+#endif
 #ifdef WATCH_AUTOMATIC_PROVISION
     if(!clock_provision_close()){clock_exit_checkpoint(__LINE__);return;}
 #endif
