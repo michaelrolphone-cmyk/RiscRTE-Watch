@@ -67,7 +67,7 @@ static int32_t run_child(uint64_t invocation,const char *path,risc_resident_resu
  launched=true;result->status=RISC_RESIDENT_OK;return RISC_RESIDENT_OK;
 }
 static bool get_host(struct risc_resident_client_v1 *client){
- assert(client->struct_size==sizeof(*client));
+ assert(client->struct_size>=sizeof(*client));
  *client=(risc_resident_client_v1){.api_version=1,.struct_size=sizeof(*client),.invocation=7,.role=RISC_RESIDENT_ROLE_HOST,.register_shell=register_host,.run_foreground=run_child,.request_foreground_exit=exit_child};return true;
 }
 const risc_runtime_api_v1 *risc_runtime_get_api(uint32_t version){assert(version==1);return host_replaced?&runtime:&host_runtime;}

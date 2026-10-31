@@ -1665,6 +1665,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 done:
 #ifdef WATCH_RESIDENT_HOST
     if(clock_resident_terminal)return;
+    if(!clock_attention_close()){(void)clock_resident_retain();return;}
 #endif
 #ifdef WATCH_AUTOMATIC_PROVISION
     if(!clock_provision_close()){clock_exit_checkpoint(__LINE__);return;}

@@ -32,7 +32,7 @@ home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py
  'include/WatchTapPolicy.h','include/PortableMotionTap.h','include/PortablePowerStatus.h','include/PortableTapSettings.h',
  'include/twatch_calendar.h','include/twatch_caps.h','include/twatch_power.h','include/twatch_util.h',
  'apps/runtime_features/clock_runtime.h','apps/runtime_features/sdk',
- 'apps/clock/clock_resident.inc','apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
+ 'apps/clock/clock_resident.inc','apps/clock/clock_resident_attention.inc','apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
  'apps/clock/points_projection.c','apps/clock/points_projection.h','apps/clock/points_compat.h',
  'apps/clock/nova','apps/clock/faces','apps/clock/transitions','apps/clock/effects/boot.cpp',
  'apps/clock/effects/effects.h','apps/clock/effects/divdi3.c','apps/clock/clock_alarm.inc',
@@ -75,7 +75,7 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.21.2' if a.serial_transfer_mode else ('0.21.1' if a.automatic_provision else '0.21.0')
+  manifest['version']='0.23.2' if a.serial_transfer_mode else ('0.23.1' if a.automatic_provision else '0.23.0')
   if a.automatic_provision:
    manifest['requires'].append({'capability':'software.installed-apps','api':1})
    manifest['optional'].append({'capability':'storage.volume','api':1})

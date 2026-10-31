@@ -2,7 +2,8 @@
  * state; this single shared Home owns native controls and physical policy.
  * Ordinary deployments without an admitted host keep their legacy behavior. */
 #ifdef WATCH_RESIDENT_HOST
-#include "RiscResidentShellV1.h"
+#include "RiscResidentAttentionV1.h"
+static risc_resident_attention_client_v1 clock_resident_extended;
 static risc_resident_client_v1 clock_resident;
 static bool clock_resident_enabled,clock_resident_child,clock_resident_dispatching;
 static bool clock_resident_terminal,clock_resident_continued,clock_resident_handoff;
@@ -82,6 +83,7 @@ static bool clock_resident_background_pause(void) {
 #endif
     return clock_resident_alive();
 }
+#include "clock_resident_attention.inc"
 static bool clock_resident_actions(uint32_t events) {
     if(events&3u)pqa_close(&clock_quick.ui);
 #ifdef WATCH_ATOMIC_PREFERENCES
@@ -231,14 +233,16 @@ static int32_t clock_resident_dispatch(void *context,const risc_resident_request
             if((uint32_t)(now-clock_resident_armed_at)>=250u)clock_resident_keys|=keys&3u;
         }
         if(request->flags&(RISC_RESIDENT_POLL_ACTIVITY|RISC_RESIDENT_POLL_INHIBIT_IDLE))clock_resident_activity=now;
-        if(!(request->flags&RISC_RESIDENT_POLL_INHIBIT_POLICY)&&(clock_resident_keys||(uint32_t)(now-clock_resident_policy_at)>=1000u))reply->flags=RISC_RESIDENT_REPLY_POLICY_REQUEST;
+        if(!(request->flags&RISC_RESIDENT_POLL_INHIBIT_POLICY)&&(clock_attention_alarm||clock_resident_keys||(uint32_t)(now-clock_resident_policy_at)>=1000u))reply->flags=RISC_RESIDENT_REPLY_POLICY_REQUEST;
         return RISC_RESIDENT_OK;
     }
     if(request->reason!=RISC_RESIDENT_CHECKPOINT_CONTROLS&&request->reason!=RISC_RESIDENT_CHECKPOINT_POLICY)return RISC_RESIDENT_BUSY;
     clock_resident_dispatching=true;
     int32_t rc=request->reason==RISC_RESIDENT_CHECKPOINT_CONTROLS?clock_resident_controls(reply):clock_resident_policy(reply,now,false);
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
-    clock_resident_dispatching=false;return rc;
+    clock_resident_dispatching=false;
+    if(rc==RISC_RESIDENT_OK&&!clock_attention_prime())return clock_resident_retain();
+    return rc;
 }
 static void clock_resident_failed(void *context,const risc_resident_failure_v1 *failure) {
     (void)context;(void)failure;
@@ -247,17 +251,19 @@ static void clock_resident_failed(void *context,const risc_resident_failure_v1 *
 }
 static bool clock_resident_init(void) {
     clock_resident=(risc_resident_client_v1){.struct_size=sizeof(clock_resident)};
+    clock_resident_extended=(risc_resident_attention_client_v1){.base={.struct_size=sizeof(clock_resident_extended)}};
     clock_resident_enabled=clock_resident_child=clock_resident_dispatching=clock_resident_terminal=clock_resident_continued=clock_resident_handoff=false;
     clock_resident_sleep_pending=clock_resident_manual_sleep=false;watch_sleep_defer_deep=watch_sleep_deep_deferred=false;
     clock_resident_next[0]=0;clock_resident_activity=clock_resident_policy_at=clock_resident_armed_at=clock_resident_keys=0;
     if(rt->struct_size<RISC_RUNTIME_RESIDENT_SHELL_V1_SIZE||!rt->resident_shell)return true;
-    bool found=rt->resident_shell(&clock_resident);if(!clock_resident_alive())return false;
+    bool found=rt->resident_shell(&clock_resident_extended.base);clock_resident=clock_resident_extended.base;if(!clock_resident_alive())return false;
     if(!found)return true;
     if(clock_resident.api_version!=1||clock_resident.struct_size<sizeof(clock_resident)||clock_resident.role!=RISC_RESIDENT_ROLE_HOST||!clock_resident.invocation||!clock_resident.register_shell||!clock_resident.run_foreground||!clock_resident.request_foreground_exit||!rt->retain_invocation){(void)clock_resident_retain();return false;}
     const risc_resident_callbacks_v1 callbacks={.api_version=1,.struct_size=sizeof(callbacks),.dispatch=clock_resident_dispatch,.failed=clock_resident_failed};
     int32_t rc=clock_resident.register_shell(clock_resident.invocation,&callbacks);
     if(!clock_resident_alive())return false;
     if(rc!=RISC_RESIDENT_OK){(void)clock_resident_retain();return false;}
+    if(!clock_attention_bind()){(void)clock_resident_retain();return false;}
     clock_resident_enabled=true;return true;
 }
 static int32_t clock_resident_run(const char *path) {
@@ -268,7 +274,7 @@ static int32_t clock_resident_run(const char *path) {
 #ifdef WATCH_CLOCK_ALARMS
     if(!clock_display_settled||clock_alarm_modal)return RISC_RESIDENT_BUSY;
 #endif
-    if(!clock_resident_pause())return clock_resident_retain();
+    if(!clock_attention_prime()||!clock_resident_pause())return clock_resident_retain();
     char queued_path[193];
     for(;;) {
         clock_resident_next[0]=0;clock_resident_child=true;
