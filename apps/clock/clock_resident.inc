@@ -3,6 +3,7 @@
  * Ordinary deployments without an admitted host keep their legacy behavior. */
 #ifdef WATCH_RESIDENT_HOST
 #include "RiscResidentAttentionV1.h"
+#include "RiscResidentIdleV1.h"
 static risc_resident_attention_client_v1 clock_resident_extended;
 static risc_resident_client_v1 clock_resident;
 static bool clock_resident_enabled,clock_resident_child,clock_resident_dispatching;
@@ -166,8 +167,7 @@ static int32_t clock_resident_controls(risc_resident_reply_v1 *reply) {
 }
 /* Policy runs only after the child closes its scene. Light retains the child;
  * a qualified Deep transition defers until the foreground has cleanly unloaded. */
-static int32_t clock_resident_policy(risc_resident_reply_v1 *reply,uint32_t now,bool force) {
-    uint32_t keys=clock_resident_keys;clock_resident_keys=0;
+static int32_t clock_resident_policy_lane(risc_resident_reply_v1 *reply,uint32_t now,bool force,uint32_t keys) {
     if(!clock_resident_preferences()||!clock_resident_alarm_ready())return clock_resident_retain();
 #ifdef WATCH_CLOCK_ALARMS
     if(!launcher_touch_open(&touch)||!clock_resident_alive()||!clock_resident_alarm_pump()||!alive(&now)||!clock_resident_alive())return clock_resident_retain();
@@ -215,12 +215,22 @@ static int32_t clock_resident_policy(risc_resident_reply_v1 *reply,uint32_t now,
     clock_resident_policy_at=now;
     return RISC_RESIDENT_OK;
 }
+static int32_t clock_resident_policy(risc_resident_reply_v1 *reply,uint32_t now,bool force) {
+    uint32_t keys=clock_resident_keys;clock_resident_keys=0;
+    return clock_resident_policy_lane(reply,now,force,keys);
+}
 static int32_t clock_resident_dispatch(void *context,const risc_resident_request_v1 *request,risc_resident_reply_v1 *reply) {
     (void)context;
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
     if(!clock_resident_child||clock_resident_dispatching||!request||request->struct_size!=sizeof(*request)||!reply||reply->struct_size<sizeof(*reply))return RISC_RESIDENT_INVALID;
     reply->flags=0;
     if(!clock_resident_settled())return RISC_RESIDENT_BUSY;
+    const bool idle_query=request->reason==RISC_RESIDENT_QUERY_IDLE_ONLY;
+    const bool idle_apply=request->reason==RISC_RESIDENT_APPLY_IDLE_ONLY;
+    if(idle_query||idle_apply) {
+        if(request->flags||request->reserved||!watch_capabilities_can_sleep(&device_clients))return RISC_RESIDENT_BUSY;
+        if(idle_query)return RISC_RESIDENT_OK;
+    }
     uint32_t now;if(!alive(&now)||!clock_resident_alive())return clock_resident_retain();
     if(request->reason==RISC_RESIDENT_CHECKPOINT_POLL) {
         /* The Home-owned power-key capability is distinct from the scene's
@@ -236,9 +246,10 @@ static int32_t clock_resident_dispatch(void *context,const risc_resident_request
         if(!(request->flags&RISC_RESIDENT_POLL_INHIBIT_POLICY)&&(clock_attention_alarm||clock_resident_keys||(uint32_t)(now-clock_resident_policy_at)>=1000u))reply->flags=RISC_RESIDENT_REPLY_POLICY_REQUEST;
         return RISC_RESIDENT_OK;
     }
-    if(request->reason!=RISC_RESIDENT_CHECKPOINT_CONTROLS&&request->reason!=RISC_RESIDENT_CHECKPOINT_POLICY)return RISC_RESIDENT_BUSY;
+    if(request->reason!=RISC_RESIDENT_CHECKPOINT_CONTROLS&&request->reason!=RISC_RESIDENT_CHECKPOINT_POLICY&&!idle_apply)return RISC_RESIDENT_BUSY;
     clock_resident_dispatching=true;
-    int32_t rc=request->reason==RISC_RESIDENT_CHECKPOINT_CONTROLS?clock_resident_controls(reply):clock_resident_policy(reply,now,false);
+    int32_t rc=idle_apply?clock_resident_policy_lane(reply,now,false,0):
+        request->reason==RISC_RESIDENT_CHECKPOINT_CONTROLS?clock_resident_controls(reply):clock_resident_policy(reply,now,false);
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
     clock_resident_dispatching=false;
     if(rc==RISC_RESIDENT_OK&&!clock_attention_prime())return clock_resident_retain();
