@@ -4,11 +4,13 @@
 #ifdef WATCH_RESIDENT_HOST
 #include "RiscResidentAttentionV1.h"
 #include "RiscResidentIdleV1.h"
+#include "RiscResidentAlarmV1.h"
 static risc_resident_attention_client_v1 clock_resident_extended;
 static risc_resident_client_v1 clock_resident;
 static bool clock_resident_enabled,clock_resident_child,clock_resident_dispatching;
 static bool clock_resident_terminal,clock_resident_continued,clock_resident_handoff;
 static bool clock_resident_sleep_pending,clock_resident_manual_sleep;
+static bool clock_resident_idle_result_valid,clock_resident_idle_alarm;
 static int32_t clock_resident_policy(risc_resident_reply_v1 *reply,uint32_t now,bool force);
 static uint32_t clock_resident_activity,clock_resident_policy_at,clock_resident_armed_at,clock_resident_keys;
 static char clock_resident_next[193];
@@ -219,12 +221,59 @@ static int32_t clock_resident_policy(risc_resident_reply_v1 *reply,uint32_t now,
     uint32_t keys=clock_resident_keys;clock_resident_keys=0;
     return clock_resident_policy_lane(reply,now,force,keys);
 }
+static bool clock_resident_alarm_available(void) {
+#ifdef WATCH_CLOCK_ALARMS
+    return clock_alarm.api!=NULL;
+#else
+    return false;
+#endif
+}
+static int32_t clock_resident_alarm_only(risc_resident_reply_v1 *reply) {
+#ifdef WATCH_CLOCK_ALARMS
+    if(!clock_resident_alarm_ready()||!clock_resident_alive())return clock_resident_retain();
+    if(!clock_alarm.api)return RISC_RESIDENT_BUSY;
+    if(!launcher_touch_open(&touch)||!clock_resident_alive()||
+       !clock_resident_alarm_pump()||!clock_resident_alive())return clock_resident_retain();
+    uint32_t now;
+    if(!alive(&now)||!clock_resident_alive()||!clock_resident_background_pause()||
+       !launcher_touch_close(&touch)||!clock_resident_alive())return clock_resident_retain();
+#ifdef WATCH_FAST_WAKE
+    if(clock_alarm_input_cancelled) {
+        clock_alarm_input_cancelled=false;
+        clock_resident_activity=now;
+    }
+#else
+    (void)now;
+#endif
+    reply->flags=RISC_RESIDENT_REPLY_REDRAW;
+    return RISC_RESIDENT_OK;
+#else
+    (void)reply;
+    return RISC_RESIDENT_BUSY;
+#endif
+}
 static int32_t clock_resident_dispatch(void *context,const risc_resident_request_v1 *request,risc_resident_reply_v1 *reply) {
     (void)context;
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
     if(!clock_resident_child||clock_resident_dispatching||!request||request->struct_size!=sizeof(*request)||!reply||reply->struct_size<sizeof(*reply))return RISC_RESIDENT_INVALID;
     reply->flags=0;
+    if(request->reason==RISC_RESIDENT_APPLY_IDLE_ONLY&&!request->flags&&!request->reserved) {
+        clock_resident_idle_result_valid=clock_resident_idle_alarm=false;
+    }
     if(!clock_resident_settled())return RISC_RESIDENT_BUSY;
+    if(request->reason==RISC_RESIDENT_QUERY_LAST_IDLE_ALARM) {
+        if(request->flags||request->reserved)return RISC_RESIDENT_INVALID;
+        if(!clock_resident_idle_result_valid)return RISC_RESIDENT_BUSY;
+        reply->flags=clock_resident_idle_alarm?RISC_RESIDENT_REPLY_REDRAW:0;
+        return RISC_RESIDENT_OK;
+    }
+    const bool alarm_query=request->reason==RISC_RESIDENT_QUERY_ALARM_ONLY;
+    const bool alarm_apply=request->reason==RISC_RESIDENT_CHECKPOINT_ALARM;
+    if(alarm_query||alarm_apply) {
+        if(request->flags||request->reserved)return RISC_RESIDENT_INVALID;
+        if(!clock_resident_alarm_available())return RISC_RESIDENT_BUSY;
+        if(alarm_query)return RISC_RESIDENT_OK;
+    }
     const bool idle_query=request->reason==RISC_RESIDENT_QUERY_IDLE_ONLY;
     const bool idle_apply=request->reason==RISC_RESIDENT_APPLY_IDLE_ONLY;
     if(idle_query||idle_apply) {
@@ -246,13 +295,26 @@ static int32_t clock_resident_dispatch(void *context,const risc_resident_request
         if(!(request->flags&RISC_RESIDENT_POLL_INHIBIT_POLICY)&&(clock_attention_alarm||clock_resident_keys||(uint32_t)(now-clock_resident_policy_at)>=1000u))reply->flags=RISC_RESIDENT_REPLY_POLICY_REQUEST;
         return RISC_RESIDENT_OK;
     }
-    if(request->reason!=RISC_RESIDENT_CHECKPOINT_CONTROLS&&request->reason!=RISC_RESIDENT_CHECKPOINT_POLICY&&!idle_apply)return RISC_RESIDENT_BUSY;
+    if(request->reason!=RISC_RESIDENT_CHECKPOINT_CONTROLS&&request->reason!=RISC_RESIDENT_CHECKPOINT_POLICY&&!idle_apply&&!alarm_apply)return RISC_RESIDENT_BUSY;
+    uint32_t alarm_revision=0;
+#ifdef WATCH_CLOCK_ALARMS
+    alarm_revision=clock_alarm_input_revision;
+#endif
     clock_resident_dispatching=true;
-    int32_t rc=idle_apply?clock_resident_policy_lane(reply,now,false,0):
+    int32_t rc=alarm_apply?clock_resident_alarm_only(reply):idle_apply?clock_resident_policy_lane(reply,now,false,0):
         request->reason==RISC_RESIDENT_CHECKPOINT_CONTROLS?clock_resident_controls(reply):clock_resident_policy(reply,now,false);
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
     clock_resident_dispatching=false;
     if(rc==RISC_RESIDENT_OK&&!clock_attention_prime())return clock_resident_retain();
+    if(idle_apply&&rc==RISC_RESIDENT_OK) {
+#ifdef WATCH_CLOCK_ALARMS
+        clock_resident_idle_alarm=clock_alarm_input_revision!=alarm_revision;
+#else
+        (void)alarm_revision;
+        clock_resident_idle_alarm=false;
+#endif
+        clock_resident_idle_result_valid=true;
+    }
     return rc;
 }
 static void clock_resident_failed(void *context,const risc_resident_failure_v1 *failure) {
@@ -264,6 +326,7 @@ static bool clock_resident_init(void) {
     clock_resident=(risc_resident_client_v1){.struct_size=sizeof(clock_resident)};
     clock_resident_extended=(risc_resident_attention_client_v1){.base={.struct_size=sizeof(clock_resident_extended)}};
     clock_resident_enabled=clock_resident_child=clock_resident_dispatching=clock_resident_terminal=clock_resident_continued=clock_resident_handoff=false;
+    clock_resident_idle_result_valid=clock_resident_idle_alarm=false;
     clock_resident_sleep_pending=clock_resident_manual_sleep=false;watch_sleep_defer_deep=watch_sleep_deep_deferred=false;
     clock_resident_next[0]=0;clock_resident_activity=clock_resident_policy_at=clock_resident_armed_at=clock_resident_keys=0;
     if(rt->struct_size<RISC_RUNTIME_RESIDENT_SHELL_V1_SIZE||!rt->resident_shell)return true;
@@ -289,6 +352,7 @@ static int32_t clock_resident_run(const char *path) {
     char queued_path[193];
     for(;;) {
         clock_resident_next[0]=0;clock_resident_child=true;
+        clock_resident_idle_result_valid=clock_resident_idle_alarm=false;
         uint32_t now,discarded=0;
         if(!clock_key_read(&discarded,"WATCH_KEY stage=resident-entry-discard")||!clock_resident_alive()||!alive(&now))return clock_resident_retain();
         clock_resident_keys=0;clock_resident_activity=clock_resident_policy_at=clock_resident_armed_at=now;
@@ -297,6 +361,7 @@ static int32_t clock_resident_run(const char *path) {
         if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
         if(rc==RISC_RESIDENT_RETAINED||result.status==RISC_RESIDENT_RETAINED)return clock_resident_retain();
         clock_resident_child=false;
+        clock_resident_idle_result_valid=clock_resident_idle_alarm=false;
         if(rc==RISC_RESIDENT_HANDOFF){clock_resident_sleep_pending=false;clock_resident_handoff=true;return rc;}
         if(rc!=RISC_RESIDENT_OK&&rc!=RISC_RESIDENT_NO_PENDING) {
             clock_resident_sleep_pending=false;clock_resident_next[0]=0;
