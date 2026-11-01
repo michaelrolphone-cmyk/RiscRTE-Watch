@@ -17,7 +17,11 @@ static bool clock_alarm_open_optional(void) {
 static bool clock_alarm_failed_cleaned,clock_alarm_error_seen;
 static int32_t clock_alarm_seen_error;
 static uint32_t clock_alarm_seen_snapshot;
+/* Monotonic modulo counter of actual alarm input cancellations, independent
+ * of FAST_WAKE's consumed flag. Used only for copied resident outcomes. */
+static uint32_t clock_alarm_input_revision;
 static void clock_alarm_cancel_input(void) {
+    ++clock_alarm_input_revision;
 #ifdef WATCH_FAST_WAKE
     /* Entry can now sample input before the alarm closure has loaded. An
      * intervening due alarm must also cancel that sampled crown action. */
