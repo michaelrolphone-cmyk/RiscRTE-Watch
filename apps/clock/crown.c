@@ -67,6 +67,20 @@ static uint32_t clock_rtc_retry_sampled_at;
 #endif
 #endif
 #include "clock_canvas.inc"
+#ifdef WATCH_SHARED_HOME_BOOT
+#include "PortableHomeBindings.h"
+/* Shared entry already retained native custody. Mirror its terminal flag
+ * locally without another provider call or speculative cleanup. */
+static bool clock_shared_bindings_live(void) {
+    if(!portable_home_bindings_retained())return true;
+    native_clock.halted=true;
+#ifdef WATCH_HOME_CANVAS
+    clock_canvas.retained=true;
+#endif
+    return false;
+}
+#endif
+
 #ifdef WATCH_CONTEXTS_CLIENT
 #include "PortableContextsClient.h"
 static portable_contexts_client clock_contexts;
@@ -228,21 +242,49 @@ static risc_display_frame_v1 held;
 static nova_watch_state face;
 #ifdef WATCH_CLOCK_POINTS
 #include "points_projection.h"
+#ifdef WATCH_SHARED_HOME_CIVIL
+#include "PortableHomeBindings.h"
+#include "RiscHomePresentationV1.h"
+#endif
 static points_config clock_points_config;
 static points_meta clock_points_meta;
 static nova_points_state clock_points_view;
 static bool clock_points_available;
+#ifdef WATCH_SHARED_HOME_CIVIL
+static int64_t clock_points_utc_second;
+static watch_points_record_basis clock_points_basis;
+#else
 static uint32_t clock_points_second;
+#endif
 static bool clock_points_sampled;
 static bool clock_points_load(void) {
     risc_runtime_capability_v1 grant={.struct_size=sizeof(grant)};
     clock_points_config=(points_config){0};clock_points_meta=(points_meta){0};clock_points_sampled=false;
     clock_points_view=(nova_points_state){.status=NOVA_POINTS_UNAVAILABLE};clock_points_available=false;
+#ifdef WATCH_SHARED_HOME_CIVIL
+    unsigned schema=portable_home_points_schema();
+#ifdef WATCH_SHARED_HOME_BOOT
+    if(!clock_shared_bindings_live())return false;
+#endif
+    /* Data authority is explicit provider metadata, never inferred from device
+     * dimensions or whichever old key happens to remain in storage. */
+    if(schema!=RISC_HOME_POINTS_LEGACY_RTC&&schema!=RISC_HOME_POINTS_NATIVE_UTC)return true;
+    clock_points_basis=schema==RISC_HOME_POINTS_NATIVE_UTC?WATCH_POINTS_RECORD_UTC:WATCH_POINTS_RECORD_RTC;
+    const char*config_key=schema==RISC_HOME_POINTS_NATIVE_UTC?"points_utc_cfg":"points_cfg";
+#if WATCH_POINTS_EXTENDED
+    const char*meta_key=schema==RISC_HOME_POINTS_NATIVE_UTC?"points_utc_meta":"points_meta";
+#endif
+#else
+    const char*config_key=POINTS_CONFIG_KEY;
+#if WATCH_POINTS_EXTENDED
+    const char*meta_key=POINTS_META_KEY;
+#endif
+#endif
     if(!rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,5,&grant))return true;
     const risc_key_value_v1 *kv=grant.api;
     if(kv&&kv->api_version==1&&kv->struct_size>=sizeof(*kv)&&kv->get) {
         uint8_t bytes[POINTS_RECORD_SIZE];uint32_t n=0;
-        int32_t result=kv->get(kv->context,POINTS_CONFIG_KEY,bytes,sizeof(bytes),&n);
+        int32_t result=kv->get(kv->context,config_key,bytes,sizeof(bytes),&n);
         clock_points_available=result==RISC_KEY_VALUE_NOT_FOUND||
             (result==RISC_KEY_VALUE_OK&&points_config_decode(&clock_points_config,bytes,n));
 #ifdef POINTS_DEFAULTS_AVAILABLE
@@ -252,7 +294,7 @@ static bool clock_points_load(void) {
         if(defaults)clock_points_config=points_default_config();
 #endif
 #if WATCH_POINTS_EXTENDED
-        n=0;result=kv->get(kv->context,POINTS_META_KEY,bytes,sizeof(bytes),&n);
+        n=0;result=kv->get(kv->context,meta_key,bytes,sizeof(bytes),&n);
 #ifdef POINTS_DEFAULTS_AVAILABLE
         if(defaults&&result==RISC_KEY_VALUE_NOT_FOUND)clock_points_meta=points_default_meta();
 #endif
@@ -397,10 +439,47 @@ static bool present(void) {
     }
     return false;
 }
+#ifdef WATCH_SHARED_HOME_CIVIL
+/* Sample provider-owned civil policy at a settled boundary, before a display
+ * lease. Saved-IANA projection may read preferences; rasterization must not. */
+static bool clock_sample_civil(uint32_t now) {
+    if(sampled_rtc&&(uint32_t)(now-rtc_sampled_at)<100u)return true;
+    risc_civil_calendar_v1 civil={.struct_size=sizeof(civil)};
+    int64_t utc=0;
+    bool valid=watch_runtime_read_policy(&native_clock,&utc,&civil);
+    if(native_clock.halted)return false;
+    twatch_rtc_time_v1 date={0};
+    if(valid)date=(twatch_rtc_time_v1){.year=(uint16_t)civil.year,.month=civil.month,.day=civil.day,
+        .hour=civil.hour,.minute=civil.minute,.second=civil.second,.weekday=civil.weekday};
+#ifdef WATCH_CLOCK_POINTS
+    if(clock_points_available) {
+        if(!valid)clock_points_view.status=NOVA_POINTS_ERROR;
+        else if(!clock_points_sampled||clock_points_utc_second!=utc||clock_points_view.status==NOVA_POINTS_ERROR) {
+            int32_t status=0;
+            (void)watch_points_projection_utc(&clock_points_config,&clock_points_meta,clock_points_basis,
+                utc,&civil,native_clock.civil,&clock_points_view,&status);
+            (void)watch_runtime_civil_result(&native_clock,status);
+            if(native_clock.halted)return false;
+            clock_points_utc_second=utc;clock_points_sampled=true;
+        }
+    }
+    face.points=&clock_points_view;
+#endif
+    if(valid&&!native_clock.fallback)rtc_second_at=now-civil.nanoseconds/1000000u;
+    else if(valid&&(!face.time_valid||!same_second(&date,&face.time)))rtc_second_at=now;
+    face.time=date;face.time_valid=valid;
+    rtc_sampled_at=now;sampled_rtc=true;
+    return true;
+}
+#endif
 static bool frame(risc_display_surface_v1 *surface) {
     if(!clock_canvas_live()||!clock_canvas_wake())return false;
 #ifdef WATCH_CONTEXTS_CLIENT
     if(!clock_contexts_capture_checkpoint(NULL))return false;
+#endif
+#ifdef WATCH_SHARED_HOME_CIVIL
+    uint32_t sampled_at;
+    if(!alive(&sampled_at)||!clock_sample_civil(sampled_at))return false;
 #endif
     if (!display->acquire(display->context,RISC_DISPLAY_FORMAT_RGB565,surface)) return false;
     held=surface->frame;return held!=0;
@@ -409,6 +488,7 @@ static bool draw_clock_pixels(uint32_t now,risc_display_surface_v1 *surface) {
     /* RTC sampling and fractional phase are independent of the frame cadence.
      * Only a successful RTC sample may advance civil time. The first observed
      * edge anchors the fractional hand within one 100ms sampling interval. */
+#ifndef WATCH_SHARED_HOME_CIVIL
     if (!sampled_rtc || (uint32_t)(now-rtc_sampled_at)>=100u) {
         twatch_rtc_time_v1 date={0};
         #ifdef WATCH_RUNTIME_FEATURES
@@ -438,6 +518,7 @@ static bool draw_clock_pixels(uint32_t now,risc_display_surface_v1 *surface) {
         face.time=date; face.time_valid=valid;
         rtc_sampled_at=now; sampled_rtc=true;
     }
+#endif
     if (!sampled_battery || (uint32_t)(now-battery_sampled_at)>=5000u) {
         risc_battery_sample_v1 sample={0};
         face.battery_valid=battery_api && battery_api->read && battery_api->read(battery_api->context,&sample) &&
@@ -1209,6 +1290,12 @@ __attribute__((visibility("default"))) void app_main(void) {
     } else CLOCK_WAKE_MARK("rtc-deferred");
 #endif
 #ifdef WATCH_RUNTIME_FEATURES
+#ifdef WATCH_SHARED_HOME_CIVIL
+    /* The native-faces path has completed boot classification and entered its
+     * original dense foreground lifecycle. Promotion/paired-confirm stay later. */
+    (void)watch_runtime_bind_civil(&native_clock);
+    if(native_clock.halted){clock_exit_checkpoint(__LINE__);goto done;}
+#endif
     bool rtc_seeded=watch_runtime_seed(&native_clock,rtc);
     if(!rtc_seeded || native_clock.rtc_reconcile_pending) {
         /* An ordinary RTC refusal cannot strand Home. A fresh Runtime read

@@ -254,6 +254,7 @@ static int32_t clock_resident_alarm_only(risc_resident_reply_v1 *reply) {
 #endif
 }
 #include "clock_resident_effects.inc"
+#include "clock_resident_contexts.inc"
 static int32_t clock_resident_dispatch(void *context,const risc_resident_request_v1 *request,risc_resident_reply_v1 *reply) {
     (void)context;
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
@@ -264,6 +265,9 @@ static int32_t clock_resident_dispatch(void *context,const risc_resident_request
         clock_resident_idle_result_valid=clock_resident_idle_alarm=false;
     }
     if(!clock_resident_settled())return RISC_RESIDENT_BUSY;
+#ifdef WATCH_SHARED_HOME_BOOT
+    if(clock_contexts_query_reason(request->reason))return clock_contexts_query(request);
+#endif
     if(clock_effect_reason(request->reason))return clock_effect_dispatch(request);
     if(request->reason==RISC_RESIDENT_QUERY_LAST_IDLE_ALARM) {
         if(request->flags||request->reserved)return RISC_RESIDENT_INVALID;

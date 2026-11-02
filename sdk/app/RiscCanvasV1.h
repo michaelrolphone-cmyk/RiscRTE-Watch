@@ -3,6 +3,7 @@
  * Grant-owner serialized; handles/leases/receipts are invocation-local.
  * No callback or caller metadata pointer survives a call. */
 #include <stdint.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include "RiscInputNavigationV1.h"
 #define RISC_CANVAS_CAPABILITY "ui.canvas"
@@ -84,4 +85,55 @@ static inline const risc_canvas_api_v1* risc_canvas_get_v1(const void *p,size_t 
  const risc_canvas_api_v1 *a=(const risc_canvas_api_v1*)p;
  if(a->api_version!=1||a->struct_size<sizeof(*a)||a->struct_size>bytes||a->tag!=RISC_CANVAS_TAG)return NULL;
  return a->open&&a->geometry&&a->begin_frame&&a->submit&&a->cancel_frame&&a->poll&&a->forget_receipt&&a->next&&a->contacts&&a->quiesce&&a->resume&&a->close?a:NULL;
+}
+
+/* Optional presentation semantics negotiated during open. The v1 table and
+ * base request remain byte-for-byte unchanged; old providers ignore the tail
+ * and leave presentation_out NULL. No caller pointer survives open(). */
+#define RISC_CANVAS_PRESENTATION_TAG UINT32_C(0x43505231)
+enum { RISC_CANVAS_PRESENT_DEFAULT=0,RISC_CANVAS_PRESENT_LOW_LATENCY=1,
+ RISC_CANVAS_PRESENT_QUALITY=2,RISC_CANVAS_PRESENT_CLEAN=3 };
+typedef struct {
+ uint32_t struct_size,intent;
+ const risc_canvas_rect_v1 *damage;
+ size_t damage_count;
+} risc_canvas_present_v1;
+enum { RISC_CANVAS_PRESENT_RETAINS_IMAGE=1u,RISC_CANVAS_PRESENT_CLEAN_SUPPORTED=2u,
+ RISC_CANVAS_PRESENT_HISTORY_SUPPORTED=4u };
+enum { RISC_CANVAS_ORIENTATION_DEFAULT=0,RISC_CANVAS_ORIENTATION_PORTRAIT=1,RISC_CANVAS_ORIENTATION_LANDSCAPE=2 };
+typedef struct {
+ uint32_t struct_size,version,tag;
+ void *context;
+ int32_t (*submit)(void*,uint64_t,uint64_t,const risc_canvas_present_v1*,uint64_t*);
+ /* Copy reconstructed prior visible content into provider history, without
+  * refreshing. The same logical lease remains writable and must later be
+  * submitted or cancelled. Unsupported is explicit; never invent history. */
+ int32_t (*seed_previous)(void*,uint64_t,uint64_t);
+ uint32_t flags; /* Actual semantic support for the opened session. */
+ /* Idle leases/receipts only. Provider maps semantic orientation and reverse180
+  * (0/1) to native raster/input geometry. Base v1 consumers remain unchanged. */
+ int32_t (*orientation)(void*,uint64_t,uint32_t,uint32_t);
+ /* Latest physically completed image in current logical encoding/geometry;
+  * no lease or presentation, unchanged destination on clean refusal. */
+ int32_t (*copy_completed)(void*,uint64_t,uint32_t,void*,size_t,uint32_t);
+} risc_canvas_presentation_v1;
+typedef struct {
+ risc_canvas_open_v1 base;
+ uint32_t presentation_tag;
+ const risc_canvas_presentation_v1 **presentation_out;
+} risc_canvas_open_presentation_v1;
+static inline const risc_canvas_presentation_v1*risc_canvas_presentation_get_v1(const void*p,size_t bytes){
+ const size_t prefix=offsetof(risc_canvas_presentation_v1,flags)+sizeof(uint32_t);
+ if(!p||bytes<prefix)return NULL;
+ const risc_canvas_presentation_v1*a=p;
+ return a->struct_size>=prefix&&a->struct_size<=bytes&&a->version==1&&
+  a->tag==RISC_CANVAS_PRESENTATION_TAG&&a->submit&&a->seed_previous?a:NULL;
+}
+
+static inline bool risc_canvas_has_orientation(const risc_canvas_presentation_v1*p){
+ return p&&p->struct_size>=offsetof(risc_canvas_presentation_v1,orientation)+sizeof(p->orientation)&&p->orientation;
+}
+
+static inline bool risc_canvas_has_snapshot(const risc_canvas_presentation_v1*p){
+ return p&&p->struct_size>=sizeof(*p)&&p->copy_completed;
 }

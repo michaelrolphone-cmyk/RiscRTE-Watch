@@ -6,9 +6,10 @@
 #error Select a dedicated Home AppData namespace
 #endif
 static crash_report_session clock_crash;
+static bool clock_crash_namespace_ready,clock_crash_namespace_warned;
 static bool clock_crash_safe(void *context) {
  (void)context;uint32_t now;
- return !native_clock.halted && !clock_contexts_uncertain && !clock_broadcast_uncertain && alive(&now);
+ return clock_canvas_live() && !native_clock.halted && !clock_contexts_uncertain && !clock_broadcast_uncertain && alive(&now);
 }
 static bool clock_crash_prepare(void *context) {
  (void)context;
@@ -19,18 +20,39 @@ static bool clock_crash_prepare(void *context) {
 }
 static void clock_crash_retain(void *context) {(void)context;watch_runtime_halt(&native_clock);}
 static uint64_t clock_crash_now(void *context) {(void)context;uint32_t now=0;(void)alive(&now);return now;}
-static void clock_crash_init(void) {
+static void clock_crash_bind_namespace(uint64_t namespace_id) {
  clock_crash_modal=false;
  crash_report_session_hooks hooks={.runtime=rt,.safe=clock_crash_safe,.prepare_storage=clock_crash_prepare,
-  .now=clock_crash_now,.retain=clock_crash_retain,.namespace_id=WATCH_CRASH_REPORT_NAMESPACE};
+  .now=clock_crash_now,.retain=clock_crash_retain,.namespace_id=namespace_id};
  /* A unique provisioned file service is optional. The internal spool stays
   * authoritative when no service is available. This application never selects
   * a storage device or controls a storage transport. */
  hooks.files_enabled=true;hooks.files_instance=0;
  crash_session_init(&clock_crash,&hooks);
+ clock_crash_namespace_ready=true;
+}
+static void clock_crash_init(void) {
+ clock_crash_modal=false;clock_crash_namespace_ready=clock_crash_namespace_warned=false;
+ uint64_t namespace_id=WATCH_CRASH_REPORT_NAMESPACE;
+#ifdef WATCH_SHARED_HOME_BOOT
+ if(!clock_shared_bindings_live())return;
+#endif
+ if(namespace_id)clock_crash_bind_namespace(namespace_id);
 }
 static bool clock_crash_step(void) {
  if(clock_handoff || clock_contexts_handoff || launcher_swipe_pending || clock_deferred_phase<4 || held || !clock_display_settled || clock_alarm_modal || picker.open || pqa_visible(&clock_quick.ui))return true;
+ if(!clock_canvas_live()||native_clock.halted)return false;
+ if(!clock_crash_namespace_ready){
+  uint64_t namespace_id=WATCH_CRASH_REPORT_NAMESPACE;
+#ifdef WATCH_SHARED_HOME_BOOT
+  if(!clock_shared_bindings_live())return false;
+#endif
+  if(!namespace_id){
+   if(!clock_crash_namespace_warned){rt->diagnostic("HOME crash namespace unavailable");clock_crash_namespace_warned=true;}
+   return true; /* Never reinterpret zero as the invocation's unique storage. */
+  }
+  clock_crash_bind_namespace(namespace_id);
+ }
  if(!crash_session_read(&clock_crash))return false;
  if(clock_crash.pending && !clock_crash.presented) {
   clock_crash_modal=true;
@@ -45,6 +67,10 @@ static bool clock_crash_step(void) {
    for(;;) {
     if(!clock_crash_safe(NULL) || !alive(&now) || !clock_key_read(&events,"WATCH_KEY stage=crash-report"))return false;
     watch_launcher_observation o=launcher_touch_capture(&touch,now);
+    if(!clock_canvas_live())return false;
+#ifdef WATCH_HOME_CANVAS
+    if(o.valid&&!o.count&&(o.navigation.pressed&(RISC_NAV_CONFIRM|RISC_NAV_BACK|RISC_NAV_HOME|RISC_NAV_RIGHT|RISC_NAV_DOWN|RISC_NAV_PAGE_FORWARD)))break;
+#endif
     if(!o.valid || o.count>1){neutral=false;down=false;}
     else if(!o.count){if(neutral && down)break;neutral=true;}
     else if(neutral){if(down && id!=o.id){neutral=false;down=false;}else {down=true;id=o.id;}}
