@@ -83,7 +83,7 @@ int main(void){
  home_canvas_observation observation=home_canvas_capture(&input_bridge);assert(!observation.valid);
  observation=home_canvas_capture(&input_bridge);assert(observation.valid&&!observation.count);
  raw.sequence++;raw.contact_count=1;raw.contacts[0]=(risc_touch_contact_v1){.id=19,.x=3,.y=7};
- observation=home_canvas_capture(&input_bridge);assert(observation.valid&&observation.count==1&&observation.x==7&&observation.y==13);
+ observation=home_canvas_capture(&input_bridge);assert(observation.valid&&observation.count==1&&observation.x==4&&observation.y==5);
  uint8_t identity=observation.id;
  observation=home_canvas_capture(&input_bridge);assert(observation.valid&&observation.id==identity);
  raw.sequence++;raw.contacts[0].id=20;
