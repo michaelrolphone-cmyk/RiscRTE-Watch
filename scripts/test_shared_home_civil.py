@@ -16,5 +16,5 @@ for mode in ('normal','sanitized'):
  (out/(mode+'.log')).write_text(result.stdout+result.stderr)
  if result.returncode:print(result.stdout+result.stderr);result.check_returncode()
  print(result.stdout,end='');runs.append({'mode':mode,'command':command,'output':result.stdout})
- files=['apps/runtime_features/clock_runtime.h','apps/runtime_features/sdk/RiscRetainedWakeV1.h','tests/shared_home_retained_test.c','scripts/test_shared_home_civil.py','apps/runtime_features/sdk/RiscCivilClockV1.h']
+ files=['apps/runtime_features/clock_runtime.h','apps/runtime_features/sdk/RiscRetainedWakeV1.h','tests/shared_home_civil_test.c','scripts/test_shared_home_civil.py','apps/runtime_features/sdk/RiscCivilClockV1.h']
 (out/'receipt.json').write_text(json.dumps({'runs':runs,'hardware_tested':False,'sha256':{path:hashlib.sha256((root/path).read_bytes()).hexdigest() for path in files}},indent=2)+'\n')
