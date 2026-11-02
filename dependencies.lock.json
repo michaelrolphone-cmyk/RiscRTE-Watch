@@ -53,6 +53,13 @@
       "path": "sdk/app/RiscCanvasV1.h",
       "git_blob": "9ff0966d9350f474ef0172b81f9bea0b59fd63fd",
       "sha256": "476744a0922833a40564d65e30eafc4556c2ce3a6af0cd27acd8d0e8c261fd8a"
+    },
+    "sdk/app/PointsUtcSchedule.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
+      "commit": "f034d5d8a07bbefdbf719f35f1ae7bb9608ace49",
+      "path": "lib/Alarm/include/PointsUtcSchedule.h",
+      "git_blob": "b420cf83e5db5e15d89f7940165abbdf458524a8",
+      "sha256": "00cc2d26a55dd433d6871cb7f64042cc896759ad812a162681f434c1d44c03b9"
     }
   },
   "shared_source_overlays": {

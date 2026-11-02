@@ -1,0 +1,50 @@
+name: Shared Home Points UTC projection
+on:
+  pull_request:
+    paths: ['apps/clock/points*', 'sdk/app/PointsUtcSchedule.h', 'tests/shared_home_points_test.c', 'scripts/test_shared_home_points.py', '.github/workflows/shared-home-points.yml', 'dependencies.lock.json']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: 039743b8d9aec55c0e07d44d8b69fcaa14cbffa0
+          path: deps/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: f034d5d8a07bbefdbf719f35f1ae7bb9608ace49
+          path: deps/utilities
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Legacy byte preservation and UTC recurrence differential
+        run: |
+          python scripts/test_shared_home_points.py --system-apps deps/system --utilities deps/utilities --output qualification/points
+          python scripts/test_fast_wake_clock.py --system-apps deps/system --utilities deps/utilities
+          python scripts/test_fast_wake_clock.py --system-apps deps/system --utilities deps/utilities --native
+      - name: Source receipts
+        if: always()
+        run: |
+          mkdir -p qualification/source
+          git archive HEAD | gzip -n > qualification/source/watch.tar.gz
+          git -C deps/system archive HEAD | gzip -n > qualification/source/system.tar.gz
+          git -C deps/utilities archive HEAD | gzip -n > qualification/source/utilities.tar.gz
+          for path in . deps/system deps/utilities; do git -C "$path" rev-parse HEAD; done > qualification/source/heads.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-home-points-${{ github.event.pull_request.head.sha || github.sha }}
+          path: qualification/
+          retention-days: 30
