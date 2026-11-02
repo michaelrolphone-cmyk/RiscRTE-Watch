@@ -89,7 +89,7 @@ __attribute__((visibility("default"))) void app_main(void){
  const twatch_rtc_api_v1 *rtc=NULL;
  const twatch_motion_api_v1 *motion=NULL;const twatch_haptic_api_v1 *haptic=NULL;
  bool native_available=false,motion_tried=false,haptic_tried=false,native_requested=false;
- bool dirty=true,gate=true;uint32_t revision=0,last=0;
+ bool dirty=true,gate=true,haptic_ok=false;uint32_t revision=0,last=0;
  char battery_text[40]="BATTERY UNAVAILABLE",rtc_text[40]="RTC UNAVAILABLE";
  char motion_text[40]="MOTION NOT STARTED",status_text[40]="SELECT A TEST";
  if(!br_get(RISC_SCENE_CAPABILITY,1,&grants[0],&own[0]))goto cleanup;
@@ -173,12 +173,12 @@ __attribute__((visibility("default"))) void app_main(void){
       }
      }
      if(!br_live())return;
-     bool ok=haptic&&haptic->effect(haptic->context,14);
+     bool ok=haptic&&haptic->effect(haptic->context,14);haptic_ok=ok;
      if(!br_live())return;
      snprintf(status_text,sizeof(status_text),"%s",ok?"VIBRATION REQUESTED":"VIBRATE UNAVAILABLE");
     }
     if(!br_rt->diagnostic(event.action==1?(motion?"WATCH_TEST motion=started":"WATCH_TEST motion=unavailable"):
-      (haptic?"WATCH_TEST haptic=test-requested":"WATCH_TEST haptic=unavailable"))){}
+      (haptic_ok?"WATCH_TEST haptic=test-requested":"WATCH_TEST haptic=unavailable"))){}
     if(!br_live())return;
     dirty=true;
    }

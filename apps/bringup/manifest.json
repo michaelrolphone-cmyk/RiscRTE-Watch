@@ -1,6 +1,6 @@
 {
   "type": "application",
-  "id": "bringup",
+  "id": "watch-bringup",
   "name": "Bringup diagnostics",
   "version": "0.2.0",
   "architecture": "xtensa-esp32s3",
@@ -37,5 +37,6 @@
       "capability": "haptic.effect",
       "api": 1
     }
-  ]
+  ],
+  "launcher_visible": false
 }

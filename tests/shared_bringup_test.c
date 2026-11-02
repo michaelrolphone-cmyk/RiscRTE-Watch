@@ -10,7 +10,7 @@ static risc_components_document_v1 seen;
 static const risc_runtime_api_v1 runtime_test;
 static bool healthy(risc_runtime_health_v1 *o){assert(!revoked);o->uptime_ms=tick*100;return tick<100;}
 static void yield_test(uint32_t ms){assert(!revoked);assert(ms);tick++;assert(tick<120);}
-static bool log_test(const char *s){assert(s);return true;}
+static bool log_test(const char *s){assert(s);if(read_fail)assert(strcmp(s,"WATCH_TEST haptic=test-requested"));return true;}
 static bool retained(void){retains++;revoked=true;return true;}
 const risc_runtime_api_v1 *risc_runtime_get_api(uint32_t v){return !revoked&&v==1?&runtime_test:NULL;}
 static bool bread(void *c,risc_battery_sample_v1 *o){(void)c;assert(!revoked);*o=(risc_battery_sample_v1){3950,73,0};return !read_fail;}

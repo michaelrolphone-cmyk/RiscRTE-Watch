@@ -181,3 +181,33 @@ jobs:
           path: closure/
           include-hidden-files: true
           if-no-files-found: error
+
+  publish:
+    needs: [product-assembly]
+    if: github.event.pull_request.number == 23 && github.event.pull_request.head.ref == 'work/shared-bringup-20261102' && github.event.pull_request.head.repo.full_name == 'michaelrolphone-cmyk/RiscRTE-Watch'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-bringup-qualified-products-${{ github.event.pull_request.head.sha }}
+          path: closure
+      - name: Publish verified Bringup-only product closure
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BRINGUP_HEAD: ${{ github.event.pull_request.head.sha }}
+          BRINGUP_BRANCH: ${{ github.event.pull_request.head.ref }}
+          BRINGUP_PR: ${{ github.event.pull_request.number }}
+        run: python3 scripts/publish_shared_bringup.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-bringup-publication-${{ github.event.pull_request.head.sha }}
+          path: publication.json
+          if-no-files-found: warn
