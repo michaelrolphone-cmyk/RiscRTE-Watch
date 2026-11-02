@@ -7,6 +7,9 @@
 #include "sdk/RiscProviderPromotionV1.h"
 #include "../clock/display_time.h"
 #include <string.h>
+#ifdef WATCH_SHARED_HOME_CIVIL
+#include "sdk/RiscCivilClockV1.h"
+#endif
 #ifdef WATCH_SHARED_HOME_RETAINED
 #include "PortableDeskClock.h"
 #if PORTABLE_DESK_CLOCK_RECORD_BYTES != 408u
@@ -23,6 +26,11 @@ typedef struct {
  const risc_retained_wake_api_v1 *wake;
  const twatch_rtc_api_v1 *fallback;
  bool time_live,wake_live,halted,resume;
+#ifdef WATCH_SHARED_HOME_CIVIL
+ risc_runtime_capability_v1 civil_grant;
+ const risc_civil_clock_policy_v1 *civil;
+ bool civil_live;
+#endif
  bool rtc_reconcile_pending; /* RTC absent/unreadable/unset or seed not accepted. */
  uint32_t cause;
 #ifdef WATCH_SHARED_HOME_RETAINED
@@ -47,6 +55,12 @@ static inline void watch_runtime_halt(watch_clock_runtime *c) {
 
 static bool watch_runtime_close(watch_clock_runtime *c) {
  if(c->halted)return false;
+#ifdef WATCH_SHARED_HOME_CIVIL
+ if(c->civil_live) {
+  if(!c->runtime->release(&c->civil_grant)){watch_runtime_halt(c);return false;}
+  c->civil_live=false;c->civil=NULL;
+ }
+#endif
  if(c->wake_live) {
   if(!c->runtime->release(&c->wake_grant)){watch_runtime_halt(c);return false;}
   c->wake_live=false;c->wake=NULL;
@@ -69,6 +83,54 @@ static bool watch_runtime_snapshot(watch_clock_runtime *c,risc_realtime_snapshot
     (!sample.validity && (sample.epoch_seconds || sample.nanoseconds)))return false;
  *out=sample;return true;
 }
+#ifdef WATCH_SHARED_HOME_CIVIL
+/* Explicit foreground-only admission. Caller must classify/replay sparse TIMER
+ * before this call; neither open() nor native snapshot() acquires a provider. */
+static inline bool watch_runtime_bind_civil(watch_clock_runtime *c) {
+ if(c->halted)return false;
+ if(c->civil_live)return c->civil!=NULL;
+ c->civil_grant=(risc_runtime_capability_v1){.struct_size=sizeof(c->civil_grant)};
+ if(!c->runtime->acquire(RISC_CIVIL_CLOCK_CAPABILITY,1,0,&c->civil_grant))return false;
+ c->civil_live=true;
+ const risc_civil_clock_api_v1 *base=c->civil_grant.api;
+ c->civil=base?risc_civil_clock_get_policy(base,base->struct_size):NULL;
+ return c->civil!=NULL;
+}
+static inline bool watch_runtime_civil_result(watch_clock_runtime*c,int rc) {
+ if(rc!=0 && rc!=-1)watch_runtime_halt(c);
+ return rc==0 && !c->halted;
+}
+static inline bool watch_runtime_interpret(watch_clock_runtime*c,const twatch_rtc_time_v1*date,int64_t*out) {
+ if(c->halted||!c->civil||!tw_valid_time(date))return false;
+ risc_civil_calendar_v1 raw={.struct_size=sizeof(raw),.year=date->year,.month=date->month,
+  .day=date->day,.hour=date->hour,.minute=date->minute,.second=date->second,.weekday=date->weekday};
+ int64_t epoch=-1;int rc=c->civil->interpret_rtc(c->civil->context,&raw,&epoch);
+ if(!watch_runtime_civil_result(c,rc)||epoch<0||epoch>INT64_C(4102444799))return false;
+ *out=epoch;return true;
+}
+/* Returns civil calendar already projected by the installed policy, plus the
+ * original snapshot fraction. Caller must NOT apply legacy display_time again. */
+static inline bool watch_runtime_read_projected(watch_clock_runtime*c,int64_t*utc_epoch,twatch_rtc_time_v1*out,uint16_t*fraction_ms) {
+ if(c->halted||!c->civil)return false;
+ int64_t epoch;uint32_t ns=0;
+ if(c->fallback) {
+  twatch_rtc_time_v1 raw={0};
+  if(!c->fallback->read(c->fallback->context,&raw)||!watch_runtime_interpret(c,&raw,&epoch))return false;
+ } else {
+  risc_realtime_snapshot_v1 sample;
+  if(!watch_runtime_snapshot(c,&sample)||sample.validity!=RISC_REALTIME_VALID)return false;
+  epoch=sample.epoch_seconds;ns=sample.nanoseconds;
+ }
+ risc_civil_calendar_v1 value={.struct_size=sizeof(value)};
+ int rc=c->civil->project(c->civil->context,epoch,ns,&value);
+ if(!watch_runtime_civil_result(c,rc)||value.struct_size!=sizeof(value)||value.reserved||
+    value.nanoseconds!=ns||value.year<2000||value.year>2099)return false;
+ twatch_rtc_time_v1 result={.year=(uint16_t)value.year,.month=value.month,.day=value.day,
+  .hour=value.hour,.minute=value.minute,.second=value.second,.weekday=value.weekday};
+ if(!tw_valid_time(&result))return false;
+ *utc_epoch=epoch;*out=result;*fraction_ms=(uint16_t)(ns/1000000u);return true;
+}
+#endif
 /* Existing Watch RTC ownership is explicitly fixed UTC+08. The UTC native
  * clock never receives Denver local wall time, compiler time, or an estimate. */
 static bool watch_runtime_epoch(const twatch_rtc_time_v1 *date,int64_t *out) {
@@ -183,12 +245,17 @@ static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *r
   c->runtime->diagnostic("WATCH_CLOCK rtc=unreadable-or-unset time=unset");
   return true;
  }
+#ifdef WATCH_SHARED_HOME_CIVIL
+ if(!watch_runtime_interpret(c,&date,&epoch))return false;
+ if(epoch>INT32_MAX){c->fallback=rtc;c->rtc_reconcile_pending=false;return true;}
+#else
  if(!watch_runtime_epoch(&date,&epoch)) {
   /* Runtime v1 has a signed-32-bit epoch. Preserve the accepted Watch's
    * wider 2000..2099 civil domain through its original RTC outside that range. */
   if(tw_valid_time(&date)){c->fallback=rtc;c->rtc_reconcile_pending=false;return true;}
   return sample.validity==RISC_REALTIME_UNSET;
  }
+#endif
  int rc=c->time->seed(c->time->context,epoch,0);
  if(rc==RISC_REALTIME_CONTEXT)watch_runtime_halt(c);
  if(rc==RISC_REALTIME_OK){c->fallback=NULL;c->rtc_reconcile_pending=false;}
