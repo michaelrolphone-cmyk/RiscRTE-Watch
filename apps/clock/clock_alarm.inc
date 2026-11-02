@@ -8,6 +8,19 @@
 #endif
 #include "watch_alarm_sleep.h"
 static portable_alarm_client clock_alarm;
+#if defined(WATCH_SHARED_HOME_BOOT)&&defined(WATCH_QUICK_ACTIONS)
+static void clock_quick_alarm_availability(void){
+    /* Storage validity and hardware applicability are independent. Never
+     * overwrite saved volume/restore merely because sound is unavailable. */
+#ifdef ALARM_SERVICE_TAGGED_V2
+    unsigned modes=portable_alarm_output_modes(&clock_alarm);
+#else
+    unsigned modes=clock_alarm.api?ALARM_MODE_BOTH:0;
+#endif
+    clock_quick.ui.volume_valid=clock_quick_volume_preference_valid&&clock_alarm.api&&
+        (modes&ALARM_MODE_SOUND)!=0;
+}
+#endif
 static bool clock_alarm_custody_live(void) {
     if(!clock_canvas_live())return false;
 #ifdef ALARM_SERVICE_TAGGED_V2
@@ -45,6 +58,9 @@ static bool clock_alarm_open_optional(void) {
     bool opened=portable_alarm_open(&clock_alarm,rt);
 #endif
     if(!clock_alarm_custody_live())return false;
+#if defined(WATCH_SHARED_HOME_BOOT)&&defined(WATCH_QUICK_ACTIONS)
+    clock_quick_alarm_availability();
+#endif
     if(opened)return true;
     if(clock_alarm.grant.api||clock_alarm.grant.slot||clock_alarm.grant.generation)return false;
     rt->diagnostic("WATCH_CLOCK alarm-service=unavailable alarms=disabled");

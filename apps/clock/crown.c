@@ -177,6 +177,10 @@ static bool clock_alarm_failure(void);
 #include "PortableQuickSession.h"
 #include "PortableQuickRender.h"
 static pqa_session clock_quick;
+#if defined(WATCH_SHARED_HOME_BOOT)&&defined(WATCH_CLOCK_ALARMS)
+static bool clock_quick_volume_preference_valid;
+static void clock_quick_alarm_availability(void);
+#endif
 static bool clock_quick_load(void){
  bool loaded=pqa_session_load(&clock_quick,rt);
  if(!clock_canvas_live()||!loaded)return false;
@@ -185,6 +189,12 @@ static bool clock_quick_load(void){
   clock_quick.ui.brightness_valid=false;clock_quick.ui.torch_valid=false;
   clock_quick.ui.torch=false;
  }
+#ifdef WATCH_CLOCK_ALARMS
+ clock_quick_volume_preference_valid=clock_quick.ui.volume_valid;
+ clock_quick_alarm_availability();
+#else
+ clock_quick.ui.volume_valid=false;
+#endif
 #endif
  return true;
 }
