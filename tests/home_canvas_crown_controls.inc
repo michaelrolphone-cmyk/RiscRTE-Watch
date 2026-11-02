@@ -34,13 +34,15 @@ static bool hc_navigation_poll(void*c,risc_input_navigation_frame_v1*out){
  check_io();(void)c;*out=(risc_input_navigation_frame_v1){0};
  if(strncmp(canvas_case,"nav-",4)||!first_seen)return true;
  if(navigation_release){navigation_release=false;return true;}
- if(clock_ms-navigation_at<300)return true;
+ if(clock_ms-navigation_at<300&&strcmp(canvas_case,"nav-repeat"))return true;
+ if(!strcmp(canvas_case,"nav-repeat")&&(!navigation_phase?clock_ms<300:!picker.open))return true;
  const uint32_t home[]={RISC_NAV_HOME};
  const uint32_t picker_keys[]={RISC_NAV_CONFIRM,RISC_NAV_RIGHT,RISC_NAV_CONFIRM,RISC_NAV_BACK};
+ const uint32_t repeat_keys[]={RISC_NAV_CONFIRM,RISC_NAV_RIGHT,RISC_NAV_RIGHT};
  const uint32_t quick_keys[]={RISC_NAV_UP,RISC_NAV_DOWN,RISC_NAV_RIGHT,RISC_NAV_CONFIRM,RISC_NAV_BACK};
- const uint32_t *keys=!strcmp(canvas_case,"nav-home")?home:!strcmp(canvas_case,"nav-picker")?picker_keys:quick_keys;
- unsigned count=!strcmp(canvas_case,"nav-home")?1:!strcmp(canvas_case,"nav-picker")?4:5;
- if(navigation_phase>=count){ended=true;return true;}
+ const uint32_t *keys=!strcmp(canvas_case,"nav-home")?home:!strcmp(canvas_case,"nav-picker")?picker_keys:!strcmp(canvas_case,"nav-repeat")?repeat_keys:quick_keys;
+ unsigned count=!strcmp(canvas_case,"nav-home")?1:!strcmp(canvas_case,"nav-picker")?4:!strcmp(canvas_case,"nav-repeat")?3:5;
+ if(navigation_phase>=count){if(strcmp(canvas_case,"nav-repeat")||picker.target==2)ended=true;return true;}
  out->buttons=out->pressed=keys[navigation_phase++];navigation_at=clock_ms;navigation_release=true;return true;
 }
 static const risc_input_navigation_api_v1 hc_navigation={1,sizeof(hc_navigation),NULL,hc_navigation_poll,hc_navigation_foreground,hc_navigation_reset};
@@ -163,7 +165,7 @@ int main(int argc,char **argv){
   check_clean();
   if(!strcmp(canvas_case,"malformed-api")){assert(!first_seen&&!canvas_submits&&!confirmations);free(physical_pixels);puts("Malformed optional Canvas safely refuses startup PASS");return 0;}
   assert(first_seen&&ready);
-  if(!strncmp(canvas_case,"nav-",4)){assert(navigation_phase);if(!strcmp(canvas_case,"nav-home"))assert(launches==1);}
+  if(!strncmp(canvas_case,"nav-",4)){assert(navigation_phase);if(!strcmp(canvas_case,"nav-home"))assert(launches==1);if(!strcmp(canvas_case,"nav-repeat"))assert(navigation_phase==3&&picker.target==2);}
   else assert(confirmations==1);
   if(!strcmp(canvas_case,"absent"))assert(!canvas_submits);
   else assert(canvas_submits&&converted_frames==canvas_submits&&!raw_touch_acquires&&!fixture_canvas.frames.session&&!fixture_canvas.frames.writable&&!fixture_canvas.frames.receipts);

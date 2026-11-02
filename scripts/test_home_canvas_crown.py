@@ -47,7 +47,7 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  for i,source in enumerate(sources):
   obj=w/f'{i}.o';run(['cc','-std=c11',*flags,*(['-DWATCH_CONTEXTS_CLIENT'] if i else []),'-MMD','-MF',str(obj)+'.d','-c',str(source),'-o',str(obj)]);objects.append(str(obj))
  binary=a.output/'test';run(['c++','-std=c++11',*flags,'-MMD','-MF',str(w/'boot.d'),str(ROOT/'apps/clock/effects/boot.cpp'),*objects,'-o',str(binary)])
- modes=['normal','cold','deep','sleep','saved','no-raw-touch','nav-home','nav-picker','nav-quick','controls-button','multitouch','alarm-above','alarm-retry']
+ modes=['normal','cold','deep','sleep','saved','no-raw-touch','nav-home','nav-picker','nav-repeat','nav-quick','controls-button','multitouch','alarm-above','alarm-retry']
  cases=[(mode,encoding,rotation) for mode in modes for encoding in (5,1) for rotation in (0,1)]
  face_count=int(subprocess.check_output([str(binary),'face-count'],text=True))
  cases += [(f'face-{face}',encoding,0) for face in range(face_count) for encoding in (5,1)]
