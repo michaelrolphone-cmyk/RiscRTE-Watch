@@ -64,6 +64,8 @@ if a.shared_view_output:
   shutil.copyfile(shared/'lib/PortableApps/include'/name,includes[0]/name)
  for name in ('RiscCanvasV1.h','RiscCanvasInputV1.h','RiscCivilClockV1.h','RiscHomePresentationV1.h','RiscResidentContextsV1.h'):
   shutil.copyfile(shared/'sdk/app'/name,includes[0]/name)
+ for name in ('RiscRetainedWakeV1.h','RiscRealtimeV1.h','RiscProviderPromotionV1.h'):
+  shutil.copyfile(ROOT/'apps/runtime_features/sdk'/name,includes[0]/name)
  sources += [shared/'lib/PortableApps/src/PortableTimeZone.c',shared/'lib/PortableApps/src/PortableTimeZoneCatalog.c']
  flags=[f for f in FLAGS if not f.startswith('-DWATCH_CRASH_REPORT_NAMESPACE=') and f!='-DPORTABLE_RTC_UTC8_DENVER']
  flags+=['-DWATCH_SHARED_HOME_BOOT','-DWATCH_SHARED_HOME_CIVIL','-DWATCH_HOME_CANVAS_INPUT',

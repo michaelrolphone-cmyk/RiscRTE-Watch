@@ -28,10 +28,10 @@
     },
     "sdk/app/PortableQuickRadios.h": {
       "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
-      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "commit": "00854ed279886f068c745323fcf13bc6c7142824",
       "path": "lib/PortableApps/include/PortableQuickRadios.h",
-      "git_blob": "e9d934d034010c22b03421cf629799befc355133",
-      "sha256": "ba7d68322b7a1ca0c44348733171c47b26fef595e57ced53bb70cc3ee90ac14f"
+      "git_blob": "8b30cb7e0e95f46307c06d43bc84a2682e0f4e98",
+      "sha256": "92f72a10457d8a9d08555fec5a34e5d4190cb28ca3b77291d3f910de9b7e1ceb"
     },
     "sdk/app/PortableQuickActions.h": {
       "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
@@ -49,10 +49,10 @@
     },
     "sdk/app/RiscCanvasV1.h": {
       "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
-      "commit": "f965f1eb974c8e637f222bfc1ac57fc19402b6cf",
+      "commit": "a0046cd0777f21cf4e128a6d7a4d55e009a12fba",
       "path": "sdk/app/RiscCanvasV1.h",
-      "git_blob": "f7db1edb1057355d1987b1efe9fe162fa204625a",
-      "sha256": "8b628f033a7927d704ef0085183eb4ad9d962cc4a136e333b864a307e1ce227c"
+      "git_blob": "7009dd08059669accc2fdfe6cc70d3350be3bbd9",
+      "sha256": "7ebaa25f43bb37a07326db82228dab5adeb3a54e176fde5e47e17d9ceb3c1b91"
     },
     "sdk/app/PointsUtcSchedule.h": {
       "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
@@ -70,10 +70,10 @@
     },
     "sdk/app/RiscCanvasInputV1.h": {
       "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
-      "commit": "f965f1eb974c8e637f222bfc1ac57fc19402b6cf",
+      "commit": "a0046cd0777f21cf4e128a6d7a4d55e009a12fba",
       "path": "sdk/app/RiscCanvasInputV1.h",
-      "git_blob": "bc5d4289fb51e55ae8fb20620abbc45d80dc5e45",
-      "sha256": "7cc24fb8664a65cbffdc328bfc86b5cd6c6a34f98ec57da8762379af67e30cab"
+      "git_blob": "e27e362f646c38dfcd0fbf15f9ca5bea569a3cdf",
+      "sha256": "c58364e7b467724a02369e4113375785690ca9d721eda79620ea08f6b8371d43"
     },
     "sdk/app/RiscHomePresentationV1.h": {
       "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
@@ -84,10 +84,10 @@
     },
     "sdk/app/RiscResidentContextsV1.h": {
       "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
-      "commit": "f965f1eb974c8e637f222bfc1ac57fc19402b6cf",
+      "commit": "a0046cd0777f21cf4e128a6d7a4d55e009a12fba",
       "path": "sdk/app/RiscResidentContextsV1.h",
-      "git_blob": "315696b6737690f950cf816443b0bedfb6124c22",
-      "sha256": "55a808204613cb20d159b0aa67942c718378443c4cd9a0384843c6b00cc3adbb"
+      "git_blob": "364896c9ce14059550815537d499b26fb33ec2d9",
+      "sha256": "647514b994841e88f0693449062fb83b07e520f0f77e8197935fc3b99ee7634b"
     },
     "sdk/app/PortableHomeBindings.h": {
       "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",

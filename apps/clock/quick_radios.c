@@ -32,6 +32,51 @@ static bool set_hardware(const wifi_api_v1*w,const portable_bluetooth_control_v1
  if(preserve && b->status(b->context,&actual) && actual==desired)return true;
  return b->set_enabled(b->context,desired==PORTABLE_BLUETOOTH_ON) && b->status(b->context,&actual) && actual==desired;
 }
+/* Explicit read-only admission for settings editors. It observes existing
+ * desired preferences and provider status without applying radio policy.
+ * A false result leaves uncertain grants pinned for the caller's custody fence. */
+bool pqa_radios_inspect(pqa_radios*s,pqa_state*u,const risc_runtime_api_v1*rt,
+                       bool(*safe)(void*),void*context) {
+ if(!s||!u||!rt||!safe||rt->api_version!=1||
+    rt->struct_size<RISC_RUNTIME_CAPABILITIES_V1_SIZE||!rt->acquire||!rt->release||!safe(context))return false;
+ pqa_radios next={0};
+ risc_runtime_capability_v1 kg,wg,bg;
+ bool have_k=bind(rt,&kg,RISC_KEY_VALUE_CAPABILITY,1);
+ if(!safe(context))return false;
+ next.valid=portable_radio_load(kg.api,&next.flags);
+ if(!safe(context))return false;
+ if(have_k&&!rt->release(&kg))return false;
+ if(!safe(context))return false;
+ bool have_w=bind(rt,&wg,"net.wifi",0);
+ if(!safe(context))return false;
+ bool have_b=bind(rt,&bg,"bluetooth.hci",0);
+ if(!safe(context))return false;
+ const wifi_api_v1*w=wifi(&wg);
+ const portable_bluetooth_control_v1*b=ble(&bg);
+ if(w){
+  wifi_link_t state=w->status(w->context);
+  if(!safe(context))return false;
+  if((unsigned)state>WIFI_LINK_UP)return false;
+ }
+ if(b){
+  uint8_t state=PORTABLE_BLUETOOTH_RETAINED;
+  bool observed=b->status(b->context,&state);
+  if(!safe(context))return false;
+  if(!observed||state>PORTABLE_BLUETOOTH_ON)return false;
+ }
+ if(have_b&&!rt->release(&bg))return false;
+ if(!safe(context))return false;
+ if(have_w&&!rt->release(&wg))return false;
+ if(!safe(context))return false;
+#if defined(PORTABLE_QUICK_CAPABILITY_SAFE) || defined(PORTABLE_QUICK_RADIO_AVAILABILITY)
+ next.wifi_available=w!=NULL;next.bluetooth_available=b!=NULL;next.available=w||b;
+#else
+ next.available=w&&b;
+#endif
+ *s=next;reflect(s,u);
+ if(!s->valid)u->error_flags|=PQA_ERROR_RADIO|PQA_ERROR_SAVE;
+ return true;
+}
 bool pqa_radios_load(pqa_radios*s,pqa_state*u,const risc_runtime_api_v1*rt) {
  *s=(pqa_radios){0};risc_runtime_capability_v1 kg,wg,bg;
  (void)bind(rt,&kg,RISC_KEY_VALUE_CAPABILITY,1);s->valid=portable_radio_load(kg.api,&s->flags);

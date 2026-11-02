@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include "RiscInputNavigationV1.h"
 #define RISC_CANVAS_CAPABILITY "ui.canvas"
+/* Same table ABI, separately selectable input-free dependency closure. */
+#define RISC_CANVAS_RASTER_CAPABILITY "ui.canvas.raster"
 #define RISC_CANVAS_API_V1 1u
 #define RISC_CANVAS_TAG UINT32_C(0x43415631)
 enum { RISC_CANVAS_OK=0, RISC_CANVAS_IDLE=1, RISC_CANVAS_AGAIN=2,

@@ -58,7 +58,12 @@ static bool clock_contexts_query_reason(uint32_t reason) {
 static int32_t clock_contexts_query(const risc_resident_request_v1*q) {
     if(q->flags||q->reserved)return RISC_RESIDENT_INVALID;
     if(q->reason==RISC_CONTEXTS_SETTINGS_PREPARE){
-        if(!clock_resident_preferences()||!clock_resident_alarm_ready()||!clock_resident_alive())
+        if(!pqa_session_load(&clock_quick,rt)||!clock_resident_alive())return clock_resident_retain();
+#ifdef WATCH_QUICK_RADIOS
+        if(!pqa_radios_inspect(&clock_radios,&clock_quick.ui,rt,clock_effect_alive,NULL))
+            return clock_resident_retain();
+#endif
+        if(!reload_time_format()||!clock_resident_alive()||!clock_resident_alarm_ready()||!clock_resident_alive())
             return clock_resident_retain();
         return RISC_RESIDENT_OK;
     }

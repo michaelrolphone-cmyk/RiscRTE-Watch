@@ -11,7 +11,7 @@ enum { RISC_CONTEXTS_FACE=0,RISC_CONTEXTS_POWER=1,RISC_CONTEXTS_SLEEP=2,
 #define RISC_CONTEXTS_SETTING_QUERY(field) (UINT32_C(0x43530100)+(field))
 /* Defined POWER options:0 normal/hybrid,1 low/light,2 ultra/deep.
  * NOTIFY options:0 off/DND,1 vibrate,2 sound,3 both. Other field/option
- * combinations are INVALID; unsupported saved choices remain unchanged. */
+ * combinations return BUSY (unsupported) from the host; unsupported saved choices remain unchanged. */
 #define RISC_CONTEXTS_SETTING_OPTION_QUERY(field,option) (UINT32_C(0x43530200)+(field)*16u+(option))
 /* Explicit closed-scene preparation, separate from pure applicability reads.
  * Settle existing preference/radio/alarm readiness only; no policy writes or

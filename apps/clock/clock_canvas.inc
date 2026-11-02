@@ -13,6 +13,9 @@ static home_canvas_touch clock_canvas_touch;
 static risc_runtime_capability_v1 clock_canvas_grant;
 static bool clock_canvas_selected,clock_canvas_granted;
 static bool clock_canvas_live(void){
+#ifdef WATCH_SHARED_HOME_BOOT
+ if(risc_runtime_get_api(1)!=rt){clock_canvas.retained=true;native_clock.halted=true;return false;}
+#endif
 #ifdef WATCH_RUNTIME_FEATURES
  return !clock_canvas.retained&&!native_clock.halted;
 #else
@@ -39,7 +42,13 @@ static void clock_canvas_reset(void){
 #endif
 }
 static bool clock_canvas_open(const risc_display_output_api_v1*physical){
+ if(!clock_canvas_live())return false;
+#ifdef WATCH_HOME_CANVAS_INPUT
+ clock_canvas_granted=rt->acquire(RISC_CANVAS_RASTER_CAPABILITY,1,0,&clock_canvas_grant);
+#else
  clock_canvas_granted=rt->acquire(RISC_CANVAS_CAPABILITY,1,0,&clock_canvas_grant);
+#endif
+ if(!clock_canvas_live())return false;
  if(!clock_canvas_granted){
 #ifdef WATCH_HOME_CANVAS_INPUT
   return false; /* Combined profile requires raster Canvas and its foreground companion. */
@@ -70,7 +79,7 @@ static bool clock_canvas_open(const risc_display_output_api_v1*physical){
  clock_canvas_selected=true;
 #ifdef WATCH_HOME_CANVAS_INPUT
  clock_canvas_input_granted=rt->acquire(RISC_CANVAS_INPUT_CAPABILITY,1,0,&clock_canvas_input_grant);
- if(!clock_canvas_input_granted)return false;
+ if(!clock_canvas_live()||!clock_canvas_input_granted)return false;
  const risc_canvas_input_v1*input=clock_canvas_input_grant.api;
  clock_canvas_input=input?risc_canvas_input_get_v1(input,input->struct_size):NULL;
  if(!clock_canvas_input)return false;
