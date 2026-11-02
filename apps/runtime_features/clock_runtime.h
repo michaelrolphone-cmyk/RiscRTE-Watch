@@ -152,7 +152,7 @@ static inline bool watch_runtime_read_projected(watch_clock_runtime*c,int64_t*ut
 #endif
 /* Existing Watch RTC ownership is explicitly fixed UTC+08. The UTC native
  * clock never receives Denver local wall time, compiler time, or an estimate. */
-static bool watch_runtime_epoch(const twatch_rtc_time_v1 *date,int64_t *out) {
+static inline bool watch_runtime_epoch(const twatch_rtc_time_v1 *date,int64_t *out) {
  if(!tw_valid_time(date))return false;
  int64_t days=10957; /* 2000-01-01 minus Unix epoch. */
  for(unsigned y=2000;y<date->year;y++)days+=365u+(y%4==0);
@@ -162,7 +162,7 @@ static bool watch_runtime_epoch(const twatch_rtc_time_v1 *date,int64_t *out) {
  if(epoch<0 || epoch>INT32_MAX)return false;
  *out=epoch;return true;
 }
-static bool watch_runtime_calendar(int64_t epoch,twatch_rtc_time_v1 *out) {
+static inline bool watch_runtime_calendar(int64_t epoch,twatch_rtc_time_v1 *out) {
  if(epoch<946656000 || epoch>INT32_MAX)return false;
  uint32_t local=(uint32_t)(epoch+8*3600),days=local/86400;
  uint32_t remaining=days-10957,seconds=local%86400;
@@ -290,7 +290,7 @@ static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *r
  if(rc==RISC_REALTIME_OK){c->fallback=NULL;c->rtc_reconcile_pending=false;}
  return rc==RISC_REALTIME_OK;
 }
-static bool watch_runtime_read(watch_clock_runtime *c,twatch_rtc_time_v1 *out,uint16_t *fraction_ms) {
+static inline bool watch_runtime_read(watch_clock_runtime *c,twatch_rtc_time_v1 *out,uint16_t *fraction_ms) {
  if(c->halted)return false;
  if(c->fallback) {
   twatch_rtc_time_v1 date={0};
