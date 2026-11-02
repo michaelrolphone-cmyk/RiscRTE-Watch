@@ -115,6 +115,7 @@ for lane in ('watch','wave','x4'):
  assert all(packed[n]==data for n,data in stored.items() if n not in allowed and n not in representation_changes)
  assert decode_store(packed)==out
  encoding=storage_record(out,packed)
+ if encoding:encoding['selection']='Preserve existing envelopes; Bringup first, then descending positive savings among raw ordinary internal applications; stop at first fixed-size pack preserving reserve'
  path=a.output/lane
  for name,entries in [('before',before),('before-stored',stored),('before-sd',sd),('after',out),('stored',packed),('after-sd',after_sd)]:
   write_tree(path/name,entries)

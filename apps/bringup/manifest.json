@@ -1,7 +1,6 @@
 {
   "type": "application",
   "id": "watch-bringup",
-  "name": "Bringup diagnostics",
   "version": "0.2.0",
   "architecture": "xtensa-esp32s3",
   "file_name": "bringup.elf",
@@ -38,5 +37,6 @@
       "api": 1
     }
   ],
-  "launcher_visible": false
+  "launcher_visible": false,
+  "display_name": "Bringup diagnostics"
 }
