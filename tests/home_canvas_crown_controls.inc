@@ -18,7 +18,15 @@ static int32_t hc_touch_next(void*c,uint64_t id,risc_touch_event_v1*out){
  }
  return fast_touch_next(c,id,out);
 }
-static bool hc_snapshot(void*c,risc_touch_snapshot_v1*out){check_io();bool ok=fast_snapshot(c,out);if(canvas_controls_emitted)out->sequence=1;return ok;}
+static bool hc_snapshot(void*c,risc_touch_snapshot_v1*out){
+ check_io();bool ok=fast_snapshot(c,out);if(canvas_controls_emitted)out->sequence=1;
+ if(!strcmp(canvas_case,"multitouch")&&first_seen&&clock_ms>=300&&clock_ms<1800){
+  out->sequence=2;out->contact_count=2;
+  out->contacts[0]=(risc_touch_contact_v1){.id=10,.x=TEST_WIDTH/2,.y=TEST_HEIGHT/2};
+  out->contacts[1]=(risc_touch_contact_v1){.id=11,.x=TEST_WIDTH/2+1,.y=TEST_HEIGHT/2+1};
+ }else if(!strcmp(canvas_case,"multitouch")&&first_seen&&clock_ms>=1800)out->sequence=3;
+ return ok;
+}
 static bool hc_touch_poll(void*c,size_t n){check_io();assert(n&&n<=RISC_TOUCH_QUEUE_LENGTH);return poll(c,1);}
 static bool hc_navigation_foreground(void*c,const risc_input_foreground_v1*claims,size_t count){check_io();(void)c;(void)claims;assert(count<=1);return true;}
 static bool hc_navigation_reset(void*c){check_io();(void)c;return true;}
@@ -162,6 +170,7 @@ int main(int argc,char **argv){
   if(!strcmp(canvas_case,"cold"))assert(first_frames>10&&first_at>2000);
   if(!strcmp(canvas_case,"deep"))assert(first_frames==1&&first_at==95);
   if(!strcmp(canvas_case,"sleep"))assert(sleeps==1&&wake_count==1&&soft_frames==1);
+  if(!strcmp(canvas_case,"multitouch"))assert(!launches&&!face_writes&&!quick_writes&&!picker.open&&!pqa_visible(&clock_quick.ui));
   if(!strcmp(canvas_case,"controls-button"))assert(canvas_controls_emitted&&pqa_visible(&clock_quick.ui));
   if(!strncmp(canvas_case,"alarm-",6))assert(alarm_touch_phase==4&&!alarm_view.occurrence.generation&&alarm_frames);
   if(!strncmp(canvas_case,"face-",5))assert(picker.selected==(unsigned)strtoul(canvas_case+5,NULL,10));

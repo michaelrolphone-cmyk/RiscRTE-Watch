@@ -1,6 +1,9 @@
 name: Production Home Canvas integration
 on:
   pull_request:
+concurrency:
+  group: home-canvas-crown-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
