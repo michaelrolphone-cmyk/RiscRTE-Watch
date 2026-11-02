@@ -42,7 +42,7 @@ typedef struct {
 } watch_points_time;
 static bool watch_points_day(const watch_points_time *time,uint32_t now,uint32_t *day) {
 #ifdef WATCH_SHARED_HOME_CIVIL
-    if(time->rule)return points_utc_local_day_clock(time->rule,now,day,time->clock);
+    if(time&&time->rule)return points_utc_local_day_clock(time->rule,now,day,time->clock);
 #else
     (void)time;
 #endif
@@ -50,7 +50,7 @@ static bool watch_points_day(const watch_points_time *time,uint32_t now,uint32_t
 }
 static bool watch_points_for_day(const watch_points_time *time,const points_config *c,unsigned slot,uint32_t day,unsigned edge,points_event *e,uint32_t *flags) {
 #ifdef WATCH_SHARED_HOME_CIVIL
-    if(time->rule)return points_utc_event_for_day_clock(time->rule,c,slot,day,edge,e,flags,time->maximum,time->clock);
+    if(time&&time->rule)return points_utc_event_for_day_clock(time->rule,c,slot,day,edge,e,flags,time->maximum,time->clock);
 #else
     (void)time;
 #endif
@@ -58,7 +58,7 @@ static bool watch_points_for_day(const watch_points_time *time,const points_conf
 }
 static bool watch_points_project(const watch_points_time *time,const points_config *c,uint32_t now,points_projection *p) {
 #ifdef WATCH_SHARED_HOME_CIVIL
-    if(time->rule)return points_utc_project_clock(time->rule,c,now,p,time->maximum,time->clock);
+    if(time&&time->rule)return points_utc_project_clock(time->rule,c,now,p,time->maximum,time->clock);
 #else
     (void)time;
 #endif
@@ -66,7 +66,7 @@ static bool watch_points_project(const watch_points_time *time,const points_conf
 }
 static bool watch_points_calendar(const watch_points_time *time,uint32_t at,twatch_rtc_time_v1 *local) {
 #ifdef WATCH_SHARED_HOME_CIVIL
-    if(time->rule) {
+    if(time&&time->rule) {
         portable_timezone_civil v;
         bool ok=time->clock&&time->clock->project?
             time->clock->project(time->clock->context,INT64_C(946684800)+at,&v):
@@ -186,9 +186,8 @@ invalid:
 }
 
 bool watch_points_projection(const points_config *config,const points_meta *meta,uint32_t now,nova_points_state *out) {
-    const watch_points_time time={0};
     if(!out)return false;
-    return watch_points_projection_core(&time,config,meta,now,out);
+    return watch_points_projection_core(NULL,config,meta,now,out);
 }
 #ifdef WATCH_SHARED_HOME_CIVIL
 typedef struct {
@@ -233,8 +232,9 @@ bool watch_points_projection_utc(const points_config *config,const points_meta *
     }
     if(basis==WATCH_POINTS_RECORD_UTC&&(epoch>INT32_MAX||
        config->created>(uint32_t)(INT32_MAX-INT64_C(946684800))-ALARM_RECOVERY_SECONDS))return false;
-    portable_timezone_rule rule;
-    if(portable_timezone_resolve(civil->zone,sizeof(civil->zone),&rule)!=PORTABLE_TIMEZONE_OK)return false;
+    portable_timezone_rule rule={0};
+    if(basis==WATCH_POINTS_RECORD_UTC&&
+       portable_timezone_resolve(civil->zone,sizeof(civil->zone),&rule)!=PORTABLE_TIMEZONE_OK)return false;
     watch_points_policy_context provider={.policy=policy};
     if(basis==WATCH_POINTS_RECORD_RTC) {
         provider.schedule=risc_civil_clock_get_schedule(policy,policy->struct_size);
