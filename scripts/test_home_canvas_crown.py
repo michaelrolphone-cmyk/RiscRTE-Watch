@@ -38,15 +38,15 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  flags=['-O1','-g1','-Wall','-Wextra','-Werror','-Wno-unused-function',
   '-DPORTABLE_LOW_BATTERY',f'-DTEST_WIDTH={a.width}u',f'-DTEST_HEIGHT={a.height}u',
   *[v for v in selected if v.startswith('-D') and v[2:].split('=')[0] not in defined],
-  *['-I'+str(v) for v in (sdk,ROOT/'include',ROOT,ROOT/'tests',staged,a.canvas_source/'Services/canvas_host')]]
+  *['-I'+str(v) for v in (sdk,ROOT/'include',ROOT,ROOT/'tests',staged,a.canvas_source/'Services/canvas_host',a.canvas_source/'lib/PortableApps/include')]]
  if a.sanitized:flags+=['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer','-no-pie']
  sources=[fixture,*[ROOT/'apps/clock'/n for n in ('nova/nova.c','points_projection.c','viewport.c','capability_clients.c','quick_radios.c')],
   *[staged/n for n in ('quick_actions.c','quick_render.c','quick_session.c','PortableAutomaticProvision.c','PortableNetworkSession.c')]]
  def run(cmd):commands.append(list(map(str,cmd)));subprocess.run(cmd,check=True)
  objects=[]
  for i,source in enumerate(sources):
-  obj=w/f'{i}.o';run(['cc','-std=c11',*flags,*(['-DWATCH_CONTEXTS_CLIENT'] if i else []),'-c',str(source),'-o',str(obj)]);objects.append(str(obj))
- binary=a.output/'test';run(['c++','-std=c++11',*flags,str(ROOT/'apps/clock/effects/boot.cpp'),*objects,'-o',str(binary)])
+  obj=w/f'{i}.o';run(['cc','-std=c11',*flags,*(['-DWATCH_CONTEXTS_CLIENT'] if i else []),'-MMD','-MF',str(obj)+'.d','-c',str(source),'-o',str(obj)]);objects.append(str(obj))
+ binary=a.output/'test';run(['c++','-std=c++11',*flags,'-MMD','-MF',str(w/'boot.d'),str(ROOT/'apps/clock/effects/boot.cpp'),*objects,'-o',str(binary)])
  modes=['normal','cold','deep','sleep','saved','no-raw-touch','nav-home','nav-picker','nav-quick','controls-button','multitouch','alarm-above','alarm-retry']
  cases=[(mode,encoding,rotation) for mode in modes for encoding in (5,1) for rotation in (0,1)]
  face_count=int(subprocess.check_output([str(binary),'face-count'],text=True))
@@ -62,6 +62,11 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
   print(result.stdout+result.stderr,end='',flush=True);(a.output/'runs.json').write_text(json.dumps(runs,indent=2)+'\n')
   result.check_returncode()
  compiled={str(f.relative_to(w)):digest(f) for folder in (sdk,staged) for f in folder.rglob('*') if f.is_file()}
+ dependency_files=set()
+ for dep in w.glob('*.d'):
+  for name in dep.read_text().replace(chr(92)+chr(10),' ').split(':',1)[1].split():
+   path=Path(name);assert path.is_file(),name;dependency_files.add(path)
+ compiled_dependencies={str(path):digest(path) for path in sorted(dependency_files)}
 sources=[fixture_source,quick_source,ROOT/'tests/home_canvas_crown_controls.inc',Path(__file__).resolve(),
  ROOT/'scripts/build.py',ROOT/'scripts/merged_sdk.py',ROOT/'dependencies.lock.json']
 sources+=list((ROOT/'apps/clock').rglob('*.h'))+list((ROOT/'apps/clock').glob('*.c'))+list((ROOT/'apps/clock').glob('*.inc'))+list((ROOT/'include').glob('*.h'))
@@ -70,4 +75,4 @@ provider={str(f.relative_to(a.canvas_source)):digest(f) for f in (a.canvas_sourc
  production_flags=True,canvas_source_commit=actual,hardware_tested=False,fixture_edits=changes,
  generated_fixture_sha256=hashlib.sha256(text.encode()).hexdigest(),commands=commands,runs=runs,
  source_sha256={str(v.relative_to(ROOT)):digest(v) for v in sources},
- staged_source_header_sha256=compiled,canvas_provider_source_sha256=provider),indent=2)+'\n')
+ staged_source_header_sha256=compiled,compiled_dependency_sha256=compiled_dependencies,canvas_provider_source_sha256=provider),indent=2)+'\n')
