@@ -1,17 +1,37 @@
 #pragma once
 #include "watch_sleep.h"
 #include "AlarmServiceV1.h"
+#ifdef ALARM_SERVICE_TAGGED_V2
+#include "AlarmServiceV2.h"
+#endif
 #include "RiscTimedSleepV1.h"
 /* Reuse owned crown sleep with an optional alarm deadline. No persistent
  * suppression: every entry, refusal and timed-Light boundary reconciles anew. */
+#ifdef ALARM_SERVICE_TAGGED_V2
+static bool watch_alarm_terminal(int32_t rc) {
+    return rc==ALARM_OUTPUT || rc<ALARM_FOREGROUND || rc>ALARM_PENDING;
+}
+#endif
 static int32_t watch_alarm_deadline(const alarm_service_v1 *a,alarm_sleep_v1 *decision) {
     for(unsigned n=0;n<64;n++) {
         *decision=(alarm_sleep_v1){.struct_size=sizeof(*decision)};
         int32_t rc=a->prepare_sleep(a->context,decision);
         if(rc!=ALARM_PENDING)return rc;
+#ifdef ALARM_SERVICE_TAGGED_V2
+        int32_t stepped=a->step(a->context);
+        if(watch_alarm_terminal(stepped))return ALARM_RETAINED;
+        if(stepped!=ALARM_OK&&stepped!=ALARM_PENDING)return stepped;
+#else
         (void)a->step(a->context);
+#endif
         alarm_status_v1 status={.struct_size=sizeof(status)};
-        if(a->status(a->context,&status)!=ALARM_OK)return ALARM_INVALID;
+        int32_t copied=a->status(a->context,&status);
+#ifdef ALARM_SERVICE_TAGGED_V2
+        if(watch_alarm_terminal(copied))return ALARM_RETAINED;
+        if(copied==ALARM_OK&&status.output_uncertain)return ALARM_RETAINED;
+        if(copied==ALARM_OK&&watch_alarm_terminal(status.error))return ALARM_RETAINED;
+#endif
+        if(copied!=ALARM_OK)return ALARM_INVALID;
         if(status.state==ALARM_STATE_BLOCKED)return status.error<0?status.error:ALARM_INVALID;
         if(status.occurrence.generation || status.output_uncertain
 #ifdef ALARM_STATUS_CUE_SUPPORTED
@@ -30,7 +50,10 @@ static uint32_t watch_alarm_duration(const alarm_sleep_v1 *s) {
 /* Current cohorts explicitly require the append-only service sleep suffix.
  * Frozen historical builds keep the old prefix contract and source inputs. */
 static bool watch_alarm_resume_ready(const alarm_service_v1 *a) {
-#ifdef WATCH_ALARM_SLEEP_RESUME
+#if defined(ALARM_SERVICE_TAGGED_V2)
+    const alarm_service_descriptor_v2 *d=alarm_service_descriptor(a);
+    return d && (d->features&ALARM_DESCRIPTOR_RESUME_SLEEP) && d->resume_sleep;
+#elif defined(WATCH_ALARM_SLEEP_RESUME)
     const alarm_service_sleep_v1 *extended=(const alarm_service_sleep_v1 *)a;
     return a && a->api_version==ALARM_SERVICE_API_V1 &&
         a->struct_size>=ALARM_SERVICE_SLEEP_V1_SIZE && extended->resume_sleep;
@@ -39,7 +62,9 @@ static bool watch_alarm_resume_ready(const alarm_service_v1 *a) {
 #endif
 }
 static int32_t watch_alarm_resume_light(const alarm_service_v1 *a,const alarm_sleep_v1 *decision) {
-#ifdef WATCH_ALARM_SLEEP_RESUME
+#if defined(ALARM_SERVICE_TAGGED_V2)
+    return alarm_service_resume(a,decision);
+#elif defined(WATCH_ALARM_SLEEP_RESUME)
     const alarm_service_sleep_v1 *extended=(const alarm_service_sleep_v1 *)a;
     return watch_alarm_resume_ready(a)?extended->resume_sleep(a->context,decision):ALARM_INVALID;
 #else
@@ -87,6 +112,9 @@ static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *pa
     bool alarm_failed=false;
     if(pmu_ok){
         watch_sleep_stage=4;alarm_result=watch_alarm_deadline(a,&decision);watch_sleep_detail=alarm_result;
+#ifdef ALARM_SERVICE_TAGGED_V2
+        if(watch_alarm_terminal(alarm_result))return WATCH_SLEEP_RETAINED;
+#endif
         alarm_failed=alarm_result!=ALARM_OK && alarm_result!=ALARM_BUSY;
     }
     if(pmu_ok && alarm_result==ALARM_OK) {
@@ -103,6 +131,9 @@ static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *pa
              * refusal/retained native result never authorizes this boundary. */
             if(rc==RISC_LIGHT_SLEEP_OK) {
                 alarm_result=watch_alarm_resume_light(a,&decision);
+#ifdef ALARM_SERVICE_TAGGED_V2
+                if(watch_alarm_terminal(alarm_result))return WATCH_SLEEP_RETAINED;
+#endif
                 if(alarm_result!=ALARM_OK) {
                     watch_sleep_stage=4;watch_sleep_detail=alarm_result;alarm_failed=true;
                     rc=RISC_LIGHT_SLEEP_PLATFORM;
@@ -114,6 +145,9 @@ static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *pa
                 if(!pmu->sleep_wake_pending || !watch_wake_pending(pmu,motion,&pending))rc=RISC_LIGHT_SLEEP_PLATFORM;
                 else if(!pending) {
                     alarm_result=watch_alarm_deadline(a,&decision);
+#ifdef ALARM_SERVICE_TAGGED_V2
+                    if(watch_alarm_terminal(alarm_result))return WATCH_SLEEP_RETAINED;
+#endif
                     if(alarm_result==ALARM_OK) {
                         /* Fresh RTC-backed decision first; hold and recheck crown
                            immediately afterward, then owned entry. No post-hold KV. */
@@ -131,7 +165,12 @@ static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *pa
         }
     }
     if(watch_sleep_stage==5 || watch_sleep_stage==6)watch_sleep_detail=rc;
-    if(rc==RISC_LIGHT_SLEEP_RETAINED){diagnostic("WATCH_ALARM sleep=retained");return WATCH_SLEEP_RETAINED;}
+    if(rc==RISC_LIGHT_SLEEP_RETAINED){
+#ifndef ALARM_SERVICE_TAGGED_V2
+        diagnostic("WATCH_ALARM sleep=retained");
+#endif
+        return WATCH_SLEEP_RETAINED;
+    }
     if(motion && !motion->resume_wake(motion->context)){diagnostic("WATCH_ALARM motion=restore-retained");return WATCH_SLEEP_RETAINED;}
     bool pmu_restored=pmu->resume(pmu->context);
     int32_t panel_restore=panel->struct_size>=RISC_DISPLAY_POWER_RESUME_STATUS_SIZE && panel->resume_status?
@@ -141,7 +180,14 @@ static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *pa
         diagnostic(!pmu_restored?"WATCH_ALARM restore=power-failed":"WATCH_ALARM restore=panel-failed");
         return WATCH_SLEEP_FAILED;
     }
-    if(!alarm_failed)(void)a->refresh(a->context);
+    if(!alarm_failed) {
+        int32_t refreshed=a->refresh(a->context);
+#ifdef ALARM_SERVICE_TAGGED_V2
+        if(watch_alarm_terminal(refreshed))return WATCH_SLEEP_RETAINED;
+#else
+        (void)refreshed;
+#endif
+    }
 #ifdef WATCH_RESIDENT_HOST
     if(!alarm_failed&&watch_sleep_deep_deferred)return WATCH_SLEEP_DEFERRED;
 #endif
