@@ -34,3 +34,11 @@ static void hc_contexts_queries(void);
 static bool hc_wifi_off(void*);
 static int hc_alarm_fault(const char*);
 static bool hc_lost_case(const char*);
+
+static bool hc_brightness_supported;
+static unsigned hc_brightness_calls;
+static bool hc_display_info(void*,risc_display_info_v1*);
+static bool hc_brightness(void*,uint16_t,uint16_t);
+static unsigned hc_expected_brightness(void);
+
+static unsigned hc_evidence_calls,hc_zero_namespace_warnings;

@@ -8,7 +8,7 @@ from pathlib import Path
 from merged_sdk import headers,sources as stage_sources
 from home_alarm_fixture import tagged_alarm
 ROOT=Path(__file__).resolve().parents[1]
-CANVAS_COMMIT='a0046cd0777f21cf4e128a6d7a4d55e009a12fba'
+CANVAS_COMMIT='cf483dfb592269aa232d7ba95d4f7459d644f9fe'
 p=argparse.ArgumentParser(description=__doc__)
 for name in ('system','utilities','canvas-source','output'):p.add_argument('--'+name,type=Path,required=True)
 p.add_argument('--width',type=int,default=240);p.add_argument('--height',type=int,default=240)
@@ -36,6 +36,7 @@ for op in ('status','step','refresh','ack'):
  text=replace_once(text,before,before+'int fault=hc_alarm_fault("'+op+'");if(fault)return fault;')
 text=replace_once(text,'check_io();(void)c;*cause=boot_cause;','check_io();if(hc_lost_case("boot-read-lost-retained"))return RISC_RETAINED_WAKE_ABSENT;(void)c;*cause=boot_cause;')
 text=replace_once(text,'static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_io();','static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_io();if(!strcmp(k,"home_view")&&hc_lost_case("view-read-lost-retained"))return RISC_KEY_VALUE_NOT_FOUND;')
+text=replace_once(text,'assert(hardware_brightness==clock_quick.brightness&&!pending&&!owned&&touch.subscription&&last_complete==submitted);','assert(hardware_brightness==hc_expected_brightness()&&!pending&&!owned&&touch.subscription&&last_complete==submitted);')
 text=replace_once(text,'return &fast_runtime;}','return hc_runtime_lost?NULL:&fast_runtime;}')
 
 text=replace_once(text,'assert(points_loads==1&&face.points==&clock_points_view','assert(points_loads==hc_expected_points_loads()&&face.points==&clock_points_view')
@@ -46,6 +47,9 @@ controls=replace_once(controls,'canvas_provider_init(&fixture_canvas,&fixture_ph
 controls=replace_once(controls,' fixture_canvas.navigation=&hc_navigation;','')
 controls=replace_once(controls,'if(!strncmp(canvas_case,"alarm-",6)){alarm_touch_test=true;','if(!strcmp(canvas_case,"alarm-above")||!strcmp(canvas_case,"alarm-retry")){alarm_touch_test=true;')
 controls=replace_once(controls,'if(!strncmp(canvas_case,"alarm-",6))assert(alarm_touch_phase','if(!strcmp(canvas_case,"alarm-above")||!strcmp(canvas_case,"alarm-retry"))assert(alarm_touch_phase')
+controls=replace_once(controls,'if(!strcmp(canvas_case,"controls-button")&&first_seen','if((!strcmp(canvas_case,"controls-button")||!strncmp(canvas_case,"brightness-absent-",18))&&first_seen')
+controls=replace_once(controls,'  check_clean();','  check_clean();if(!strcmp(canvas_case,"brightness-refuse")||!strcmp(canvas_case,"brightness-null-advertised")){assert(!first_seen&&!confirmations);free(physical_pixels);puts("Advertised malformed/refused brightness safely refuses startup PASS");return 0;}')
+controls=replace_once(controls,'.supported_formats=RISC_DISPLAY_FORMAT_BIT(physical_format)};return true;','.supported_formats=RISC_DISPLAY_FORMAT_BIT(physical_format),.flags=hc_brightness_supported?RISC_DISPLAY_INFO_BRIGHTNESS:0};return true;')
 controls=replace_once(controls,' hc_reset(format,rotation);',' hc_reset(format,rotation);hc_shared_start();')
 controls=replace_once(controls,' app_main();',' hc_shared_run();')
 controls=replace_once(controls,'retained_fence&&retains&&native_clock.halted','retained_fence&&(retains||hc_runtime_lost)&&(native_clock.halted||portable_home_bindings_retained())')
@@ -114,7 +118,7 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  cases+=[(mode,5,0) for mode in ('absent','malformed-api','open-retained','open-unknown','geometry-retained',
   'begin-retained','begin-unknown','malformed-frame','submit-retained','poll-retained','poll-unknown',
   'input-retained','quiesce-retained','close-retained','physical-retained',
-  'companion-absent','companion-malformed','companion-retained','companion-close-retained','civil-absent','civil-malformed','civil-retained','civil-lost-retained','companion-lost-retained','boot-read-lost-retained','view-read-lost-retained','alarm-status-lost-retained','alarm-step-lost-retained','alarm-refresh-lost-retained','alarm-ack-lost-retained','alarm-status-retained','alarm-status-unknown','alarm-step-retained','alarm-step-unknown','alarm-refresh-retained','alarm-refresh-unknown','alarm-ack-retained','alarm-ack-unknown','output-0','output-1','output-2','output-3','contexts-query','schema-native','schema-unspecified','schema-catalog','schema-malformed','fraction','crash-navigation','crash-retained','provision','provision-volume','boot-acquire-retained','policy-acquire-retained','view-acquire-retained',
+  'companion-absent','companion-malformed','companion-retained','companion-close-retained','civil-absent','civil-malformed','civil-retained','zero-crash-namespace','brightness-absent-refuse','brightness-absent-null','brightness-refuse','brightness-null-advertised','civil-lost-retained','companion-lost-retained','boot-read-lost-retained','view-read-lost-retained','alarm-status-lost-retained','alarm-step-lost-retained','alarm-refresh-lost-retained','alarm-ack-lost-retained','alarm-status-retained','alarm-status-unknown','alarm-step-retained','alarm-step-unknown','alarm-refresh-retained','alarm-refresh-unknown','alarm-ack-retained','alarm-ack-unknown','output-0','output-1','output-2','output-3','contexts-query','schema-native','schema-unspecified','schema-catalog','schema-malformed','fraction','crash-navigation','crash-retained','provision','provision-volume','boot-acquire-retained','policy-acquire-retained','view-acquire-retained',
   'boot-absent','policy-absent','view-absent','boot-null','policy-null','view-null',
   'boot-null-release-retained','policy-null-release-retained','view-null-release-retained')]
  for mode,encoding,rotation in cases:

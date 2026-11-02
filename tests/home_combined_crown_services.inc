@@ -76,10 +76,17 @@ static int hc_shared_acquire(const char*name,uint32_t version,uint64_t instance,
  return -1;
 }
 static void hc_shared_start(void){
+ hc_brightness_supported=strncmp(canvas_case,"brightness-absent-",18)!=0;hc_brightness_calls=0;
+ da.base.get_info=hc_display_info;da.base.set_brightness=hc_brightness;
+ if(!strcmp(canvas_case,"brightness-absent-null")||!strcmp(canvas_case,"brightness-null-advertised"))da.base.set_brightness=NULL;
+ fixture_physical.set_brightness=da.base.set_brightness;
+ if(!hc_brightness_supported){quick_saved[0]=true;quick_values[0]=60;}
  if(!strncmp(canvas_case,"output-",7))alarm_api.output_modes=(unsigned)strtoul(canvas_case+7,NULL,10);
  if(!strncmp(canvas_case,"alarm-ack-",10)){alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;}
  hc_wifi=qa_wifi;hc_wifi.disconnect_checked=hc_wifi_off;hc_query_pure=false;hc_query_dispatches=hc_wifi_disconnects=0;
  hc_presentation=(risc_home_presentation_v1){1,sizeof(hc_presentation),RISC_HOME_PRESENTATION_TAG,RISC_HOME_VIEW_FACES,61,0,RISC_HOME_POINTS_LEGACY_RTC,0};
+ hc_evidence_calls=hc_zero_namespace_warnings=0;
+ if(!strcmp(canvas_case,"zero-crash-namespace")){hc_presentation.crash_namespace=0;fast_runtime.struct_size=sizeof(fast_runtime);fast_runtime.failure_evidence=hc_evidence;}
  hc_runtime_lost=hc_view_seen=false;fast_runtime.release=hc_shared_release;
  hc_live_peak=hc_capacity_refusals=0;fast_runtime.acquire=hc_bounded_acquire;
  if(!strcmp(canvas_case,"provision"))fixture_provision_mode=1;
@@ -115,6 +122,8 @@ static void hc_shared_run(void){
  assert(!hc_entry_init());hc_entry_main();
  fprintf(stderr,"Home actual acquisition boundary peak=%u overflows=%u live=%u\n",hc_live_peak,hc_capacity_refusals,grants-ungrants);
  assert(!hc_capacity_refusals);
+ if(!strcmp(canvas_case,"zero-crash-namespace"))assert(first_seen&&ready&&confirmations&&hc_zero_namespace_warnings==1&&!hc_evidence_calls&&!clock_crash_namespace_ready);
+ if(!hc_brightness_supported){assert(!hc_brightness_calls&&hardware_brightness==40&&quick_saved[0]&&quick_values[0]==60&&!quick_writes);assert(canvas_controls_emitted&&pqa_visible(&clock_quick.ui)&&canvas_submits);}
  if(!strncmp(canvas_case,"provision",9))assert(fixture_provision_scans==5&&fixture_volume_acquires==1&&stage_calls==2);
 
  if(!retained_fence){if(first_seen)assert(hc_points_reads==(hc_expected_points_loads()?(WATCH_POINTS_EXTENDED?2u:1u):0u));hc_entry_fini();if(hc_shared_input_started){assert(hc_input_driver->quiesce());hc_input_driver->stop();}
@@ -133,6 +142,14 @@ static bool hc_crash_navigation(risc_input_navigation_frame_v1*out){
  out->buttons=out->pressed=RISC_NAV_CONFIRM;return true;
 }
 static void hc_shared_diagnostic(const char*s){
+ if(!strcmp(canvas_case,"zero-crash-namespace")){
+  if(strstr(s,"stage=services-ready"))ended=false;
+  if(!strcmp(s,"HOME crash namespace unavailable")){++hc_zero_namespace_warnings;ended=true;}
+ }
+ if(!hc_brightness_supported&&strstr(s,"stage=services-ready")){
+  assert(!clock_quick.ui.brightness_valid&&!clock_quick.ui.torch_valid&&!hc_brightness_calls&&hardware_brightness==40);
+  hc_query_pure=true;assert(!clock_contexts_field(RISC_CONTEXTS_BRIGHTNESS));hc_query_pure=false;
+ }
  if(!strncmp(canvas_case,"alarm-refresh-",14)&&strstr(s,"stage=services-ready"))(void)clock_alarm_refresh_checked();
  if((!strcmp(canvas_case,"contexts-query")||!strncmp(canvas_case,"output-",7))&&strstr(s,"stage=services-ready"))hc_contexts_queries();
  if(strncmp(canvas_case,"crash-",6))return;
@@ -155,12 +172,13 @@ static int32_t hc_evidence_ack(uint64_t token,uint32_t boot,uint32_t sequence){
  (void)token;(void)boot;(void)sequence;assert(!"absent durable spool must never acknowledge");return -1;
 }
 static bool hc_evidence(risc_failure_evidence_client_v1*out){
- check_io();*out=(risc_failure_evidence_client_v1){.api_version=1,.struct_size=sizeof(*out),
+ check_io();++hc_evidence_calls;*out=(risc_failure_evidence_client_v1){.api_version=1,.struct_size=sizeof(*out),
  .invocation=71,.read=hc_evidence_read,.acknowledge=hc_evidence_ack};return true;
 }
 
 static bool hc_bounded_acquire(const char*name,uint32_t version,uint64_t instance,risc_runtime_capability_v1*g){
  check_io();assert(grants>=ungrants);
+ if(!strcmp(name,RISC_APP_DATA_CAPABILITY))assert(instance!=0);
  bool acquired=hc_acquire(name,version,instance,g);
  if(acquired&&g->api==&qa_wifi)g->api=&hc_wifi;
  if(grants-ungrants>hc_live_peak)hc_live_peak=grants-ungrants;
@@ -224,3 +242,11 @@ static int hc_alarm_fault(const char*operation){
 }
 
 static bool hc_lost_case(const char*name){if(strcmp(canvas_case,name))return false;hc_runtime_lost=retained_fence=canvas_faulted=true;return true;}
+
+static bool hc_display_info(void*c,risc_display_info_v1*out){check_io();bool ok=info(c,out);out->flags=hc_brightness_supported?RISC_DISPLAY_INFO_BRIGHTNESS:0;return ok;}
+static bool hc_brightness(void*c,uint16_t value,uint16_t maximum){
+ check_io();++hc_brightness_calls;
+ if(!hc_brightness_supported||!strcmp(canvas_case,"brightness-refuse"))return false;
+ return fast_brightness(c,value,maximum);
+}
+static unsigned hc_expected_brightness(void){return hc_brightness_supported?clock_quick.brightness:40u;}
