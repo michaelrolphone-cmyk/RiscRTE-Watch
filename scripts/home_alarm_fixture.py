@@ -9,4 +9,6 @@ def tagged_alarm(text):
     for before,after in edits:
         assert text.count(before)==1,(before,text.count(before))
         text=text.replace(before,after)
-    return '#include "AlarmServiceV2.h"\n'+text,edits
+    text=text.replace('ALARM_SERVICE_CAPABILITY','ALARM_SERVICE_FACADE_CAPABILITY')
+    edits.append(('ALARM_SERVICE_CAPABILITY','ALARM_SERVICE_FACADE_CAPABILITY'))
+    return '#include "AlarmServiceFacadeV2.h"\n'+text,edits

@@ -5,7 +5,8 @@ void home_overview_app_main(void){assert(!"overview selected in native-faces qua
 int home_overview_app_module_init(void){assert(!"overview selected in native-faces qualification");return -1;}
 void home_overview_app_module_fini(void){assert(!"overview selected in native-faces qualification");}
 static int32_t hc_input_activate(void*c,uint64_t session){
- check_io();if(!strcmp(canvas_case,"companion-retained")){canvas_faulted=true;return RISC_CANVAS_RETAINED;}
+ check_io();if(hc_lost_case("companion-lost-retained"))return RISC_CANVAS_OK;
+ if(!strcmp(canvas_case,"companion-retained")){canvas_faulted=true;return RISC_CANVAS_RETAINED;}
  return ((const risc_canvas_input_v1*)hc_input_driver->capability)->activate(c,session);
 }
 static int32_t hc_input_deactivate(void*c,uint64_t session){
@@ -14,6 +15,7 @@ static int32_t hc_input_deactivate(void*c,uint64_t session){
 }
 static int32_t hc_civil_project(void*c,int64_t epoch,uint32_t fraction,risc_civil_calendar_v1*out){
  check_io();assert(!owned&&!pending);
+ if(hc_lost_case("civil-lost-retained"))return 0;
  if(!strcmp(canvas_case,"civil-retained")){canvas_faulted=true;return -9;}
  const risc_civil_clock_policy_v1*p=hc_civil_driver->capability;
  return p->project(c,epoch,fraction,out);
@@ -214,8 +216,11 @@ static void hc_contexts_queries(void){
 }
 
 static int hc_alarm_fault(const char*operation){
- char retained[64],unknown[64];
+ char retained[64],unknown[64],lost[64];
+ snprintf(lost,sizeof(lost),"alarm-%s-lost-retained",operation);if(hc_lost_case(lost))return ALARM_OK;
  snprintf(retained,sizeof(retained),"alarm-%s-retained",operation);snprintf(unknown,sizeof(unknown),"alarm-%s-unknown",operation);
  if(!strcmp(canvas_case,retained)||!strcmp(canvas_case,unknown)){canvas_faulted=true;return !strcmp(canvas_case,retained)?ALARM_RETAINED:77;}
  return ALARM_OK;
 }
+
+static bool hc_lost_case(const char*name){if(strcmp(canvas_case,name))return false;hc_runtime_lost=retained_fence=canvas_faulted=true;return true;}

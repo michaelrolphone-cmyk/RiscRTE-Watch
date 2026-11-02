@@ -34,6 +34,8 @@ text=replace_once(text,'static void check_io(void){assert(!retained_fence);}','s
 for op in ('status','step','refresh','ack'):
  before={'status':'static int32_t alarm_status(void*c,alarm_status_v1*out){check_io();','step':'static int32_t alarm_step(void*c){check_io();','refresh':'static int32_t alarm_refresh(void*c){check_io();','ack':'static int32_t alarm_ack(void*c,const alarm_token_v1*token){check_io();'}[op]
  text=replace_once(text,before,before+'int fault=hc_alarm_fault("'+op+'");if(fault)return fault;')
+text=replace_once(text,'check_io();(void)c;*cause=boot_cause;','check_io();if(hc_lost_case("boot-read-lost-retained"))return RISC_RETAINED_WAKE_ABSENT;(void)c;*cause=boot_cause;')
+text=replace_once(text,'static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_io();','static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_io();if(!strcmp(k,"home_view")&&hc_lost_case("view-read-lost-retained"))return RISC_KEY_VALUE_NOT_FOUND;')
 text=replace_once(text,'return &fast_runtime;}','return hc_runtime_lost?NULL:&fast_runtime;}')
 
 text=replace_once(text,'assert(points_loads==1&&face.points==&clock_points_view','assert(points_loads==hc_expected_points_loads()&&face.points==&clock_points_view')
@@ -112,7 +114,7 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  cases+=[(mode,5,0) for mode in ('absent','malformed-api','open-retained','open-unknown','geometry-retained',
   'begin-retained','begin-unknown','malformed-frame','submit-retained','poll-retained','poll-unknown',
   'input-retained','quiesce-retained','close-retained','physical-retained',
-  'companion-absent','companion-malformed','companion-retained','companion-close-retained','civil-absent','civil-malformed','civil-retained','alarm-status-retained','alarm-status-unknown','alarm-step-retained','alarm-step-unknown','alarm-refresh-retained','alarm-refresh-unknown','alarm-ack-retained','alarm-ack-unknown','output-0','output-1','output-2','output-3','contexts-query','schema-native','schema-unspecified','schema-catalog','schema-malformed','fraction','crash-navigation','crash-retained','provision','provision-volume','boot-acquire-retained','policy-acquire-retained','view-acquire-retained',
+  'companion-absent','companion-malformed','companion-retained','companion-close-retained','civil-absent','civil-malformed','civil-retained','civil-lost-retained','companion-lost-retained','boot-read-lost-retained','view-read-lost-retained','alarm-status-lost-retained','alarm-step-lost-retained','alarm-refresh-lost-retained','alarm-ack-lost-retained','alarm-status-retained','alarm-status-unknown','alarm-step-retained','alarm-step-unknown','alarm-refresh-retained','alarm-refresh-unknown','alarm-ack-retained','alarm-ack-unknown','output-0','output-1','output-2','output-3','contexts-query','schema-native','schema-unspecified','schema-catalog','schema-malformed','fraction','crash-navigation','crash-retained','provision','provision-volume','boot-acquire-retained','policy-acquire-retained','view-acquire-retained',
   'boot-absent','policy-absent','view-absent','boot-null','policy-null','view-null',
   'boot-null-release-retained','policy-null-release-retained','view-null-release-retained')]
  for mode,encoding,rotation in cases:

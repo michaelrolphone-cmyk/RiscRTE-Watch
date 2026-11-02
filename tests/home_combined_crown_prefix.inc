@@ -33,3 +33,4 @@ static unsigned hc_query_dispatches,hc_wifi_disconnects;
 static void hc_contexts_queries(void);
 static bool hc_wifi_off(void*);
 static int hc_alarm_fault(const char*);
+static bool hc_lost_case(const char*);
