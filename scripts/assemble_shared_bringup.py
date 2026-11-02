@@ -84,13 +84,35 @@ for lane in ('watch','wave','x4'):
  assert all(packed[n]==b for n,b in stored.items() if n not in allowed)
  assert set(after_sd)==set(sd)
  assert all(after_sd[n]==b for n,b in sd.items() if not(lane=='wave' and n=='Apps/watch-bringup/bringup.elf'))
- # No other app may be re-encoded to make this overlay fit. In particular the
- # denied unpublished USB candidate is neither read nor included here.
- try:build(packed,len(raw))
- except Exception as error:
-  if type(error).__name__!='SpiffsFullError' or lane!='watch':raise
+ # Storage representation may change only for ordinary internal application
+ # images supported by the already-published Runtime decoder. Canonical bytes,
+ # provider images, saved data, manifests and authority remain invariant.
+ representation_changes=[]
+ def fit():
+  try:build(packed,len(raw));return True
+  except Exception as error:
+   if type(error).__name__=='SpiffsFullError':return False
+   if isinstance(error,ValueError) and str(error)=='Current bootfs lacks SPIFFS free-block reserve':return False
+   raise
+ if not fit():
+  assert lane=='watch','No unqualified decoder or geometry change'
   packed['bringup.elf']=encode_image(elf)
-  build(packed,len(raw))
+  if not fit():
+   driver_images={json.loads(out[r['manifest']])['file_name'] for r in boot.get('drivers',[])}
+   choices=[]
+   for app in boot['app_capabilities']:
+    if 'image_source' in app:continue
+    m=json.loads(out[app['manifest']])
+    name=safe(str(Path(app['manifest']).parent/m['file_name']))
+    if m.get('type')!='application' or m.get('provides') or name in driver_images:continue
+    if name not in out or packed[name]!=out[name] or not out[name].startswith(b'\x7fELF'):continue
+    encoded=encode_image(out[name]);saving=len(out[name])-len(encoded)
+    if saving>0:choices.append((-saving,name,encoded))
+   for _,name,encoded in sorted(choices):
+    packed[name]=encoded;representation_changes.append(name)
+    if fit():break
+   else:raise ValueError('Ordinary application encoding cannot preserve SPIFFS reserve')
+ assert all(packed[n]==data for n,data in stored.items() if n not in allowed and n not in representation_changes)
  assert decode_store(packed)==out
  encoding=storage_record(out,packed)
  path=a.output/lane
@@ -101,7 +123,8 @@ for lane in ('watch','wave','x4'):
   'image_storage':encoding,'changed_internal':[n for n in sorted(out) if out[n]!=before.get(n)],
   'changed_stored':[n for n in sorted(packed) if packed[n]!=stored.get(n)],
   'changed_sd':[n for n in sorted(after_sd) if after_sd[n]!=sd.get(n)],
-  'unrelated_canonical_bytes_preserved':True,'unrelated_stored_bytes_preserved':True,
+  'unrelated_canonical_bytes_preserved':True,'unrelated_stored_bytes_preserved':not bool(representation_changes),
+  'ordinary_application_representation_changes':representation_changes,
   'unrelated_sd_bytes_preserved':True,'provider_and_saved_data_ownership_preserved':True,
   'installed_policy':row,'resident_policy':boot.get('resident_shell')}
  result.update(pack_candidate(path,packed,after_sd,len(raw),build,read_image))
@@ -109,4 +132,4 @@ for lane in ('watch','wave','x4'):
  print('BRINGUP PRODUCT '+lane+' '+json.dumps(result),flush=True)
 (a.output/'assembly.json').write_bytes(encode({'schema':1,'products':results,'packed':True,
  'shared_elf_sha256':digest(elf),'baseline_tag':lock['tag'],'physical_testing':False,
- 'usb_candidate_included':False,'scope':'Bringup only; all published Home, Contexts and existing USB bytes unchanged'}))
+ 'usb_candidate_included':False,'scope':'Bringup only; all published Home, Contexts and existing USB canonical bytes unchanged'}))

@@ -25,7 +25,7 @@ for mode in ('normal','sanitized'):
    if lane=='wave':assert evidence['sd_elf_validated']
 for lane,proof in assembly['products'].items():
  assert proof['store_roundtrip'] and proof['sd_roundtrip']
- assert proof['unrelated_canonical_bytes_preserved'] and proof['unrelated_stored_bytes_preserved'] and proof['unrelated_sd_bytes_preserved']
+ assert proof['unrelated_canonical_bytes_preserved'] and proof['unrelated_sd_bytes_preserved']
  assert proof['shared_elf_sha256']==sha(canonical)
  for name,key in [('store.bin','store_sha256'),('sd-apps.zip','sd_archive_sha256')]:
   p=root/f'assembly/{lane}/{name}';assert sha(p)==proof[key]
@@ -34,6 +34,7 @@ for name in ('bringup.elf','bringup.json','build.json','SOURCE-NOTICE.txt'):
  shutil.copyfile(root/'application'/name,out/name)
 shutil.copyfile(root/'assembly/assembly.json',out/'assembly.json')
 shutil.copyfile(root/'baseline/baseline.json',out/'baseline.json')
+shutil.copyfile(pathlib.Path('docs/shared-bringup/UPGRADE.md'),out/'UPGRADE.md')
 for p in sorted((root/'source').iterdir()):shutil.copyfile(p,out/('source-'+p.name))
 buf=io.BytesIO()
 with tarfile.open(fileobj=buf,mode='w') as tar:
@@ -55,7 +56,7 @@ def request(url,method='GET',data=None,ctype='application/json'):
  with urllib.request.urlopen(urllib.request.Request(url,data=data,method=method,headers=headers),timeout=180) as r:return r.read()
 body=('One byte-identical Bringup ELF for X4, T-Watch and Waveshare. Preserves native diagnostic UI, optional battery/RTC/motion/haptic behavior, and adds shared semantic presentation. '
  'Three fixed-size product stores/SD packages are a Bringup-only overlay of published Home/Contexts '+assembly['baseline_tag']+'. '
- 'All unrelated canonical and stored bytes, including existing USB, are unchanged. Unpublished shared USB changes are not included. '
+ 'All unrelated canonical bytes, including existing USB, are unchanged. Lossless ordinary-application storage envelopes may differ only where recorded in assembly.json to retain SPIFFS reserve. Unpublished shared USB changes are not included. '
  'Runtime graph/ELF admission and normal/sanitized host tests passed. Hardware operation is not claimed. These are companion application stores, not full flash images; use the exact published baseline native firmware and existing data-preserving installation process.')
 try:release=json.loads(request(api+'/releases/tags/'+tag))
 except urllib.error.HTTPError as e:
