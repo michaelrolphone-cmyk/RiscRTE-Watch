@@ -253,6 +253,7 @@ static bool clock_points_available;
 #ifdef WATCH_SHARED_HOME_CIVIL
 static int64_t clock_points_utc_second;
 static watch_points_record_basis clock_points_basis;
+static bool clock_points_live(void*context){(void)context;return clock_canvas_live();}
 #else
 static uint32_t clock_points_second;
 #endif
@@ -456,7 +457,7 @@ static bool clock_sample_civil(uint32_t now) {
     risc_civil_calendar_v1 civil={.struct_size=sizeof(civil)};
     int64_t utc=0;
     bool valid=watch_runtime_read_policy(&native_clock,&utc,&civil);
-    if(native_clock.halted)return false;
+    if(!clock_canvas_live())return false;
     twatch_rtc_time_v1 date={0};
     if(valid)date=(twatch_rtc_time_v1){.year=(uint16_t)civil.year,.month=civil.month,.day=civil.day,
         .hour=civil.hour,.minute=civil.minute,.second=civil.second,.weekday=civil.weekday};
@@ -465,10 +466,11 @@ static bool clock_sample_civil(uint32_t now) {
         if(!valid)clock_points_view.status=NOVA_POINTS_ERROR;
         else if(!clock_points_sampled||clock_points_utc_second!=utc||clock_points_view.status==NOVA_POINTS_ERROR) {
             int32_t status=0;
-            (void)watch_points_projection_utc(&clock_points_config,&clock_points_meta,clock_points_basis,
-                utc,&civil,native_clock.civil,&clock_points_view,&status);
+            (void)watch_points_projection_utc_guarded(&clock_points_config,&clock_points_meta,clock_points_basis,
+                utc,&civil,native_clock.civil,&clock_points_view,&status,clock_points_live,NULL);
+            if(!clock_canvas_live())return false;
             (void)watch_runtime_civil_result(&native_clock,status);
-            if(native_clock.halted)return false;
+            if(!clock_canvas_live())return false;
             clock_points_utc_second=utc;clock_points_sampled=true;
         }
     }
