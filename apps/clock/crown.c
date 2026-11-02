@@ -1719,7 +1719,6 @@ done:
 #endif
 #ifdef WATCH_RUNTIME_FEATURES
     if(native_clock.halted){clock_exit_checkpoint(__LINE__);return;}
-    if(!watch_runtime_close(&native_clock)){clock_exit_checkpoint(__LINE__);return;}
 #endif
 #ifdef WATCH_QUICK_ACTIONS
     if(clock_quick.ui.torch && display && !pqa_session_restore(&clock_quick,display)){
@@ -1747,6 +1746,9 @@ done:
     if(!clock_canvas_live())return;
 #ifdef WATCH_HOME_CANVAS
     if(!clock_canvas_close())return;
+#endif
+#ifdef WATCH_RUNTIME_FEATURES
+    if(!watch_runtime_close(&native_clock)){clock_exit_checkpoint(__LINE__);return;}
 #endif
     if (have_r) rt->release(&rg);
     if(!watch_capabilities_close(&device_clients)) {
