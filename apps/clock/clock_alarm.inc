@@ -102,6 +102,9 @@ static bool clock_alarm_foreground(void) {
     if(!portable_alarm_owned(&clock_alarm) && (!error || (clock_alarm_error_seen &&
        clock_alarm_seen_error==clock_alarm.status.error && clock_alarm_seen_snapshot==clock_alarm.status.snapshot)))return true;
     clock_alarm_cancel_input();clock_alarm_modal=true;
+#ifdef WATCH_HOME_CANVAS
+    if(clock_canvas_selected){bool controls=false;(void)home_canvas_touch_navigation(&clock_canvas_touch,&controls);}
+#endif
     portable_touch alert_touch={.api=touch.api,.subscription=touch.subscription};
     uint32_t discarded;
     if(!clock_key_read(&discarded,"WATCH_KEY stage=alarm-entry-discard"))return clock_alarm_failure();

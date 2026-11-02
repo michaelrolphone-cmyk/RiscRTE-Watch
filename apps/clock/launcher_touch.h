@@ -97,14 +97,23 @@ static watch_launcher_observation launcher_touch_capture(watch_launcher_touch *t
 static unsigned clock_canvas_navigation_focus;
 static unsigned launcher_canvas_navigation(watch_face_picker*p,const watch_launcher_observation*o){
  uint32_t key=o->navigation.pressed;
- if(!o->valid||o->count){return WATCH_FACE_NONE;}
+ if(!o->valid||o->count){return WATCH_FACE_NONE;
+ }
+ if(key&&(key&(key-1u))){memcpy(sleep_status,"ONE CONTROL AT A TIME",sizeof("ONE CONTROL AT A TIME"));
+ return WATCH_FACE_NONE;
+ }
 #ifdef WATCH_QUICK_ACTIONS
  if(o->controls||(!p->open&&!pqa_visible(&clock_quick.ui)&&(key&RISC_NAV_UP))){
-  pqa_cancel_input(&clock_quick.ui);clock_quick.ui.target_q8=pqa_open_q8(&clock_quick.ui);
+  if(p->open)watch_face_close(p);
+  pqa_cancel_input(&clock_quick.ui);
+ clock_quick.ui.target_q8=pqa_open_q8(&clock_quick.ui);
   return WATCH_FACE_NONE;
  }
  if(pqa_visible(&clock_quick.ui)){
-  if(key&(RISC_NAV_BACK|RISC_NAV_HOME)){pqa_close(&clock_quick.ui);return (key&RISC_NAV_HOME)?WATCH_FACE_LAUNCHER:WATCH_FACE_NONE;}
+  if(key&(RISC_NAV_BACK|RISC_NAV_HOME)){if(!strncmp(sleep_status,"QUICK ",6))sleep_status[0]=0;
+ pqa_close(&clock_quick.ui);
+ return (key&RISC_NAV_HOME)?WATCH_FACE_LAUNCHER:WATCH_FACE_NONE;
+ }
   if(key&(RISC_NAV_UP|RISC_NAV_DOWN|RISC_NAV_PAGE_BACK|RISC_NAV_PAGE_FORWARD)){
    unsigned back=!!(key&(RISC_NAV_UP|RISC_NAV_PAGE_BACK));
    clock_canvas_navigation_focus=(clock_canvas_navigation_focus+(back?8u:1u))%9u;
@@ -113,20 +122,30 @@ static unsigned launcher_canvas_navigation(watch_face_picker*p,const watch_launc
   static const char*const labels[]={"QUICK BRIGHTNESS","QUICK VOLUME","QUICK SILENT","QUICK DND","QUICK AIRPLANE","QUICK WI-FI","QUICK BLUETOOTH","QUICK TORCH","QUICK CONTEXTS"};
   if(key)memcpy(sleep_status,labels[focus],strlen(labels[focus])+1);
   if(focus<2&&(key&(RISC_NAV_LEFT|RISC_NAV_RIGHT))){
-   pqa_state*u=&clock_quick.ui;bool valid=focus?u->volume_valid:u->brightness_valid;
+   pqa_state*u=&clock_quick.ui;
+ bool valid=focus?u->volume_valid:u->brightness_valid;
    if(valid){
     int value=(focus?u->volume:u->brightness)+((key&RISC_NAV_RIGHT)?10:-10);
-    int minimum=focus?0:10;if(value<minimum)value=minimum;if(value>100)value=100;
-    if(focus){u->volume=u->action_volume=(uint8_t)value;u->pending|=PQA_VOLUME_COMMIT;}
-    else{u->brightness=u->action_brightness=(uint8_t)value;u->pending|=PQA_BRIGHTNESS_COMMIT;}
+    int minimum=focus?0:10;
+ if(value<minimum)value=minimum;
+ if(value>100)value=100;
+    if(focus){u->volume=u->action_volume=(uint8_t)value;
+ u->pending|=PQA_VOLUME_COMMIT;
+ }
+    else{u->brightness=u->action_brightness=(uint8_t)value;
+ u->pending|=PQA_BRIGHTNESS_COMMIT;
+ }
    }
   }else if((key&RISC_NAV_CONFIRM)&&focus>=2){
-   pqa_state*u=&clock_quick.ui;pqa_layout l=pqa_layout_for(u);
+   pqa_state*u=&clock_quick.ui;
+ pqa_layout l=pqa_layout_for(u);
    pqa_rect r=focus==8?l.contexts:l.tiles[focus-2];
    /* Use the same controller validation and explicit action provenance as
-    * touch; unavailable fields cannot synthesize an authorized write. */
+    * touch;
+ unavailable fields cannot synthesize an authorized write. */
    if(u->position_q8==pqa_open_q8(u)&&u->target_q8==pqa_open_q8(u)){
-    pqa_cancel_input(u);(void)pqa_input(u,o->now,true,0,0,0,0,true);
+    pqa_cancel_input(u);
+ (void)pqa_input(u,o->now,true,0,0,0,0,true);
     (void)pqa_input(u,o->now,true,1,255,r.x+r.w/2,r.y+r.h/2,true);
     (void)pqa_input(u,o->now,true,0,255,r.x+r.w/2,r.y+r.h/2,true);
    }
@@ -135,13 +154,22 @@ static unsigned launcher_canvas_navigation(watch_face_picker*p,const watch_launc
  }
 #endif
  if(key&RISC_NAV_HOME)return WATCH_FACE_LAUNCHER;
- if(key&RISC_NAV_BACK){if(p->open){watch_face_close(p);return WATCH_FACE_NONE;}return WATCH_FACE_LAUNCHER;}
+ if(key&RISC_NAV_BACK){if(p->open){watch_face_close(p);
+ return WATCH_FACE_NONE;
+ }return WATCH_FACE_LAUNCHER;
+ }
  if(!p->open){
   if(key&(RISC_NAV_CONFIRM|RISC_NAV_DOWN)){
-   p->open=true;p->category=(uint8_t)watch_face_category_for(p->selected);
-   p->target=(uint8_t)watch_face_index_for(p->category,p->selected);p->position=-(int)p->target*watch_face_pitch(p);p->snapping=true;
-   p->category_position=-(int)p->category*watch_category_pitch(p);p->category_positions[p->category]=p->position;
-   watch_face_reset_contact(p);p->last_tick=o->now;return WATCH_FACE_OPEN;
+   p->open=true;
+ p->category=(uint8_t)watch_face_category_for(p->selected);
+   p->target=(uint8_t)watch_face_index_for(p->category,p->selected);
+ p->position=-(int)p->target*watch_face_pitch(p);
+ p->snapping=true;
+   p->category_position=-(int)p->category*watch_category_pitch(p);
+ p->category_positions[p->category]=p->position;
+   watch_face_reset_contact(p);
+ p->last_tick=o->now;
+ return WATCH_FACE_OPEN;
   }
   if(key&(RISC_NAV_LEFT|RISC_NAV_RIGHT|RISC_NAV_PAGE_BACK|RISC_NAV_PAGE_FORWARD))return WATCH_FACE_LAUNCHER;
   return WATCH_FACE_NONE;
@@ -149,17 +177,26 @@ static unsigned launcher_canvas_navigation(watch_face_picker*p,const watch_launc
  if(key&(RISC_NAV_UP|RISC_NAV_DOWN)){
   p->category_positions[p->category]=p->position;
   p->category=(uint8_t)((p->category+((key&RISC_NAV_UP)?WATCH_FACE_CATEGORY_COUNT-1:1))%WATCH_FACE_CATEGORY_COUNT);
-  p->category_target=p->category;p->category_position=-(int)p->category*watch_category_pitch(p);p->category_velocity=0;
-  p->position=p->category_positions[p->category];p->target=(uint8_t)watch_face_nearest(p);p->snapping=true;
+  p->category_target=p->category;
+ p->category_position=-(int)p->category*watch_category_pitch(p);
+ p->category_velocity=0;
+  p->position=p->category_positions[p->category];
+ p->target=(uint8_t)watch_face_nearest(p);
+ p->snapping=true;
  }
  if(key&(RISC_NAV_LEFT|RISC_NAV_RIGHT|RISC_NAV_PAGE_BACK|RISC_NAV_PAGE_FORWARD)){
   unsigned count=watch_face_page_for(p->category)->count;
   unsigned back=!!(key&(RISC_NAV_LEFT|RISC_NAV_PAGE_BACK));
-  p->target=(uint8_t)((p->target+(back?count-1:1))%count);p->snapping=true;p->velocity=0;
+  p->target=(uint8_t)((p->target+(back?count-1:1))%count);
+ p->snapping=true;
+ p->velocity=0;
  }
  if(key&RISC_NAV_CONFIRM){
-  p->position=-(int)p->target*watch_face_pitch(p);p->pulse_face=watch_face_page_for(p->category)->ids[p->target];
-  p->pulse_started=o->now;p->pulse_active=true;return WATCH_FACE_SELECT;
+  p->position=-(int)p->target*watch_face_pitch(p);
+ p->pulse_face=watch_face_page_for(p->category)->ids[p->target];
+  p->pulse_started=o->now;
+ p->pulse_active=true;
+ return WATCH_FACE_SELECT;
  }
  return WATCH_FACE_NONE;
 }

@@ -1162,7 +1162,8 @@ __attribute__((visibility("default"))) void app_main(void) {
     if(clock_canvas_selected)display=&clock_canvas.display;
 #endif
     if (!watch_viewport_open(&clock_viewport,display)) {
-        if(clock_canvas_live())rt->diagnostic("WATCH_CLOCK error=display-viewport");{clock_exit_checkpoint(__LINE__);goto done;}
+        if(clock_canvas_live()){rt->diagnostic("WATCH_CLOCK error=display-viewport");}
+        {clock_exit_checkpoint(__LINE__);goto done;}
     }
     display=&clock_viewport.display;
 #ifdef WATCH_CLOCK_LAUNCHER
@@ -1403,6 +1404,14 @@ __attribute__((visibility("default"))) void app_main(void) {
 #ifdef WATCH_CLOCK_LAUNCHER
         sample_launcher_touch(now,true);
         if(!clock_canvas_live())return;
+#ifdef WATCH_HOME_CANVAS
+        if(clock_canvas_selected&&!picker.open){
+#ifdef WATCH_ATOMIC_PREFERENCES
+            if(clock_face_grant.api&&!clock_face_close()){clock_exit_checkpoint(__LINE__);return;}
+#endif
+            if(picker_scratch){nova_watch_picker_cache_destroy(picker_scratch);picker_scratch=NULL;}
+        }
+#endif
 #ifdef WATCH_FAST_WAKE
         if(!clock_input_reported){clock_wake_stage("first-input-poll",now);clock_input_reported=true;}
 #endif
