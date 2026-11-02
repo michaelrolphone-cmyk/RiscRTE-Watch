@@ -1,6 +1,7 @@
 /* Real shared entry and installed provider implementations, controlled hardware only. */
 #include "RiscProviderV2.h"
 #include "RiscRuntimeV1.h"
+#include "RiscFailureEvidenceV1.h"
 #include "RiscCivilClockV1.h"
 #include "RiscCanvasInputV1.h"
 #include "RiscHomePresentationV1.h"
@@ -15,3 +16,14 @@ static risc_home_presentation_v1 hc_presentation;
 static bool hc_shared_input_started;
 static int hc_shared_acquire(const char*,uint32_t,uint64_t,risc_runtime_capability_v1*);
 static void hc_shared_start(void),hc_shared_run(void),hc_shared_expected(void);
+static unsigned hc_points_reads;
+static unsigned hc_expected_points_loads(void);
+static unsigned hc_crash_frames,hc_crash_fresh,hc_crash_started,hc_crash_last;
+static bool hc_crash_inject,hc_crash_neutral,hc_crash_release;
+static void hc_shared_diagnostic(const char*);
+static bool hc_crash_navigation(risc_input_navigation_frame_v1*);
+static bool hc_evidence(risc_failure_evidence_client_v1*);
+static unsigned hc_live_peak,hc_capacity_refusals;
+static bool hc_bounded_acquire(const char*,uint32_t,uint64_t,risc_runtime_capability_v1*);
+static bool hc_runtime_lost,hc_view_seen;
+static bool hc_shared_release(risc_runtime_capability_v1*);

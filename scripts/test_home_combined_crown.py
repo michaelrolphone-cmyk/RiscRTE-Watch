@@ -7,7 +7,7 @@ import argparse,ast,hashlib,json,os,re,shutil,subprocess,tempfile
 from pathlib import Path
 from merged_sdk import headers,sources as stage_sources
 ROOT=Path(__file__).resolve().parents[1]
-CANVAS_COMMIT='264067285272a3e12131f191d071515036f72490'
+CANVAS_COMMIT='a0046cd0777f21cf4e128a6d7a4d55e009a12fba'
 p=argparse.ArgumentParser(description=__doc__)
 for name in ('system','utilities','canvas-source','output'):p.add_argument('--'+name,type=Path,required=True)
 p.add_argument('--width',type=int,default=240);p.add_argument('--height',type=int,default=240)
@@ -28,14 +28,27 @@ def replace_once(value,before,after):
  changes.append((before,after));return value.replace(before,after)
 before='if(face.time_valid){twatch_rtc_time_v1 raw={0},expected={0};assert(watch_runtime_calendar(native_time.epoch_seconds,&raw));assert(watch_display_time(&raw,&expected));assert(!memcmp(&face.time,&expected,sizeof(expected)));}'
 text=replace_once(text,before,'if(face.time_valid)hc_shared_expected();')
+text=replace_once(text,'return &fast_runtime;}','return hc_runtime_lost?NULL:&fast_runtime;}')
+
+text=replace_once(text,'assert(points_loads==1&&face.points==&clock_points_view','assert(points_loads==hc_expected_points_loads()&&face.points==&clock_points_view')
 controls=(ROOT/'tests/home_canvas_crown_controls.inc').read_text()
 controls=replace_once(controls,'check_io();\n if(!strcmp(name,"ui.canvas"))','check_io();\n int shared=hc_shared_acquire(name,version,instance,g);if(shared>=0)return shared!=0;\n if(!strcmp(name,"ui.canvas"))')
+controls=replace_once(controls,'if(!strcmp(name,"ui.canvas"))','if(!strcmp(name,RISC_CANVAS_RASTER_CAPABILITY))')
 controls=replace_once(controls,'canvas_provider_init(&fixture_canvas,&fixture_physical,&fixture_touch,rotation);','canvas_provider_init(&fixture_canvas,&fixture_physical,NULL,rotation);')
 controls=replace_once(controls,' fixture_canvas.navigation=&hc_navigation;','')
 controls=replace_once(controls,' hc_reset(format,rotation);',' hc_reset(format,rotation);hc_shared_start();')
 controls=replace_once(controls,' app_main();',' hc_shared_run();')
+controls=replace_once(controls,'retained_fence&&retains&&native_clock.halted','retained_fence&&(retains||hc_runtime_lost)&&(native_clock.halted||portable_home_bindings_retained())')
+
+controls=replace_once(controls,'confirmations==1+wake_count','confirmations==1+wake_count+(fixture_provision_mode?1u:0u)')
 controls=replace_once(controls,'if(!strcmp(canvas_case,"malformed-api")){assert(!first_seen&&!canvas_submits&&!confirmations);',
- 'if(!strcmp(canvas_case,"malformed-api")||!strcmp(canvas_case,"absent")||!strcmp(canvas_case,"companion-absent")||!strcmp(canvas_case,"companion-malformed")){assert(!first_seen&&!canvas_submits&&!confirmations);')
+ 'if(!strcmp(canvas_case,"malformed-api")||!strcmp(canvas_case,"absent")||!strcmp(canvas_case,"companion-absent")||!strcmp(canvas_case,"companion-malformed")||!strcmp(canvas_case,"policy-absent")||!strcmp(canvas_case,"policy-null")||!strcmp(canvas_case,"boot-null")){assert(!first_seen&&!canvas_submits&&!confirmations);')
+
+controls=replace_once(controls,'if(strncmp(canvas_case,"nav-",4)||!first_seen)return true;','if(hc_crash_navigation(out))return true;\n if(strncmp(canvas_case,"nav-",4)||!first_seen)return true;')
+controls=replace_once(controls,'++canvas_submits;return canvas_provider_submit(c,s,lease,out);','++canvas_submits;if(clock_crash_modal)++hc_crash_frames;return canvas_provider_submit(c,s,lease,out);')
+controls=replace_once(controls,'static int32_t hc_next(void*c,uint64_t s,risc_canvas_event_v1*out){','static int32_t hc_next(void*c,uint64_t s,risc_canvas_event_v1*out){\n if(!strcmp(canvas_case,"crash-retained")&&clock_crash_modal&&hc_crash_frames){check_io();canvas_faulted=true;return RISC_CANVAS_RETAINED;}')
+controls=replace_once(controls,'ended=false;return ok;}','ended=false;hc_shared_diagnostic(s);return ok;}')
+
 text=(ROOT/'tests/home_combined_crown_prefix.inc').read_text()+'\n'+text+'\n'+controls+'\n'+(ROOT/'tests/home_combined_crown_services.inc').read_text()
 
 (a.output/'generated_fixture.c').write_text(text)
@@ -50,10 +63,12 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  w=Path(tmp);sdk=headers(w,a.system,a.utilities,ROOT);staged=stage_sources(w,a.system,ROOT)
  # Match the production combined-view canonical header replacement order.
  shared=a.canvas_source
- for name in ('PortableHomeBoot.h','PortableHomeBindings.h','PortableDeskClock.h'):
+ for name in ('PortableHomeBoot.h','PortableHomeBindings.h','PortableDeskClock.h','PortableTimeZone.h'):
   shutil.copyfile(shared/'lib/PortableApps/include'/name,sdk/name)
- for name in ('RiscCanvasV1.h','RiscCanvasInputV1.h','RiscHomePresentationV1.h','RiscResidentContextsV1.h'):
+ for name in ('RiscCanvasV1.h','RiscCanvasInputV1.h','RiscCivilClockV1.h','RiscHomePresentationV1.h','RiscResidentContextsV1.h'):
   shutil.copyfile(shared/'sdk/app'/name,sdk/name)
+ for name in ('RiscRetainedWakeV1.h','RiscRealtimeV1.h','RiscProviderPromotionV1.h'):
+  shutil.copyfile(ROOT/'apps/runtime_features/sdk'/name,sdk/name)
  branch=next(n for n in tree.body if isinstance(n,ast.If) and isinstance(n.test,ast.Attribute) and n.test.attr=='shared_view_output')
  env={'FLAGS':selected,'includes':[sdk],'str':str}
  for statement in branch.body:
@@ -89,7 +104,9 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  cases+=[(mode,5,0) for mode in ('absent','malformed-api','open-retained','open-unknown','geometry-retained',
   'begin-retained','begin-unknown','malformed-frame','submit-retained','poll-retained','poll-unknown',
   'input-retained','quiesce-retained','close-retained','physical-retained',
-  'companion-absent','companion-malformed','companion-retained','companion-close-retained','civil-absent','civil-malformed','civil-retained')]
+  'companion-absent','companion-malformed','companion-retained','companion-close-retained','civil-absent','civil-malformed','civil-retained','schema-native','schema-unspecified','schema-catalog','schema-malformed','fraction','crash-navigation','crash-retained','provision','provision-volume','boot-acquire-retained','policy-acquire-retained','view-acquire-retained',
+  'boot-absent','policy-absent','view-absent','boot-null','policy-null','view-null',
+  'boot-null-release-retained','policy-null-release-retained','view-null-release-retained')]
  for mode,encoding,rotation in cases:
   command=[str(binary),mode,str(encoding),str(rotation)]
   try:
@@ -99,7 +116,8 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
    def decoded(value):return value.decode(errors='replace') if isinstance(value,bytes) else value or ''
    result=subprocess.CompletedProcess(command,124,decoded(exc.stdout),decoded(exc.stderr)+'\nCase timed out after 90 seconds\n')
   log=f'{mode}-{encoding}-{rotation}.log';(a.output/log).write_text(result.stdout+result.stderr)
-  runs.append(dict(mode=mode,physical_encoding=encoding,rotation=rotation,exit_code=result.returncode,log=log))
+  peaks=re.findall(r'Home actual acquisition boundary peak=(\d+) overflows=(\d+) live=(\d+)',result.stderr)
+  runs.append(dict(mode=mode,physical_encoding=encoding,rotation=rotation,exit_code=result.returncode,log=log,app_grant_peak=int(peaks[-1][0]) if peaks else None))
   print(result.stdout+result.stderr,end='',flush=True);(a.output/'runs.json').write_text(json.dumps(runs,indent=2)+'\n')
  compiled={str(f.relative_to(w)):digest(f) for folder in (sdk,staged) for f in folder.rglob('*') if f.is_file()}
  dependency_files=set()
