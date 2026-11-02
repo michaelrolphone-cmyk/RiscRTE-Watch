@@ -35,7 +35,7 @@ def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  w=Path(tmp);sdk=headers(w,a.system,a.utilities,ROOT);staged=stage_sources(w,a.system,ROOT)
  fixture=w/'fixture.c';fixture.write_text(text)
- flags=['-O1','-g1','-Wall','-Wextra','-Werror','-Wno-unused-function','-Wno-misleading-indentation',
+ flags=['-O1','-g1','-Wall','-Wextra','-Werror','-Wno-unused-function',
   '-DPORTABLE_LOW_BATTERY',f'-DTEST_WIDTH={a.width}u',f'-DTEST_HEIGHT={a.height}u',
   *[v for v in selected if v.startswith('-D') and v[2:].split('=')[0] not in defined],
   *['-I'+str(v) for v in (sdk,ROOT/'include',ROOT,ROOT/'tests',staged,a.canvas_source/'Services/canvas_host')]]
