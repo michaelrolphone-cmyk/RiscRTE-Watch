@@ -1,3 +1,4 @@
+static wifi_api_v1 hc_wifi;
 
 void home_faces_app_main(void){app_main();}
 void home_overview_app_main(void){assert(!"overview selected in native-faces qualification");}
@@ -73,6 +74,9 @@ static int hc_shared_acquire(const char*name,uint32_t version,uint64_t instance,
  return -1;
 }
 static void hc_shared_start(void){
+ if(!strncmp(canvas_case,"output-",7))alarm_api.output_modes=(unsigned)strtoul(canvas_case+7,NULL,10);
+ if(!strncmp(canvas_case,"alarm-ack-",10)){alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;}
+ hc_wifi=qa_wifi;hc_wifi.disconnect_checked=hc_wifi_off;hc_query_pure=false;hc_query_dispatches=hc_wifi_disconnects=0;
  hc_presentation=(risc_home_presentation_v1){1,sizeof(hc_presentation),RISC_HOME_PRESENTATION_TAG,RISC_HOME_VIEW_FACES,61,0,RISC_HOME_POINTS_LEGACY_RTC,0};
  hc_runtime_lost=hc_view_seen=false;fast_runtime.release=hc_shared_release;
  hc_live_peak=hc_capacity_refusals=0;fast_runtime.acquire=hc_bounded_acquire;
@@ -127,6 +131,8 @@ static bool hc_crash_navigation(risc_input_navigation_frame_v1*out){
  out->buttons=out->pressed=RISC_NAV_CONFIRM;return true;
 }
 static void hc_shared_diagnostic(const char*s){
+ if(!strncmp(canvas_case,"alarm-refresh-",14)&&strstr(s,"stage=services-ready"))(void)clock_alarm_refresh_checked();
+ if((!strcmp(canvas_case,"contexts-query")||!strncmp(canvas_case,"output-",7))&&strstr(s,"stage=services-ready"))hc_contexts_queries();
  if(strncmp(canvas_case,"crash-",6))return;
  if(strstr(s,"stage=services-ready"))ended=false;
  if(strstr(s,"stage=crash-report-begin")){
@@ -154,6 +160,7 @@ static bool hc_evidence(risc_failure_evidence_client_v1*out){
 static bool hc_bounded_acquire(const char*name,uint32_t version,uint64_t instance,risc_runtime_capability_v1*g){
  check_io();assert(grants>=ungrants);
  bool acquired=hc_acquire(name,version,instance,g);
+ if(acquired&&g->api==&qa_wifi)g->api=&hc_wifi;
  if(grants-ungrants>hc_live_peak)hc_live_peak=grants-ungrants;
  if(grants-ungrants>16){++hc_capacity_refusals;fprintf(stderr,"Home would exceed Runtime live-slot bound: %s instance=%llu peak=%u\n",name,(unsigned long long)instance,hc_live_peak);}
  assert(grants-ungrants<=16);
@@ -168,4 +175,47 @@ static bool hc_shared_release(risc_runtime_capability_v1*g){
   memset(g,0,sizeof(*g));++ungrants;return true;
  }
  return fast_release(g);
+}
+
+static bool hc_wifi_off(void*c){check_io();++hc_wifi_disconnects;return wifi_off(c);}
+static void hc_contexts_queries(void){
+ assert(!hc_query_dispatches&&!held&&!owned&&!pending);
+ bool child=clock_resident_child;clock_resident_child=true;
+ risc_resident_request_v1 q={sizeof(q),RISC_CONTEXTS_SETTINGS_PREPARE,0,0};
+ risc_resident_reply_v1 reply={sizeof(reply),0};
+ unsigned before_radio=radio_apply_count,before_wifi=hc_wifi_disconnects;
+ unsigned before_quick=quick_writes,before_face=face_writes,before_brightness=hardware_brightness;
+ assert(clock_resident_dispatch(NULL,&q,&reply)==RISC_RESIDENT_OK&&!reply.flags);
+ assert(radio_apply_count==before_radio&&hc_wifi_disconnects==before_wifi&&quick_writes==before_quick&&face_writes==before_face&&hardware_brightness==before_brightness);
+ unsigned before_grants=grants,before_releases=ungrants,before_frames=submitted,before_time=clock_ms;
+ hc_query_pure=true;
+ for(unsigned field=0;field<16;++field){
+  q.reason=RISC_CONTEXTS_SETTING_QUERY(field);reply.flags=UINT32_MAX;
+  int rc=clock_resident_dispatch(NULL,&q,&reply);++hc_query_dispatches;
+  assert((rc==RISC_RESIDENT_OK||rc==RISC_RESIDENT_BUSY)&&!reply.flags);
+  if(field==RISC_CONTEXTS_FACE)assert(rc==RISC_RESIDENT_OK);
+  if(field>=RISC_CONTEXTS_SETTING_COUNT)assert(rc==RISC_RESIDENT_BUSY);
+  for(unsigned option=0;option<16;++option){
+   q.reason=RISC_CONTEXTS_SETTING_OPTION_QUERY(field,option);reply.flags=UINT32_MAX;
+   rc=clock_resident_dispatch(NULL,&q,&reply);++hc_query_dispatches;
+   assert((rc==RISC_RESIDENT_OK||rc==RISC_RESIDENT_BUSY)&&!reply.flags);
+   if(field==RISC_CONTEXTS_NOTIFY&&option<=3&&clock_quick.ui.dnd_valid)assert(rc==((!option||(alarm_api.output_modes&option)==option)?RISC_RESIDENT_OK:RISC_RESIDENT_BUSY));
+   if((field!=RISC_CONTEXTS_POWER&&field!=RISC_CONTEXTS_NOTIFY)||(field==RISC_CONTEXTS_POWER&&option>2)||(field==RISC_CONTEXTS_NOTIFY&&option>3))assert(rc==RISC_RESIDENT_BUSY);
+  }
+ }
+ q.reason=RISC_CONTEXTS_SETTINGS_PREPARE;q.flags=1;
+ assert(clock_resident_dispatch(NULL,&q,&reply)==RISC_RESIDENT_INVALID&&!reply.flags);
+ q.flags=0;q.reserved=1;assert(clock_resident_dispatch(NULL,&q,&reply)==RISC_RESIDENT_INVALID&&!reply.flags);
+ q.reserved=0;held=true;assert(clock_resident_dispatch(NULL,&q,&reply)==RISC_RESIDENT_BUSY&&!reply.flags);held=false;
+ clock_resident_child=false;assert(clock_resident_dispatch(NULL,&q,&reply)==RISC_RESIDENT_INVALID);
+ clock_resident_child=child;hc_query_pure=false;
+ assert(grants==before_grants&&ungrants==before_releases&&submitted==before_frames&&clock_ms==before_time&&hc_query_dispatches==272);
+ fprintf(stderr,"Actual crown Contexts PREPARE: no radio toggles/persistence; 272 pure cached queries and malformed/unsettled/child-lane guards PASS\n");
+}
+
+static int hc_alarm_fault(const char*operation){
+ char retained[64],unknown[64];
+ snprintf(retained,sizeof(retained),"alarm-%s-retained",operation);snprintf(unknown,sizeof(unknown),"alarm-%s-unknown",operation);
+ if(!strcmp(canvas_case,retained)||!strcmp(canvas_case,unknown)){canvas_faulted=true;return !strcmp(canvas_case,retained)?ALARM_RETAINED:77;}
+ return ALARM_OK;
 }

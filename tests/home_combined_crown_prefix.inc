@@ -27,3 +27,9 @@ static unsigned hc_live_peak,hc_capacity_refusals;
 static bool hc_bounded_acquire(const char*,uint32_t,uint64_t,risc_runtime_capability_v1*);
 static bool hc_runtime_lost,hc_view_seen;
 static bool hc_shared_release(risc_runtime_capability_v1*);
+
+static bool hc_query_pure;
+static unsigned hc_query_dispatches,hc_wifi_disconnects;
+static void hc_contexts_queries(void);
+static bool hc_wifi_off(void*);
+static int hc_alarm_fault(const char*);
