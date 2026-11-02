@@ -134,7 +134,8 @@ static void hc_reset(unsigned format,unsigned rotation){
  physical_width=rotation%2?TEST_HEIGHT:TEST_WIDTH;physical_height=rotation%2?TEST_WIDTH:TEST_HEIGHT;
  physical_stride=(format==RISC_DISPLAY_FORMAT_RGB565?physical_width*2:(physical_width+7)/8)+4;
  physical_pixels=calloc(physical_height,physical_stride);assert(physical_pixels);
- fixture_physical=da.base;fixture_physical.get_info=physical_info;fixture_physical.acquire=physical_acquire;fixture_physical.submit=physical_submit;
+ /* Copying only the base table must not advertise the source power suffix. */
+ fixture_physical=da.base;fixture_physical.struct_size=sizeof(fixture_physical);fixture_physical.get_info=physical_info;fixture_physical.acquire=physical_acquire;fixture_physical.submit=physical_submit;
  fixture_touch=ta;fixture_touch.poll=hc_touch_poll;fixture_touch.next=hc_touch_next;fixture_touch.snapshot=hc_snapshot;
  navigation_phase=navigation_at=0;navigation_release=canvas_controls_emitted=false;
  canvas_provider_init(&fixture_canvas,&fixture_physical,&fixture_touch,rotation);

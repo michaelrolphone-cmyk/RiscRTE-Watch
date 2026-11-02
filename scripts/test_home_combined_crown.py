@@ -47,6 +47,8 @@ text=replace_once(text,'return &fast_runtime;}','return hc_runtime_lost?NULL:&fa
 
 text=replace_once(text,'assert(points_loads==1&&face.points==&clock_points_view','assert(points_loads==hc_expected_points_loads()&&face.points==&clock_points_view')
 controls=(ROOT/'tests/home_canvas_crown_controls.inc').read_text()
+controls=replace_once(controls,' return canvas_provider_open(c,r,s);',' assert(fixture_physical.struct_size==sizeof(fixture_physical));\n assert(!risc_display_output_history(&fixture_physical));\n int32_t result=canvas_provider_open(c,r,s);\n if(result==RISC_CANVAS_OK)assert(!(fixture_canvas.presentation.flags&RISC_CANVAS_PRESENT_HISTORY_SUPPORTED));\n return result;')
+
 controls=replace_once(controls,'check_io();\n if(!strcmp(name,"ui.canvas"))','check_io();\n int shared=hc_shared_acquire(name,version,instance,g);if(shared>=0)return shared!=0;\n if(!strcmp(name,"ui.canvas"))')
 controls=replace_once(controls,'if(!strcmp(name,"ui.canvas"))','if(!strcmp(name,RISC_CANVAS_RASTER_CAPABILITY))')
 controls=replace_once(controls,'canvas_provider_init(&fixture_canvas,&fixture_physical,&fixture_touch,rotation);','canvas_provider_init(&fixture_canvas,&fixture_physical,NULL,rotation);')
@@ -143,7 +145,7 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  negative_control=dict(exit_code=negative_result.returncode,log='negative-control.log',source_crown_sha256=digest(crown_path),wrapper_sha256=digest(wrapper_path),
   source_wrapper_commit='a236cfe66b4bc29bb83aef0c6ba9478307321e18',generated_crown_sha256=digest(negative_crown),
   passed=negative_result.returncode!=0 and 'Home would exceed Runtime live-slot bound:' in negative_log and 'peak=17' in negative_log and 'hc_bounded_acquire' in negative_log)
- modes=['normal','cold','deep','sleep','saved','no-raw-touch','nav-home','nav-picker','nav-repeat','nav-quick','controls-button','multitouch','alarm-above','alarm-retry']
+ modes=['normal','history-absent','cold','deep','sleep','saved','no-raw-touch','nav-home','nav-picker','nav-repeat','nav-quick','controls-button','multitouch','alarm-above','alarm-retry']
  cases=[(mode,5,0) for mode in ('nav-radio-both','nav-radio-rollback','nav-radio-detach-retained','nav-radio-rebind-refused','nav-radio-rebind-lost-retained')]+[(mode,encoding,rotation) for mode in modes for encoding in (5,1) for rotation in (0,1)]
  face_count=int(subprocess.check_output([str(binary),'face-count'],text=True))
  cases += [(f'face-{face}',encoding,0) for face in range(face_count) for encoding in (5,1)]
