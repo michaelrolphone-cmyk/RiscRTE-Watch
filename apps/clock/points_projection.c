@@ -194,12 +194,28 @@ typedef struct {
     const risc_civil_clock_policy_v1 *policy;
     const risc_civil_clock_schedule_v1 *schedule;
     int32_t status;
+    bool (*safe)(void *);
+    void *safe_context;
 } watch_points_policy_context;
-static bool watch_points_policy_project(void *context,int64_t epoch,portable_timezone_civil *out) {
-    watch_points_policy_context *c=context;if(c->status)return false;
-    risc_civil_calendar_v1 value={.struct_size=sizeof(value)};
-    c->status=c->policy->project(c->policy->context,epoch,0,&value);
+static bool watch_points_policy_safe(watch_points_policy_context *c) {
     if(c->status)return false;
+    if(c->safe&&!c->safe(c->safe_context)){c->status=-9;return false;}
+    return true;
+}
+static int32_t watch_points_policy_interpret(watch_points_policy_context *c,
+    const risc_civil_calendar_v1 *value,int64_t *epoch) {
+    if(!watch_points_policy_safe(c))return c->status;
+    int32_t rc=c->policy->interpret_rtc(c->policy->context,value,epoch);
+    /* Test custody before accepting even an ordinary successful result. */
+    if(!watch_points_policy_safe(c))return c->status;
+    c->status=rc;return rc;
+}
+static bool watch_points_policy_project(void *context,int64_t epoch,portable_timezone_civil *out) {
+    watch_points_policy_context *c=context;if(!watch_points_policy_safe(c))return false;
+    risc_civil_calendar_v1 value={.struct_size=sizeof(value)};
+    int32_t rc=c->policy->project(c->policy->context,epoch,0,&value);
+    if(!watch_points_policy_safe(c))return false;
+    c->status=rc;if(c->status)return false;
     portable_timezone_civil civil={value.year,value.month,value.day,value.hour,value.minute,value.second,value.weekday};
     int64_t checked;
     if(value.struct_size<sizeof(value)||value.reserved||value.nanoseconds||value.year<2000||value.year>2099||
@@ -207,20 +223,22 @@ static bool watch_points_policy_project(void *context,int64_t epoch,portable_tim
     *out=civil;return true;
 }
 static int32_t watch_points_policy_inverse(void *context,const portable_timezone_civil *local,int64_t epoch[2],uint32_t *count) {
-    watch_points_policy_context *c=context;if(c->status)return c->status;
+    watch_points_policy_context *c=context;if(!watch_points_policy_safe(c))return c->status;
     risc_civil_calendar_v1 value={.struct_size=sizeof(value),.year=local->year,.month=local->month,
         .day=local->day,.hour=local->hour,.minute=local->minute,.second=local->second,.weekday=local->weekday};
     risc_civil_inverse_v1 result={.struct_size=sizeof(result)};
-    c->status=c->schedule->inverse(c->policy->context,&value,&result);
-    if(c->status)return c->status;
+    int32_t rc=c->schedule->inverse(c->policy->context,&value,&result);
+    if(!watch_points_policy_safe(c))return c->status;
+    c->status=rc;if(c->status)return c->status;
     if(result.struct_size<sizeof(result)||result.count>2||
        (result.count==2&&result.epoch[0]>=result.epoch[1])){c->status=-1;return -1;}
     *count=result.count;for(unsigned i=0;i<result.count;i++)epoch[i]=result.epoch[i];
     return 0;
 }
-bool watch_points_projection_utc(const points_config *config,const points_meta *meta,
+bool watch_points_projection_utc_guarded(const points_config *config,const points_meta *meta,
     watch_points_record_basis basis,int64_t epoch,const risc_civil_calendar_v1 *civil,
-    const risc_civil_clock_policy_v1 *policy,nova_points_state *out,int32_t *policy_status) {
+    const risc_civil_clock_policy_v1 *policy,nova_points_state *out,int32_t *policy_status,
+    bool (*safe)(void *),void *safe_context) {
     if(policy_status)*policy_status=0;
     if(!out)return false;
     *out=(nova_points_state){.status=NOVA_POINTS_ERROR};
@@ -235,7 +253,8 @@ bool watch_points_projection_utc(const points_config *config,const points_meta *
     portable_timezone_rule rule={0};
     if(basis==WATCH_POINTS_RECORD_UTC&&
        portable_timezone_resolve(civil->zone,sizeof(civil->zone),&rule)!=PORTABLE_TIMEZONE_OK)return false;
-    watch_points_policy_context provider={.policy=policy};
+    watch_points_policy_context provider={.policy=policy,.safe=safe,.safe_context=safe_context};
+    if(!watch_points_policy_safe(&provider)){*policy_status=provider.status;return false;}
     if(basis==WATCH_POINTS_RECORD_RTC) {
         provider.schedule=risc_civil_clock_get_schedule(policy,policy->struct_size);
         if(!provider.schedule){out->status=NOVA_POINTS_UNAVAILABLE;return false;}
@@ -247,7 +266,7 @@ bool watch_points_projection_utc(const points_config *config,const points_meta *
         risc_civil_calendar_v1 value={.struct_size=sizeof(value),.year=raw.year,.month=raw.month,
             .day=raw.day,.hour=raw.hour,.minute=raw.minute,.second=raw.second,.weekday=raw.weekday};
         int64_t created=0;
-        *policy_status=policy->interpret_rtc(policy->context,&value,&created);
+        *policy_status=watch_points_policy_interpret(&provider,&value,&created);
         if(*policy_status||created>INT64_C(946684800)+ALARM_RTC_MAX)return false;
         /* A cutoff before the representable UTC recurrence domain excludes no
          * representable occurrence. Preserve the original record untouched. */
@@ -261,7 +280,7 @@ bool watch_points_projection_utc(const points_config *config,const points_meta *
         risc_civil_calendar_v1 last={.struct_size=sizeof(last),.year=2099,.month=12,.day=31,
             .hour=23,.minute=59,.second=59};
         int64_t upper=0;
-        *policy_status=policy->interpret_rtc(policy->context,&last,&upper);
+        *policy_status=watch_points_policy_interpret(&provider,&last,&upper);
         if(*policy_status||upper<INT64_C(946684800)||upper>INT64_C(946684800)+ALARM_RTC_MAX)return false;
         maximum=(uint32_t)(upper-INT64_C(946684800));
     }
@@ -269,10 +288,17 @@ bool watch_points_projection_utc(const points_config *config,const points_meta *
     const watch_points_time time={.rule=&rule,.maximum=maximum,
         .clock=basis==WATCH_POINTS_RECORD_RTC?&clock:NULL};
     bool ok=watch_points_projection_core(&time,&copy,meta,(uint32_t)(epoch-INT64_C(946684800)),out);
+    (void)watch_points_policy_safe(&provider);
     if(provider.status) {
         *policy_status=provider.status;
         *out=(nova_points_state){.status=NOVA_POINTS_ERROR};return false;
     }
     return ok;
+}
+bool watch_points_projection_utc(const points_config *config,const points_meta *meta,
+    watch_points_record_basis basis,int64_t epoch,const risc_civil_calendar_v1 *civil,
+    const risc_civil_clock_policy_v1 *policy,nova_points_state *out,int32_t *policy_status) {
+    return watch_points_projection_utc_guarded(config,meta,basis,epoch,civil,policy,out,
+        policy_status,NULL,NULL);
 }
 #endif

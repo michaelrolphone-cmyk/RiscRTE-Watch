@@ -19,4 +19,10 @@ typedef enum { WATCH_POINTS_RECORD_RTC, WATCH_POINTS_RECORD_UTC } watch_points_r
 bool watch_points_projection_utc(const points_config *,const points_meta *,
     watch_points_record_basis,int64_t,const risc_civil_calendar_v1 *,
     const risc_civil_clock_policy_v1 *,nova_points_state *,int32_t *policy_status);
+/* Optional pure custody predicate, checked before and after every provider
+ * callback. False becomes sticky -9; caller owns terminal cleanup. */
+bool watch_points_projection_utc_guarded(const points_config *,const points_meta *,
+    watch_points_record_basis,int64_t,const risc_civil_calendar_v1 *,
+    const risc_civil_clock_policy_v1 *,nova_points_state *,int32_t *policy_status,
+    bool (*safe)(void *),void *safe_context);
 #endif

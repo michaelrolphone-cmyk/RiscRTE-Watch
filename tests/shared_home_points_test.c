@@ -6,8 +6,15 @@
 #include "PortableTimeZone.h"
 static unsigned checks,interpret_calls;
 static int32_t failure;
+static unsigned custody_calls,custody_drop_at;
+static bool custody_alive=true;
+static void custody_tick(void) {
+    custody_calls++;
+    if(custody_drop_at&&custody_calls==custody_drop_at)custody_alive=false;
+}
+static bool custody_safe(void *context) { return *(bool *)context; }
 static int32_t interpret(void *ctx,const risc_civil_calendar_v1 *v,int64_t *out) {
-    (void)ctx;interpret_calls++;
+    (void)ctx;interpret_calls++;custody_tick();
     if(failure)return failure;
     uint32_t raw;
     if(!alarm_calendar_seconds(v->year,v->month,v->day,v->hour,v->minute,v->second,&raw))return -1;
@@ -16,7 +23,7 @@ static int32_t interpret(void *ctx,const risc_civil_calendar_v1 *v,int64_t *out)
 static unsigned civil_calls,fail_at;
 static int32_t civil_failure;
 static int32_t project(void *ctx,int64_t epoch,uint32_t ns,risc_civil_calendar_v1 *out) {
-    (void)ctx;civil_calls++;
+    (void)ctx;civil_calls++;custody_tick();
     if(fail_at&&civil_calls>=fail_at)return civil_failure;
     if(epoch<INT64_C(946656000)||epoch>INT64_C(4102415999))return -1;
     twatch_rtc_time_v1 raw,local;
@@ -26,7 +33,7 @@ static int32_t project(void *ctx,int64_t epoch,uint32_t ns,risc_civil_calendar_v
     return 0;
 }
 static int32_t inverse(void *ctx,const risc_civil_calendar_v1 *v,risc_civil_inverse_v1 *out) {
-    (void)ctx;civil_calls++;
+    (void)ctx;civil_calls++;custody_tick();
     if(fail_at&&civil_calls>=fail_at)return civil_failure;
     twatch_rtc_time_v1 local={(uint16_t)v->year,v->month,v->day,v->weekday,v->hour,v->minute,v->second};
     portable_time_candidate candidates[2];
@@ -114,6 +121,25 @@ int main(void) {
     assert(!watch_points_projection_utc(&cfg,&meta,WATCH_POINTS_RECORD_RTC,1793610000,&civil,&policy,&out,&rc));
     assert(rc==-9&&civil_calls==fail_at&&out.status==NOVA_POINTS_ERROR);checks++;
     fail_at=0;
+    /* Ordinary successful provider results cannot outlive caller custody.
+       Exhaust every callback boundary from one actual complete projection. */
+    cfg.created=3600;custody_calls=0;
+    assert(watch_points_projection_utc_guarded(&cfg,&meta,WATCH_POINTS_RECORD_RTC,
+        1793610000,&civil,&policy,&out,&rc,custody_safe,&custody_alive));
+    unsigned total_calls=custody_calls;assert(total_calls>10);
+    for(unsigned stop=1;stop<=total_calls;stop++) {
+        custody_calls=0;custody_drop_at=stop;custody_alive=true;
+        unsigned old_interpret=interpret_calls,old_civil=civil_calls;
+        assert(!watch_points_projection_utc_guarded(&cfg,&meta,WATCH_POINTS_RECORD_RTC,
+            1793610000,&civil,&policy,&out,&rc,custody_safe,&custody_alive));
+        assert(rc==-9&&out.status==NOVA_POINTS_ERROR&&custody_calls==stop);
+        assert(interpret_calls-old_interpret+civil_calls-old_civil==stop);checks++;
+    }
+    custody_calls=0;custody_drop_at=0;custody_alive=false;
+    assert(!watch_points_projection_utc_guarded(&cfg,&meta,WATCH_POINTS_RECORD_RTC,
+        1793610000,&civil,&policy,&out,&rc,custody_safe,&custody_alive));
+    assert(rc==-9&&custody_calls==0);checks++;
+    custody_alive=true;cfg.created=0;
     risc_civil_clock_policy_v1 prefix=policy;prefix.struct_size=sizeof(prefix);
     assert(!watch_points_projection_utc(&cfg,&meta,WATCH_POINTS_RECORD_RTC,1793610000,&civil,&prefix,&out,&rc));
     assert(out.status==NOVA_POINTS_UNAVAILABLE);checks++;
