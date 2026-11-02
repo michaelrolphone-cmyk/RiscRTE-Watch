@@ -177,6 +177,9 @@ __attribute__((visibility("default"))) void app_main(void){
      if(!br_live())return;
      snprintf(status_text,sizeof(status_text),"%s",ok?"VIBRATION REQUESTED":"VIBRATE UNAVAILABLE");
     }
+    if(!br_rt->diagnostic(event.action==1?(motion?"WATCH_TEST motion=started":"WATCH_TEST motion=unavailable"):
+      (haptic?"WATCH_TEST haptic=test-requested":"WATCH_TEST haptic=unavailable"))){}
+    if(!br_live())return;
     dirty=true;
    }
   }
@@ -215,4 +218,5 @@ cleanup:
  }
  for(unsigned n=7;n;n--)if(own[n-1]&&!br_release(&grants[n-1]))return;
  if(native_requested&&br_live())bringup_native_main();
+ else if(br_live())(void)br_rt->diagnostic("WATCH_TEST return=home");
 }

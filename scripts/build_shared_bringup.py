@@ -42,5 +42,5 @@ record={'schema':1,'source_revision':subprocess.check_output(['git','rev-parse',
   [ROOT/'apps/bringup/main.c',ROOT/'apps/bringup/shared_ui.h',ROOT/'apps/bringup/native_ui.h',
    ROOT/'apps/clock/viewport.c',manifest,Path(__file__)]}}
 (out/'build.json').write_text(json.dumps(record,indent=2)+'\n')
-shutil.copyfile(ROOT/'LICENSE',out/'LICENSE')
+(out/'SOURCE-NOTICE.txt').write_text('Source: michaelrolphone-cmyk/RiscRTE-Watch; preserved native Bringup diagnostics plus shared capability controller. See source archive and build.json for exact provenance.\n')
 print(json.dumps(record,indent=2))
