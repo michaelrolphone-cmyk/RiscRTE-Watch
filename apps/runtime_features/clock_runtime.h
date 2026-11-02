@@ -7,6 +7,12 @@
 #include "sdk/RiscProviderPromotionV1.h"
 #include "../clock/display_time.h"
 #include <string.h>
+#ifdef WATCH_SHARED_HOME_RETAINED
+#include "PortableDeskClock.h"
+#if PORTABLE_DESK_CLOCK_RECORD_BYTES != 408u
+#error "Shared Home retained clock requires the existing 408-byte schema3"
+#endif
+#endif
 #define WATCH_CLOCK_CHECKPOINT_TYPE 0x57434c4bu
 #define WATCH_CLOCK_CHECKPOINT_SCHEMA 1u
 
@@ -19,6 +25,10 @@ typedef struct {
  bool time_live,wake_live,halted,resume;
  bool rtc_reconcile_pending; /* RTC absent/unreadable/unset or seed not accepted. */
  uint32_t cause;
+#ifdef WATCH_SHARED_HOME_RETAINED
+ bool desk_supported,desk_resume;
+ portable_desk_record desk_record;
+#endif
 } watch_clock_runtime;
 
 /* Canonical append-only Runtime 0.1.54 invocation fence; frozen Watch SDK
@@ -104,13 +114,58 @@ static bool watch_runtime_open(watch_clock_runtime *c,const risc_runtime_api_v1 
  risc_retained_wake_record_v1 record={.struct_size=sizeof(record)};
  int rc=c->wake->read(c->wake->context,WATCH_CLOCK_CHECKPOINT_TYPE,WATCH_CLOCK_CHECKPOINT_SCHEMA,&record,&c->cause);
  if(rc==RISC_RETAINED_WAKE_CONTEXT){watch_runtime_halt(c);return false;}
- if(rc!=RISC_RETAINED_WAKE_OK && rc!=RISC_RETAINED_WAKE_ABSENT && rc!=RISC_RETAINED_WAKE_MISMATCH)return false;
+ if(rc!=RISC_RETAINED_WAKE_OK && rc!=RISC_RETAINED_WAKE_ABSENT && rc!=RISC_RETAINED_WAKE_MISMATCH) {
+#ifdef WATCH_SHARED_HOME_RETAINED
+  if(rc!=RISC_RETAINED_WAKE_INVALID)watch_runtime_halt(c);
+#endif
+  return false;
+ }
  if(c->cause>RISC_BOOT_DEEP_OTHER)return false;
  c->resume=rc==RISC_RETAINED_WAKE_OK && c->cause>=RISC_BOOT_DEEP_TIMER &&
   record.struct_size==sizeof(record) && record.type==WATCH_CLOCK_CHECKPOINT_TYPE &&
   record.schema_version==WATCH_CLOCK_CHECKPOINT_SCHEMA && record.size==1 && record.payload[0]==1;
+#ifdef WATCH_SHARED_HOME_RETAINED
+ /* A mismatched legacy read never consumes the native boot snapshot. Decode
+  * the shared app-owned schema only through the verified extended capability.
+  * No display, input, storage, RTC, or presentation provider has opened yet. */
+ const risc_retained_wake_api_v1_extended *extended=risc_retained_wake_extended(c->wake);
+ c->desk_supported=extended && extended->max_payload_bytes>=PORTABLE_DESK_CLOCK_RECORD_BYTES;
+ if(rc==RISC_RETAINED_WAKE_MISMATCH && c->desk_supported) {
+  uint8_t bytes[PORTABLE_DESK_CLOCK_RECORD_BYTES];uint32_t used=0,cause=UINT32_MAX;
+  int result=extended->read_bytes(c->wake->context,PORTABLE_DESK_CLOCK_RECORD_TYPE,
+      PORTABLE_DESK_CLOCK_RECORD_SCHEMA,bytes,sizeof(bytes),&used,&cause);
+  if(result!=RISC_RETAINED_WAKE_OK && result!=RISC_RETAINED_WAKE_ABSENT &&
+     result!=RISC_RETAINED_WAKE_MISMATCH && result!=RISC_RETAINED_WAKE_INVALID) {
+   watch_runtime_halt(c);return false;
+  }
+  if(result!=RISC_RETAINED_WAKE_INVALID) {
+   if(cause>RISC_BOOT_DEEP_OTHER)return false;
+   c->cause=cause;
+   c->desk_resume=result==RISC_RETAINED_WAKE_OK && cause==RISC_BOOT_DEEP_TIMER &&
+       portable_desk_decode(bytes,used,&c->desk_record);
+  }
+ }
+#endif
  return true;
 }
+#ifdef WATCH_SHARED_HOME_RETAINED
+/* 1 is staged; 0 is explicit absent/clean refusal; -2 is retained custody.
+ * The caller stages only before preparation. This does not alter or migrate
+ * the existing one-byte Watch checkpoint used by ordinary Hybrid sleep. */
+static inline int watch_runtime_stage_desk(watch_clock_runtime *c,const portable_desk_record *record) {
+ if(c->halted)return -2;
+ if(!c->wake || !c->desk_supported)return 0;
+ const risc_retained_wake_api_v1_extended *extended=risc_retained_wake_extended(c->wake);
+ uint8_t bytes[PORTABLE_DESK_CLOCK_RECORD_BYTES];
+ if(!extended || extended->max_payload_bytes<sizeof(bytes) ||
+    !portable_desk_encode(record,bytes,sizeof(bytes)))return 0;
+ int rc=extended->stage_bytes(c->wake->context,PORTABLE_DESK_CLOCK_RECORD_TYPE,
+     PORTABLE_DESK_CLOCK_RECORD_SCHEMA,bytes,sizeof(bytes));
+ if(rc==RISC_RETAINED_WAKE_OK)return 1;
+ if(rc==RISC_RETAINED_WAKE_INVALID)return 0;
+ watch_runtime_halt(c);return -2;
+}
+#endif
 static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *rtc) {
  c->rtc_reconcile_pending=true;
  risc_realtime_snapshot_v1 sample;
