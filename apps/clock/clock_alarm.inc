@@ -2,6 +2,10 @@
  * settled frame helpers; contains no schedule/RTC/output policy. */
 #include "PortableAlarmClient.h"
 #include "PortableTouch.h"
+#ifdef ALARM_SERVICE_TAGGED_V2
+#include "AlarmServiceFacadeV2.h"
+#define WATCH_ALARM_CALL_SAFE() clock_canvas_live()
+#endif
 #include "watch_alarm_sleep.h"
 static portable_alarm_client clock_alarm;
 static bool clock_alarm_custody_live(void) {
@@ -33,7 +37,7 @@ static bool clock_alarm_open_optional(void) {
     clock_alarm_attempted=true;
 #ifdef ALARM_SERVICE_TAGGED_V2
     memset(&clock_alarm,0,sizeof(clock_alarm));clock_alarm.grant.struct_size=sizeof(clock_alarm.grant);
-    bool acquired=rt->acquire(ALARM_SERVICE_CAPABILITY,ALARM_SERVICE_API_V2,0,&clock_alarm.grant);
+    bool acquired=rt->acquire(ALARM_SERVICE_FACADE_CAPABILITY,ALARM_SERVICE_FACADE_API,0,&clock_alarm.grant);
     if(!clock_canvas_live())return false;
     bool opened=acquired&&alarm_service_descriptor(clock_alarm.grant.api)!=NULL;
     if(opened)clock_alarm.api=clock_alarm.grant.api;
@@ -71,6 +75,33 @@ static void clock_alarm_cancel_input(void) {
     picker_open_pending=picker_select_pending=false;
     watch_face_reset_contact(&picker);
 }
+static bool clock_alarm_stop_checked(void) {
+#ifdef ALARM_SERVICE_TAGGED_V2
+    if(!clock_alarm_custody_live())return false;
+    if(!clock_alarm.api)return true;
+    int32_t result=ALARM_PENDING;
+    for(unsigned n=0;n<3&&result==ALARM_PENDING;n++){
+        result=clock_alarm.api->stop_only(clock_alarm.api->context);
+        if(!clock_canvas_live())return false;
+        if(!portable_alarm_result(&clock_alarm,result)||!clock_alarm_custody_live())return false;
+    }
+    return result==ALARM_OK;
+#else
+    return portable_alarm_failure_stop(&clock_alarm);
+#endif
+}
+static bool clock_alarm_step_checked(void) {
+#ifdef ALARM_SERVICE_TAGGED_V2
+    if(!clock_alarm_custody_live()||!portable_alarm_callable(&clock_alarm))return false;
+    int32_t result=clock_alarm.api->step(clock_alarm.api->context);
+    if(!clock_canvas_live())return false;
+    if(!portable_alarm_result(&clock_alarm,result)||!clock_alarm_custody_live())return false;
+    bool copied=portable_alarm_status(&clock_alarm);
+    return clock_alarm_custody_live()&&copied;
+#else
+    return portable_alarm_pump(&clock_alarm);
+#endif
+}
 static bool clock_alarm_failure(void) {
     if(!clock_alarm_custody_live())return false;
     if(clock_alarm_failed_cleaned)return false;
@@ -78,7 +109,7 @@ static bool clock_alarm_failure(void) {
     if(!clock_contexts_pause())return false;
 #endif
     clock_alarm_failed_cleaned=true;
-    if(!portable_alarm_failure_stop(&clock_alarm)) {
+    if(!clock_alarm_stop_checked()) {
 #ifdef ALARM_SERVICE_TAGGED_V2
         clock_alarm.retained=true;(void)clock_alarm_custody_live();return false;
 #else
@@ -96,7 +127,7 @@ static bool clock_alarm_pump_checked(void) {
     if((portable_alarm_owned(&clock_alarm)||clock_alarm.status.state==ALARM_STATE_BLOCKED)&&
        !clock_contexts_pause())return false;
 #endif
-    bool pumped=portable_alarm_pump(&clock_alarm);
+    bool pumped=clock_alarm_step_checked();
     if(!clock_alarm_custody_live()||!pumped)return false;
 #ifdef WATCH_CONTEXTS_CLIENT
     if((portable_alarm_owned(&clock_alarm)||clock_alarm.status.state==ALARM_STATE_BLOCKED)&&
@@ -105,7 +136,7 @@ static bool clock_alarm_pump_checked(void) {
     return true;
 }
 #else
-#define clock_alarm_pump_checked() portable_alarm_pump(&clock_alarm)
+#define clock_alarm_pump_checked() clock_alarm_step_checked()
 #endif
 static bool clock_alarm_foreground(void) {
     if(!clock_canvas_live())return false;

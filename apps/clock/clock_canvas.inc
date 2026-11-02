@@ -79,10 +79,11 @@ static bool clock_canvas_open(const risc_display_output_api_v1*physical){
  clock_canvas_selected=true;
 #ifdef WATCH_HOME_CANVAS_INPUT
  clock_canvas_input_granted=rt->acquire(RISC_CANVAS_INPUT_CAPABILITY,1,0,&clock_canvas_input_grant);
- if(!clock_canvas_live()||!clock_canvas_input_granted)return false;
+ if(!clock_canvas_live())return false;
+ if(!clock_canvas_input_granted){rt->diagnostic("WATCH_CLOCK input-companion=unavailable foreground=refused");return false;}
  const risc_canvas_input_v1*input=clock_canvas_input_grant.api;
  clock_canvas_input=input?risc_canvas_input_get_v1(input,input->struct_size):NULL;
- if(!clock_canvas_input)return false;
+ if(!clock_canvas_input){rt->diagnostic("WATCH_CLOCK input-companion=malformed foreground=refused");return false;}
  if(!home_canvas_result(&clock_canvas,clock_canvas_input->activate(clock_canvas_input->context,clock_canvas.session)))return false;
  clock_canvas_input_active=true;
 #endif

@@ -280,11 +280,14 @@ static bool clock_points_load(void) {
     const char*meta_key=POINTS_META_KEY;
 #endif
 #endif
-    if(!rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,5,&grant))return true;
+    bool acquired=rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,5,&grant);
+    if(!clock_canvas_live())return false;
+    if(!acquired)return true;
     const risc_key_value_v1 *kv=grant.api;
     if(kv&&kv->api_version==1&&kv->struct_size>=sizeof(*kv)&&kv->get) {
         uint8_t bytes[POINTS_RECORD_SIZE];uint32_t n=0;
         int32_t result=kv->get(kv->context,config_key,bytes,sizeof(bytes),&n);
+        if(!clock_canvas_live())return false;
         clock_points_available=result==RISC_KEY_VALUE_NOT_FOUND||
             (result==RISC_KEY_VALUE_OK&&points_config_decode(&clock_points_config,bytes,n));
 #ifdef POINTS_DEFAULTS_AVAILABLE
@@ -295,6 +298,7 @@ static bool clock_points_load(void) {
 #endif
 #if WATCH_POINTS_EXTENDED
         n=0;result=kv->get(kv->context,meta_key,bytes,sizeof(bytes),&n);
+        if(!clock_canvas_live())return false;
 #ifdef POINTS_DEFAULTS_AVAILABLE
         if(defaults&&result==RISC_KEY_VALUE_NOT_FOUND)clock_points_meta=points_default_meta();
 #endif
@@ -308,7 +312,8 @@ static bool clock_points_load(void) {
 #endif
         clock_points_view.status=clock_points_available?NOVA_POINTS_EMPTY:NOVA_POINTS_ERROR;
     }
-    return rt->release(&grant);
+    bool released=rt->release(&grant);
+    return clock_canvas_live()&&released;
 }
 #endif
 static uint32_t rtc_sampled_at, rtc_second_at, battery_sampled_at;
@@ -330,9 +335,13 @@ static void reset_telemetry(void) {
 static bool reload_time_format(void) {
     unsigned mode=PORTABLE_TIME_FORMAT_12;
     risc_runtime_capability_v1 grant={.struct_size=sizeof(grant)};
-    if(rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,PORTABLE_TIME_FORMAT_STORE_INSTANCE,&grant)) {
+    bool acquired=rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,PORTABLE_TIME_FORMAT_STORE_INSTANCE,&grant);
+    if(!clock_canvas_live())return false;
+    if(acquired) {
         (void)portable_time_format_load(grant.api,&mode);
-        if(!rt->release(&grant))return false;
+        if(!clock_canvas_live())return false;
+        bool released=rt->release(&grant);
+        if(!clock_canvas_live()||!released)return false;
     }
     face.hour_24=mode==PORTABLE_TIME_FORMAT_24;
     return true;
@@ -479,7 +488,7 @@ static bool frame(risc_display_surface_v1 *surface) {
 #endif
 #ifdef WATCH_SHARED_HOME_CIVIL
     uint32_t sampled_at;
-    if(!alive(&sampled_at)||!clock_sample_civil(sampled_at))return false;
+    if(!alive(&sampled_at)||!clock_sample_civil(sampled_at)||!clock_canvas_live())return false;
 #endif
     if (!display->acquire(display->context,RISC_DISPLAY_FORMAT_RGB565,surface)) return false;
     held=surface->frame;return held!=0;
@@ -1233,6 +1242,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 #endif
     CLOCK_WAKE_MARK("display-begin");
     have_d=rt->acquire("display.output",1,0,&dg);
+    if(!clock_canvas_live())return;
     if (!have_d) {clock_exit_checkpoint(__LINE__);goto done;}
     display=dg.api;
     if (!display || display->api_version!=1 || display->struct_size<sizeof(*display) ||
@@ -1282,6 +1292,7 @@ __attribute__((visibility("default"))) void app_main(void) {
     if(!defer_rtc) {
 #endif
     have_r=rt->acquire("rtc.clock",2,0,&rg);
+    if(!clock_canvas_live())return;
     if (have_r) {
         rtc=rg.api;
         if (!rtc || rtc->api_version!=2 || rtc->struct_size<sizeof(*rtc) || !rtc->read) rtc=NULL;
@@ -1315,12 +1326,18 @@ __attribute__((visibility("default"))) void app_main(void) {
     /* Load before the first sharp Clock frame on fresh boot and normal return.
      * This is the existing shared app-settings namespace, never a driver write. */
     risc_runtime_capability_v1 face_grant={.struct_size=sizeof(face_grant)};
-    if(rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,WATCH_FACE_STORE_INSTANCE,&face_grant)) {
+    bool face_open=rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,WATCH_FACE_STORE_INSTANCE,&face_grant);
+    if(!clock_canvas_live())return;
+    if(face_open) {
         unsigned selected=0;int rc=watch_face_load(face_grant.api,&selected);
+        if(!clock_canvas_live())return;
         picker.selected=(uint8_t)selected;
         unsigned format=PORTABLE_TIME_FORMAT_12;(void)portable_time_format_load(face_grant.api,&format);
+        if(!clock_canvas_live())return;
         face.hour_24=format==PORTABLE_TIME_FORMAT_24;
-        if(!rt->release(&face_grant)){clock_exit_checkpoint(__LINE__);goto done;}
+        bool released=rt->release(&face_grant);
+        if(!clock_canvas_live())return;
+        if(!released){clock_exit_checkpoint(__LINE__);goto done;}
         if(rc!=RISC_KEY_VALUE_OK&&rc!=RISC_KEY_VALUE_NOT_FOUND)rt->diagnostic("WATCH_CLOCK face=unreadable default=nova");
     }
 #endif
@@ -1357,9 +1374,14 @@ __attribute__((visibility("default"))) void app_main(void) {
     sleep_mode=PORTABLE_SLEEP_HYBRID;
     CLOCK_WAKE_MARK("sleep-settings-begin");
     risc_runtime_capability_v1 sg={.struct_size=sizeof(sg)};
-    if(rt->acquire(RISC_KEY_VALUE_CAPABILITY,RISC_KEY_VALUE_API_V1,PORTABLE_SLEEP_STORE_INSTANCE,&sg)) {
+    bool sleep_settings_open=rt->acquire(RISC_KEY_VALUE_CAPABILITY,RISC_KEY_VALUE_API_V1,PORTABLE_SLEEP_STORE_INSTANCE,&sg);
+    if(!clock_canvas_live())return;
+    if(sleep_settings_open) {
         int loaded=portable_sleep_load(sg.api,&sleep_mode);
-        if(!rt->release(&sg)){clock_exit_checkpoint(__LINE__);goto done;}
+        if(!clock_canvas_live())return;
+        bool released=rt->release(&sg);
+        if(!clock_canvas_live())return;
+        if(!released){clock_exit_checkpoint(__LINE__);goto done;}
         if(loaded==PORTABLE_SLEEP_INVALID || loaded==PORTABLE_SLEEP_UNAVAILABLE)
             rt->diagnostic("WATCH_CLOCK settings=unreadable default=hybrid");
     } else rt->diagnostic("WATCH_CLOCK settings=unavailable default=hybrid");
@@ -1411,9 +1433,14 @@ __attribute__((visibility("default"))) void app_main(void) {
     sleep_mode=PORTABLE_SLEEP_HYBRID;
     CLOCK_WAKE_MARK("sleep-settings-begin");
     risc_runtime_capability_v1 sg={.struct_size=sizeof(sg)};
-    if(rt->acquire(RISC_KEY_VALUE_CAPABILITY,RISC_KEY_VALUE_API_V1,PORTABLE_SLEEP_STORE_INSTANCE,&sg)) {
+    bool sleep_settings_open=rt->acquire(RISC_KEY_VALUE_CAPABILITY,RISC_KEY_VALUE_API_V1,PORTABLE_SLEEP_STORE_INSTANCE,&sg);
+    if(!clock_canvas_live())return;
+    if(sleep_settings_open) {
         int loaded=portable_sleep_load(sg.api,&sleep_mode);
-        if(!rt->release(&sg)){clock_exit_checkpoint(__LINE__);goto done;}
+        if(!clock_canvas_live())return;
+        bool released=rt->release(&sg);
+        if(!clock_canvas_live())return;
+        if(!released){clock_exit_checkpoint(__LINE__);goto done;}
         if(loaded==PORTABLE_SLEEP_INVALID || loaded==PORTABLE_SLEEP_UNAVAILABLE)
             rt->diagnostic("WATCH_CLOCK settings=unreadable default=hybrid");
     } else rt->diagnostic("WATCH_CLOCK settings=unavailable default=hybrid");
@@ -1534,6 +1561,7 @@ __attribute__((visibility("default"))) void app_main(void) {
            (uint32_t)(now-clock_rtc_retry_sampled_at)>=CLOCK_RTC_RETRY_MS)) {
             if(!have_r) {
                 have_r=rt->acquire("rtc.clock",2,0,&rg);
+    if(!clock_canvas_live())return;
                 if(!have_r && (rg.api || rg.slot || rg.generation)) {
                     watch_runtime_halt(&native_clock);{clock_exit_checkpoint(__LINE__);break;}
                 }

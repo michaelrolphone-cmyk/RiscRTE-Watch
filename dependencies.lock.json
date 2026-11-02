@@ -116,6 +116,13 @@
       "path": "lib/Alarm/include/AlarmServiceV2.h",
       "git_blob": "76f25ce14030fd81dd190e7d51f3482e6394c5e7",
       "sha256": "d7e750a8093e1b5e698483254edc38533b7242a3446d0bca5866c9dfd6ad07a1"
+    },
+    "sdk/app/AlarmServiceFacadeV2.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
+      "commit": "474ab9d9cae1bea25d315f76fbe8eec61f9dba7b",
+      "path": "lib/Alarm/include/AlarmServiceFacadeV2.h",
+      "git_blob": "c022b6494b26b14fb6fa8750b39f7ab188823da7",
+      "sha256": "f6613e184fe9df1b8063798c260c5420320c7da909d425b70a9749186c3cd8ad"
     }
   },
   "shared_source_overlays": {
