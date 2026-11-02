@@ -6,7 +6,7 @@ from compact_current_elf import compact
 from normalize_xtensa_relocations import normalize
 from build_inputs import file_manifest, verify_dependency
 ROOT=Path(__file__).resolve().parents[1]
-FLAGS=['-DWATCH_RESIDENT_HOST','-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DCRASH_REPORT_SESSION_FILES=1','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_PREFERENCE_STORE','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
+FLAGS=['-DWATCH_AUTOMATIC_PROVISION','-DWATCH_RESIDENT_HOST','-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DCRASH_REPORT_SESSION_FILES=1','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_PREFERENCE_STORE','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
  '-DWATCH_CLOCK_LAUNCHER','-DWATCH_CLOCK_ALARMS','-DWATCH_CLOCK_POINTS',
  '-DPORTABLE_RTC_UTC8_DENVER','-DWATCH_PAIRED_BOOT_CONFIRM','-DWATCH_QUICK_ACTIONS',
  '-DWATCH_QUICK_RADIOS','-DWATCH_MOTION_WAKE','-DWATCH_ALARM_SLEEP_RESUME','-DWATCH_CONTEXTS_CLIENT',
@@ -16,8 +16,8 @@ for name in ('system','utilities'):p.add_argument('--'+name,type=Path,required=T
 p.add_argument('--output',type=Path,default=ROOT/'dist')
 p.add_argument('--cc',default=os.environ.get('WATCH_APP_CC') or shutil.which('xtensa-esp32s3-elf-gcc'))
 p.add_argument('--role',choices=['default','clock','both'],default='both')
-p.add_argument('--automatic-provision',action='store_true',help='Explicit generic foreground core-profile reconciliation')
-p.add_argument('--serial-transfer-mode',action='store_true',help='Opt-in cooperative Home exit for a dedicated-transfer Runtime product')
+p.add_argument('--automatic-provision',action='store_true',help='Compatibility option; generic foreground reconciliation is capability-selected')
+p.add_argument('--serial-transfer-mode',action='store_true',help='Compatibility option; cooperative exit is always Runtime-selected')
 a=p.parse_args()
 if not a.cc:p.error('Set WATCH_APP_CC or --cc to the pinned ESP32-S3 compiler')
 S=a.system.resolve();U=a.utilities.resolve();out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
@@ -50,16 +50,14 @@ common=['-Os','-fPIC','-mtext-section-literals','-mlongcalls','-fvisibility=hidd
 effect=out/'boot-effect.o'
 subprocess.run([a.cc.removesuffix('gcc')+'g++','-std=c++11',*common,'-fno-exceptions','-fno-rtti','-fno-threadsafe-statics',*incs,'-c',str(ROOT/'apps/clock/effects/boot.cpp'),'-o',str(effect)],check=True)
 sources=[ROOT/'apps/clock/crown.c',ROOT/'apps/clock/viewport.c',ROOT/'apps/clock/capability_clients.c',ROOT/'apps/clock/quick_radios.c',ROOT/'apps/clock/nova/nova.c',ROOT/'apps/clock/points_projection.c',ROOT/'apps/clock/effects/divdi3.c',*[S/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')],effect]
-if a.automatic_provision:sources += [S/'lib/PortableApps/src/PortableAutomaticProvision.c',S/'lib/PortableApps/src/PortableNetworkSession.c']
+sources += [S/'lib/PortableApps/src/PortableAutomaticProvision.c',S/'lib/PortableApps/src/PortableNetworkSession.c']
 validator=out/'validate-elf'
 subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Wextra','-Werror','-I'+str(S/'test/native_apps/stubs'),'-I'+str(S/'lib/elf_loader/include'),str(S/'lib/elf_loader/src/esp_elf_validate.c'),str(S/'test/native_apps/validate_test.c'),'-o',str(validator)],check=True)
-records={'automatic_provision':a.automatic_provision,'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':'runtime-provider','hardware_profile_inputs':False,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
-if a.serial_transfer_mode:records['serial_transfer_mode']=True
+records={'automatic_provision':True,'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':'runtime-provider','hardware_profile_inputs':False,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
+records['serial_transfer_mode']='runtime-optional'
 for role in ['default','clock'] if a.role=='both' else [a.role]:
  target=out/(role+'.elf');mapping=out/(role+'.map');exports_expected={'app_main','risc_resident_app_descriptor_v1'} if role=='default' else {'app_main'};mapping.write_text('{ global: '+ '; '.join(sorted(exports_expected))+'; local: *; };\n')
  flags=list(FLAGS) if role=='default' else []
- if role=='default' and a.automatic_provision:flags.append('-DWATCH_AUTOMATIC_PROVISION')
- if role=='default' and a.serial_transfer_mode:flags.append('-DWATCH_SERIAL_TRANSFER_MODE')
  role_sources=sources if role=='default' else [ROOT/'apps/clock/return_to_default.c']
  command=[a.cc,'-std=c11',*common,'-nostdlib','-nostartfiles','-shared','-Wl,--gc-sections','-Wl,--no-relax','-Wl,--hash-style=sysv','-Wl,--version-script='+str(mapping),*flags,*incs,*map(str,role_sources),'-lgcc','-o',str(target)]
  subprocess.run(command,check=True);normalize(target)
@@ -75,10 +73,9 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.26.2' if a.serial_transfer_mode else ('0.26.1' if a.automatic_provision else '0.26.0')
-  if a.automatic_provision:
-   manifest['requires'].append({'capability':'software.installed-apps','api':1})
-   manifest['optional'].append({'capability':'storage.volume','api':1})
+  manifest['version']='0.27.0'
+  manifest['optional'].append({'capability':'software.installed-apps','api':1})
+  manifest['optional'].append({'capability':'storage.volume','api':1})
  (out/(role+'.json')).write_text(json.dumps(manifest,indent=2)+'\n')
  records['artifacts'][role]={'role':'home' if role=='default' else 'return-to-default','file_name':target.name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'imports':sorted(imports),'exports':sorted(exports),'compaction':proof,'defines':flags}
  print(role+': target build and Runtime ELF validation PASS',flush=True)
