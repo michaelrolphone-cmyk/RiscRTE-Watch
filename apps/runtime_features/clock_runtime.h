@@ -101,7 +101,11 @@ static inline bool watch_runtime_bind_civil(watch_clock_runtime *c) {
  if(c->halted)return false;
  if(c->civil_live)return c->civil!=NULL;
  c->civil_grant=(risc_runtime_capability_v1){.struct_size=sizeof(c->civil_grant)};
- if(!c->runtime->acquire(RISC_CIVIL_CLOCK_CAPABILITY,1,0,&c->civil_grant))return false;
+ bool acquired=c->runtime->acquire(RISC_CIVIL_CLOCK_CAPABILITY,1,0,&c->civil_grant);
+#ifdef WATCH_SHARED_HOME_BOOT
+ if(risc_runtime_get_api(1)!=c->runtime){c->halted=true;return false;}
+#endif
+ if(!acquired)return false;
  c->civil_live=true;
  const risc_civil_clock_api_v1 *base=c->civil_grant.api;
  c->civil=base?risc_civil_clock_get_policy(base,base->struct_size):NULL;
