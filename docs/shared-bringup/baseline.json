@@ -1,0 +1,42 @@
+{
+  "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+  "tag": "home-shared-83afd19e5184eb511cc205299c83eb9cb5c05430",
+  "assets": [
+    {
+      "name": "product-watch-sd-sd-apps.zip",
+      "url": "https://github.com/michaelrolphone-cmyk/RiscRTE-System-Apps/releases/download/home-shared-83afd19e5184eb511cc205299c83eb9cb5c05430/product-watch-sd-sd-apps.zip",
+      "bytes": 22,
+      "sha256": "8739c76e681f900923b900c9df0ef75cf421d39cabb54650c4b9ad19b6a76d85"
+    },
+    {
+      "name": "product-watch-store-store.bin",
+      "url": "https://github.com/michaelrolphone-cmyk/RiscRTE-System-Apps/releases/download/home-shared-83afd19e5184eb511cc205299c83eb9cb5c05430/product-watch-store-store.bin",
+      "bytes": 5570560,
+      "sha256": "01f19575dd163c9ffe9a29fc660794895ae227b9a5413afb6dc2818695c1e6dd"
+    },
+    {
+      "name": "product-wave-sd-sd-apps.zip",
+      "url": "https://github.com/michaelrolphone-cmyk/RiscRTE-System-Apps/releases/download/home-shared-83afd19e5184eb511cc205299c83eb9cb5c05430/product-wave-sd-sd-apps.zip",
+      "bytes": 1767408,
+      "sha256": "9008ae2c1f7cdfb21c301667d0669cd994c287990a638fbd824de1421c349b22"
+    },
+    {
+      "name": "product-wave-store-store.bin",
+      "url": "https://github.com/michaelrolphone-cmyk/RiscRTE-System-Apps/releases/download/home-shared-83afd19e5184eb511cc205299c83eb9cb5c05430/product-wave-store-store.bin",
+      "bytes": 5570560,
+      "sha256": "84d83fc6386ead2ccbf3059ea87cd3d23ec80a918d6aef891a4449a449eae293"
+    },
+    {
+      "name": "product-x4-sd-sd-apps.zip",
+      "url": "https://github.com/michaelrolphone-cmyk/RiscRTE-System-Apps/releases/download/home-shared-83afd19e5184eb511cc205299c83eb9cb5c05430/product-x4-sd-sd-apps.zip",
+      "bytes": 5444854,
+      "sha256": "c1948739143957840a57ed3d9de4b5f7359d42be93df7b670386c7c56498f59a"
+    },
+    {
+      "name": "product-x4-store-store.bin",
+      "url": "https://github.com/michaelrolphone-cmyk/RiscRTE-System-Apps/releases/download/home-shared-83afd19e5184eb511cc205299c83eb9cb5c05430/product-x4-store-store.bin",
+      "bytes": 5308416,
+      "sha256": "85a20e1d31b9cbd8a668b2a0032de7644f3796d868ea966fe2a55846aa285bfe"
+    }
+  ]
+}
