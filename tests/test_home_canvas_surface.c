@@ -14,6 +14,12 @@ static bool acquire(void*c,uint32_t encoding,risc_display_surface_v1*out){(void)
 static void release(void*c,uint64_t id){(void)c;assert(id==1);}
 static bool submit(void*c,uint64_t id,const risc_display_rect_v1*r,size_t count,const risc_display_present_options_v1*o,uint64_t*out){(void)c;(void)r;(void)count;(void)o;assert(id==1);*out=++sequence;return true;}
 static bool status(void*c,uint64_t id,risc_display_present_status_v1*out){(void)c;assert(id==sequence);out->state=physical_state?physical_state:(polls++?RISC_DISPLAY_PRESENT_COMPLETE:RISC_DISPLAY_PRESENT_QUEUED);return true;}
+static risc_touch_snapshot_v1 raw;
+static uint64_t subscribe(void*c){(void)c;return 1;}
+static bool unsubscribe(void*c,uint64_t id){(void)c;return id==1;}
+static bool touch_poll(void*c,size_t n){(void)c;(void)n;return true;}
+static int32_t touch_next(void*c,uint64_t id,risc_touch_event_v1*out){(void)c;(void)id;(void)out;return 0;}
+static bool snapshot(void*c,risc_touch_snapshot_v1*out){(void)c;*out=raw;return true;}
 static uint16_t color(unsigned x,unsigned y){return (uint16_t)(x+256u*y);}
 static void run(unsigned w,unsigned h,unsigned output,unsigned rotation){
  width=w;height=h;format=output;stride=(format==RISC_DISPLAY_FORMAT_RGB565?width*2:(width+7)/8)+3;
@@ -67,6 +73,26 @@ int main(void){
   run(sizes[i][0],sizes[i][1],RISC_DISPLAY_FORMAT_MONO1,rotation);
  }
 
+
+ width=17;height=23;format=RISC_DISPLAY_FORMAT_RGB565;stride=34;pixels=calloc(height,stride);
+ risc_display_output_api_v1 input_display={.api_version=1,.struct_size=sizeof(input_display),.get_info=info,.acquire=acquire,.release=release,.submit=submit,.present_status=status};
+ risc_touch_api_v1 touch={1,sizeof(touch),NULL,subscribe,unsubscribe,touch_poll,touch_next,snapshot};
+ raw=(risc_touch_snapshot_v1){.sequence=1,.width=17,.height=23};
+ canvas_provider input_provider;canvas_provider_init(&input_provider,&input_display,&touch,1);
+ home_canvas_surface input_bridge;assert(home_canvas_open(&input_bridge,&input_provider.api,brightness,NULL));
+ home_canvas_observation observation=home_canvas_capture(&input_bridge);assert(!observation.valid);
+ observation=home_canvas_capture(&input_bridge);assert(observation.valid&&!observation.count);
+ raw.sequence++;raw.contact_count=1;raw.contacts[0]=(risc_touch_contact_v1){.id=19,.x=3,.y=7};
+ observation=home_canvas_capture(&input_bridge);assert(observation.valid&&observation.count==1&&observation.x==7&&observation.y==13);
+ uint8_t identity=observation.id;
+ observation=home_canvas_capture(&input_bridge);assert(observation.valid&&observation.id==identity);
+ raw.sequence++;raw.contacts[0].id=20;
+ observation=home_canvas_capture(&input_bridge);assert(observation.valid&&observation.id!=identity);
+ raw.sequence++;raw.contact_count=5;
+ for(unsigned i=0;i<5;i++)raw.contacts[i]=(risc_touch_contact_v1){.id=(uint8_t)(30+i),.x=(uint16_t)i,.y=2};
+ observation=home_canvas_capture(&input_bridge);assert(observation.valid&&observation.count==2);
+ raw.sequence++;raw.contact_count=0;observation=home_canvas_capture(&input_bridge);assert(observation.valid&&!observation.count);
+ assert(home_canvas_close(&input_bridge));free(pixels);
  /* A lower provider's failed transfer is uncertain custody, never success. */
  width=height=4;format=RISC_DISPLAY_FORMAT_RGB565;stride=8;pixels=calloc(1,32);
  risc_display_output_api_v1 d={.api_version=1,.struct_size=sizeof(d),.get_info=info,.acquire=acquire,.release=release,.submit=submit,.present_status=status};

@@ -13,8 +13,8 @@ with tempfile.TemporaryDirectory() as temp:
   cmd+=[str(ROOT/'tests/test_home_canvas_surface.c'),'-o',str(binary)]
   if sanitized:cmd+=['-fsanitize=address,undefined']
   subprocess.run(cmd,check=True)
-  result=subprocess.run([str(binary)],check=True,text=True,capture_output=True,env=dict(os.environ,ASAN_OPTIONS='detect_leaks=0'))
-  print(result.stdout);cases.append({'sanitized':sanitized,'command':cmd,'stdout':result.stdout,'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest()})
+  result=subprocess.run([str(binary)],check=False,text=True,capture_output=True,env=dict(os.environ,ASAN_OPTIONS='detect_leaks=0'))
+  print(result.stdout);print(result.stderr);result.check_returncode();cases.append({'sanitized':sanitized,'command':cmd,'stdout':result.stdout,'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest()})
 sources=[ROOT/'include/HomeCanvasSurface.h',ROOT/'tests/test_home_canvas_surface.c',pathlib.Path(__file__),a.system/'sdk/app/RiscCanvasV1.h']
 sources+=list((a.system/'Services/canvas_host').glob('*.h'))
 (a.output/'results.json').write_text(json.dumps({'cases':cases,'sources':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in sources},'scope':'Actual Canvas provider with controlled physical capabilities; no hardware acceptance.'},indent=2)+'\n')

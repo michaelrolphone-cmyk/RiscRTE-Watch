@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 #include "RiscCanvasV1.h"
 #include "RiscDisplayOutputV1.h"
 typedef struct {
@@ -13,6 +14,9 @@ typedef struct {
  risc_canvas_geometry_v1 geometry;
  risc_display_output_api_v1 display;
  bool retained;
+ uint64_t contact_identity;
+ uint8_t contact_tag;
+ bool contact_known;
  bool (*brightness)(void*,uint16_t,uint16_t);
  void *brightness_context;
 } home_canvas_surface;
@@ -109,4 +113,60 @@ static inline bool home_canvas_close(home_canvas_surface*s){
  if(s->retained||s->lease||s->receipt)return false;
  if(s->session&&!home_canvas_result(s,s->canvas->close(s->canvas->context,s->session)))return false;
  *s=(home_canvas_surface){0};return true;
+}
+
+typedef struct {
+ bool valid,activity,controls;
+ uint8_t count,id;
+ uint16_t x,y;
+ risc_input_navigation_frame_v1 navigation;
+} home_canvas_observation;
+/* Preserve logical navigation separately; touch-only consumers must not silently
+ * swallow button intents. Arbitrarily many contacts cancel single-contact
+ * gestures; there is no assumed physical touch capacity in the Canvas ABI. */
+static inline home_canvas_observation home_canvas_capture(home_canvas_surface*s){
+ home_canvas_observation o={0};if(s->retained||!s->session)return o;
+ bool gap=false;
+ for(unsigned i=0;i<32;i++){
+  risc_canvas_event_v1 e={.struct_size=sizeof(e)};
+  int32_t rc=s->canvas->next(s->canvas->context,s->session,&e);
+  if(rc==RISC_CANVAS_IDLE||rc==RISC_CANVAS_AGAIN)break;
+  if(!home_canvas_result(s,rc))return o;
+  if(e.struct_size<sizeof(e)||e.kind<RISC_CANVAS_CONTACT||e.kind>RISC_CANVAS_CONTROLS_REQUEST){s->retained=true;return o;}
+  o.activity=true;
+  if(e.kind==RISC_CANVAS_INPUT_GAP||e.kind==RISC_CANVAS_GEOMETRY_CHANGED)gap=true;
+  if(e.kind==RISC_CANVAS_CONTROLS_REQUEST)o.controls=true;
+  if(e.kind==RISC_CANVAS_NAVIGATION){
+   o.navigation.buttons=e.navigation.buttons;
+   o.navigation.pressed|=e.navigation.pressed;o.navigation.released|=e.navigation.released;
+  }
+ }
+ if(!home_canvas_geometry(s))return o;
+ size_t count=0;uint64_t sequence=0;
+ int32_t rc=s->canvas->contacts(s->canvas->context,s->session,NULL,0,&count,&sequence);
+ if(rc!=RISC_CANVAS_OK&&rc!=RISC_CANVAS_AGAIN){(void)home_canvas_result(s,rc);return o;}
+ if(count>SIZE_MAX/sizeof(risc_canvas_event_v1))return o;
+ risc_canvas_event_v1 local[2]={{.struct_size=sizeof(*local)},{.struct_size=sizeof(*local)}};
+ risc_canvas_event_v1 *contacts=count>2?calloc(count,sizeof(*contacts)):local;
+ if(!contacts)return o;
+ size_t capacity=count>2?count:2;
+ for(size_t i=0;i<capacity;i++)contacts[i].struct_size=sizeof(*contacts);
+ rc=s->canvas->contacts(s->canvas->context,s->session,contacts,capacity,&count,&sequence);
+ if(home_canvas_result(s,rc)&&count<=capacity){
+  o.valid=!gap;o.count=(uint8_t)(count>1?2:count);
+  for(size_t i=0;i<count;i++)if(contacts[i].struct_size<sizeof(*contacts)||
+    contacts[i].kind!=RISC_CANVAS_CONTACT||contacts[i].geometry_revision!=s->geometry.revision||
+    contacts[i].x<0||contacts[i].y<0||(uint32_t)contacts[i].x>=s->geometry.width||
+    (uint32_t)contacts[i].y>=s->geometry.height)o.valid=false;
+  if(count==1&&o.valid){
+   if(!s->contact_known||s->contact_identity!=contacts[0].contact){
+    s->contact_identity=contacts[0].contact;s->contact_tag++;s->contact_known=true;
+   }
+   o.id=s->contact_tag;o.x=(uint16_t)contacts[0].x;o.y=(uint16_t)contacts[0].y;
+  }
+  if(!count)s->contact_known=false;
+  o.activity|=count!=0;
+ }
+ if(contacts!=local)free(contacts);
+ return o;
 }
