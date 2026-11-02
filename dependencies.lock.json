@@ -46,6 +46,13 @@
       "path": "lib/PortableApps/include/PortableQuickLayout.h",
       "git_blob": "32e794a778ed0a7f03bd17c5487eca5a3abf3353",
       "sha256": "8b6757fcae081554eb3333ea475a83c74506f64c42e86e791d42663da55aa654"
+    },
+    "sdk/app/RiscCanvasV1.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "db53bf95040c35df459479a634a6fe1a610920ca",
+      "path": "sdk/app/RiscCanvasV1.h",
+      "git_blob": "9ff0966d9350f474ef0172b81f9bea0b59fd63fd",
+      "sha256": "476744a0922833a40564d65e30eafc4556c2ce3a6af0cd27acd8d0e8c261fd8a"
     }
   },
   "shared_source_overlays": {

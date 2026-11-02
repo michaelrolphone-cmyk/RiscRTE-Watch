@@ -15,6 +15,7 @@ static int32_t clock_resident_policy(risc_resident_reply_v1 *reply,uint32_t now,
 static uint32_t clock_resident_activity,clock_resident_policy_at,clock_resident_armed_at,clock_resident_keys;
 static char clock_resident_next[193];
 static bool clock_resident_alive(void) {
+    if(!clock_canvas_live())return false;
     if(clock_resident_terminal)return false;
     if(risc_runtime_get_api(1)!=rt){clock_resident_terminal=true;return false;}
 #ifdef WATCH_RUNTIME_FEATURES
@@ -308,6 +309,7 @@ static int32_t clock_resident_dispatch(void *context,const risc_resident_request
         request->reason==RISC_RESIDENT_CHECKPOINT_CONTROLS?clock_resident_controls(reply):clock_resident_policy(reply,now,false);
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
     clock_resident_dispatching=false;
+    if(!clock_canvas_pause())return clock_resident_retain();
     if(rc==RISC_RESIDENT_OK&&!clock_attention_prime())return clock_resident_retain();
     if(idle_apply&&rc==RISC_RESIDENT_OK) {
 #ifdef WATCH_CLOCK_ALARMS

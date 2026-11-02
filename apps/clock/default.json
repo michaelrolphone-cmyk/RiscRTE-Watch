@@ -11,10 +11,6 @@
       "api": 1
     },
     {
-      "capability": "input.touch.raw",
-      "api": 1
-    },
-    {
       "capability": "runtime.realtime-control",
       "api": 1
     },
@@ -86,6 +82,14 @@
     },
     {
       "capability": "storage.files",
+      "api": 1
+    },
+    {
+      "capability": "input.touch.raw",
+      "api": 1
+    },
+    {
+      "capability": "ui.canvas",
       "api": 1
     }
   ]

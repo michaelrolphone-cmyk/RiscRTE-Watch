@@ -31,6 +31,10 @@ static bool optional_broadcast_step(void *ctx,bool allowed,const telemetry_broad
 }
 static const struct {uint32_t version,size;} malformed_api={2,8};
 static bool optional_acquire(const char *name,uint32_t version,uint64_t instance,risc_runtime_capability_v1 *grant){
+ if(!strcmp(name,"ui.canvas")){
+  if(malformed_capability&&!strcmp(name,malformed_capability)){grant->api=&malformed_api;++grants;return true;}
+  return false;
+ }
  bool acquired=fast_acquire(name,version,instance,grant);
  if(acquired&&optional_preset){
   if(grant->api==&fast_kv&&instance==1)grant->api=&optional_kv;
@@ -62,7 +66,7 @@ int main(int argc,char **argv){
   !strcmp(capability,"power.sleep")||!strcmp(capability,"input.power-key")||
   !strcmp(capability,"display.power")||!strcmp(capability,"runtime.retained-wake")||
   !strcmp(capability,"alarm.service")||!strcmp(capability,"telemetry.broadcast")||
-  !strcmp(capability,"contexts.service")));
+  !strcmp(capability,"contexts.service")||!strcmp(capability,"ui.canvas")));
  if(!malformed&&!strcmp(capability,"runtime.provider-promotion")){
   assert(retained_fence&&retains&&native_clock.halted&&!confirmations);
  }else{

@@ -40,6 +40,7 @@ static void clock_alarm_cancel_input(void) {
     watch_face_reset_contact(&picker);
 }
 static bool clock_alarm_failure(void) {
+    if(!clock_canvas_live())return false;
     if(clock_alarm_failed_cleaned)return false;
 #ifdef WATCH_CONTEXTS_CLIENT
     if(!clock_contexts_pause())return false;
@@ -69,6 +70,7 @@ static bool clock_alarm_pump_checked(void) {
 #define clock_alarm_pump_checked() portable_alarm_pump(&clock_alarm)
 #endif
 static bool clock_alarm_foreground(void) {
+    if(!clock_canvas_live())return false;
     if(!clock_alarm.api)return true;
     (void)portable_touch_open;(void)portable_touch_close;
     if(!clock_display_settled || held)return clock_alarm_failure();
@@ -123,9 +125,20 @@ static bool clock_alarm_foreground(void) {
         rt->yield_ms(20);
         if(!clock_key_read(&events,"WATCH_KEY stage=alarm-modal"))return clock_alarm_failure();
         portable_touch_sample sample;portable_touch_read(&alert_touch,&sample);
+        if(!clock_canvas_live())return false;
         bool tap=sample.valid && sample.released && sample.tap_eligible && !sample.cancelled && !sample.moved;
         bool retry=tap && sample.y>=watch_home_alarm_retry_at(clock_viewport.width,clock_viewport.height);
         bool dismiss=(events&3u) || (tap && sample.y>=watch_home_alarm_dismiss_at(clock_viewport.width,clock_viewport.height) && sample.y<watch_home_alarm_retry_at(clock_viewport.width,clock_viewport.height));
+#ifdef WATCH_HOME_CANVAS
+        if(clock_canvas_selected){
+            bool controls=false;
+            risc_input_navigation_frame_v1 nav=home_canvas_touch_navigation(&clock_canvas_touch,&controls);
+            /* Modal actions are explicit logical button intents, never a
+             * synthesized touch at a device-specific coordinate. */
+            retry|=controls||!!(nav.pressed&(RISC_NAV_UP|RISC_NAV_PAGE_BACK));
+            dismiss|=!!(nav.pressed&(RISC_NAV_CONFIRM|RISC_NAV_BACK|RISC_NAV_HOME));
+        }
+#endif
         if(clock_alarm.status.state==ALARM_STATE_BLOCKED && retry) {
             (void)clock_alarm.api->refresh(clock_alarm.api->context);alert_touch.neutral=alert_touch.down=false;redraw=true;
         } else if(dismiss) {

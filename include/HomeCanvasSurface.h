@@ -8,27 +8,36 @@
 #include <stdlib.h>
 #include "RiscCanvasV1.h"
 #include "RiscDisplayOutputV1.h"
+#include "RiscTouchV1.h"
 typedef struct {
  const risc_canvas_api_v1 *canvas;
  uint64_t session,lease,receipt;
  risc_canvas_geometry_v1 geometry;
  risc_display_output_api_v1 display;
- bool retained;
+ bool retained,quiesced;
+ int32_t last_result;
+ void (*on_retained)(void*);void *retained_context;
  uint64_t contact_identity;
  uint8_t contact_tag;
  bool contact_known;
  bool (*brightness)(void*,uint16_t,uint16_t);
  void *brightness_context;
 } home_canvas_surface;
+static inline void home_canvas_retain(home_canvas_surface*s){
+ if(s->retained)return;
+ s->retained=true;
+ if(s->on_retained)s->on_retained(s->retained_context);
+}
 static inline bool home_canvas_result(home_canvas_surface*s,int32_t rc){
- if(rc==RISC_CANVAS_RETAINED || rc<RISC_CANVAS_UNSUPPORTED || rc>RISC_CANVAS_AGAIN)s->retained=true;
+ s->last_result=rc;
+ if(rc==RISC_CANVAS_RETAINED || rc<RISC_CANVAS_UNSUPPORTED || rc>RISC_CANVAS_AGAIN)home_canvas_retain(s);
  return rc==RISC_CANVAS_OK;
 }
 static inline bool home_canvas_geometry(home_canvas_surface*s){
  if(s->retained||!s->session)return false;
  risc_canvas_geometry_v1 g={.struct_size=sizeof(g)};
  if(!home_canvas_result(s,s->canvas->geometry(s->canvas->context,s->session,&g)))return false;
- if(g.struct_size<sizeof(g)||!g.revision||!g.width||!g.height||g.width>UINT16_MAX||g.height>UINT16_MAX){s->retained=true;return false;}
+ if(g.struct_size<sizeof(g)||!g.revision||!g.width||!g.height||g.width>UINT16_MAX||g.height>UINT16_MAX){home_canvas_retain(s);return false;}
  s->geometry=g;return true;
 }
 static bool home_canvas_info(void*ctx,risc_display_info_v1*out){
@@ -44,6 +53,10 @@ static bool home_canvas_info(void*ctx,risc_display_info_v1*out){
 static bool home_canvas_acquire(void*ctx,uint32_t format,risc_display_surface_v1*out){
  home_canvas_surface*s=ctx;
  if(!out||s->retained||!s->session||s->lease||s->receipt||format!=RISC_DISPLAY_FORMAT_RGB565)return false;
+ if(s->quiesced){
+  if(!home_canvas_result(s,s->canvas->resume(s->canvas->context,s->session)))return false;
+  s->quiesced=false;
+ }
  if(!home_canvas_geometry(s))return false;
  risc_canvas_frame_v1 f={.struct_size=sizeof(f)};
  if(!home_canvas_result(s,s->canvas->begin_frame(s->canvas->context,s->session,&f)))return false;
@@ -51,7 +64,7 @@ static bool home_canvas_acquire(void*ctx,uint32_t format,risc_display_surface_v1
  if(f.struct_size<sizeof(f)||!f.lease||!f.pixels||f.encoding!=RISC_CANVAS_RGB565_ADAPTIVE||
     f.geometry_revision!=s->geometry.revision||f.width!=s->geometry.width||f.height!=s->geometry.height||
     (f.stride&1u)||f.stride<(uint64_t)f.width*2||f.byte_count>UINT32_MAX||
-    f.height>f.byte_count/f.stride||((uintptr_t)f.pixels&1u)){s->retained=true;return false;}
+    f.height>f.byte_count/f.stride||((uintptr_t)f.pixels&1u)){home_canvas_retain(s);return false;}
  s->lease=f.lease;
  *out=(risc_display_surface_v1){f.lease,f.pixels,f.width,f.height,f.stride,(uint32_t)f.byte_count,RISC_DISPLAY_FORMAT_RGB565};
  return true;
@@ -59,7 +72,7 @@ static bool home_canvas_acquire(void*ctx,uint32_t format,risc_display_surface_v1
 static void home_canvas_release(void*ctx,risc_display_frame_v1 lease){
  home_canvas_surface*s=ctx;if(s->retained||!lease||lease!=s->lease)return;
  if(home_canvas_result(s,s->canvas->cancel_frame(s->canvas->context,s->session,lease)))s->lease=0;
- else s->retained=true; /* void facade cannot report unproved cancellation */
+ else home_canvas_retain(s); /* void facade cannot report unproved cancellation */
 }
 static bool home_canvas_submit(void*ctx,risc_display_frame_v1 lease,const risc_display_rect_v1*damage,size_t count,
  const risc_display_present_options_v1*options,risc_display_present_token_v1*out){
@@ -72,14 +85,14 @@ static bool home_canvas_submit(void*ctx,risc_display_frame_v1 lease,const risc_d
   (uint64_t)(uint32_t)damage[i].y+damage[i].height>s->geometry.height)return false;
  uint64_t receipt=0;
  if(!home_canvas_result(s,s->canvas->submit(s->canvas->context,s->session,lease,&receipt)))return false;
- if(!receipt){s->retained=true;return false;}
+ if(!receipt){home_canvas_retain(s);return false;}
  s->lease=0;s->receipt=receipt;*out=receipt;return true;
 }
 static bool home_canvas_status(void*ctx,risc_display_present_token_v1 receipt,risc_display_present_status_v1*out){
  home_canvas_surface*s=ctx;if(!out||s->retained||!receipt||receipt!=s->receipt)return false;
  risc_canvas_receipt_v1 r={.struct_size=sizeof(r)};
  if(!home_canvas_result(s,s->canvas->poll(s->canvas->context,s->session,receipt,&r)))return false;
- if(r.struct_size<sizeof(r)||r.receipt!=receipt||r.state<RISC_CANVAS_QUEUED||r.state>RISC_CANVAS_FAILED){s->retained=true;return false;}
+ if(r.struct_size<sizeof(r)||r.receipt!=receipt||r.state<RISC_CANVAS_QUEUED||r.state>RISC_CANVAS_FAILED){home_canvas_retain(s);return false;}
  if(r.state>=RISC_CANVAS_COMPLETE){
   if(!home_canvas_result(s,s->canvas->forget_receipt(s->canvas->context,s->session,receipt)))return false;
   s->receipt=0;
@@ -92,22 +105,31 @@ static bool home_canvas_wait(void*ctx,risc_display_present_token_v1 receipt,uint
 static bool home_canvas_brightness(void*ctx,uint16_t value,uint16_t maximum){
  home_canvas_surface*s=ctx;return !s->retained&&s->brightness&&s->brightness(s->brightness_context,value,maximum);
 }
-static inline bool home_canvas_open(home_canvas_surface*s,const risc_canvas_api_v1*api,
- bool(*brightness)(void*,uint16_t,uint16_t),void*context){
+static inline bool home_canvas_open_owned(home_canvas_surface*s,const risc_canvas_api_v1*api,
+ bool(*brightness)(void*,uint16_t,uint16_t),void*context,void(*retain)(void*),void*retain_context){
  if(!s||!api)return false;
- *s=(home_canvas_surface){.canvas=api,.brightness=brightness,.brightness_context=context};
+ *s=(home_canvas_surface){.canvas=api,.brightness=brightness,.brightness_context=context,.on_retained=retain,.retained_context=retain_context};
  risc_canvas_open_v1 request={sizeof(request),RISC_CANVAS_RGB565_ADAPTIVE,RISC_CANVAS_RESPONSIVE,0,0};
  if(!home_canvas_result(s,api->open(api->context,&request,&s->session)))return false;
- if(!s->session){s->retained=true;return false;}
+ if(!s->session){home_canvas_retain(s);return false;}
  if(!home_canvas_geometry(s))return false;
  s->display=(risc_display_output_api_v1){1,sizeof(s->display),s,home_canvas_info,home_canvas_acquire,
   home_canvas_release,home_canvas_submit,home_canvas_status,home_canvas_wait,home_canvas_brightness};return true;
 }
+static inline bool home_canvas_open(home_canvas_surface*s,const risc_canvas_api_v1*api,
+ bool(*brightness)(void*,uint16_t,uint16_t),void*context){
+ return home_canvas_open_owned(s,api,brightness,context,NULL,NULL);
+}
 static inline bool home_canvas_quiesce(home_canvas_surface*s){
- return !s->retained&&!s->lease&&!s->receipt&&home_canvas_result(s,s->canvas->quiesce(s->canvas->context,s->session));
+ if(s->retained||s->lease||s->receipt)return false;
+ if(s->quiesced)return true;
+ if(!home_canvas_result(s,s->canvas->quiesce(s->canvas->context,s->session)))return false;
+ s->quiesced=true;return true;
 }
 static inline bool home_canvas_resume(home_canvas_surface*s){
- return !s->retained&&home_canvas_result(s,s->canvas->resume(s->canvas->context,s->session))&&home_canvas_geometry(s);
+ if(s->retained)return false;
+ if(s->quiesced&&!home_canvas_result(s,s->canvas->resume(s->canvas->context,s->session)))return false;
+ s->quiesced=false;return home_canvas_geometry(s);
 }
 static inline bool home_canvas_close(home_canvas_surface*s){
  if(s->retained||s->lease||s->receipt)return false;
@@ -132,7 +154,7 @@ static inline home_canvas_observation home_canvas_capture(home_canvas_surface*s)
   int32_t rc=s->canvas->next(s->canvas->context,s->session,&e);
   if(rc==RISC_CANVAS_IDLE||rc==RISC_CANVAS_AGAIN)break;
   if(!home_canvas_result(s,rc))return o;
-  if(e.struct_size<sizeof(e)||e.kind<RISC_CANVAS_CONTACT||e.kind>RISC_CANVAS_CONTROLS_REQUEST){s->retained=true;return o;}
+  if(e.struct_size<sizeof(e)||e.kind<RISC_CANVAS_CONTACT||e.kind>RISC_CANVAS_CONTROLS_REQUEST){home_canvas_retain(s);return o;}
   o.activity=true;
   if(e.kind==RISC_CANVAS_INPUT_GAP||e.kind==RISC_CANVAS_GEOMETRY_CHANGED)gap=true;
   if(e.kind==RISC_CANVAS_CONTROLS_REQUEST)o.controls=true;
@@ -167,6 +189,6 @@ static inline home_canvas_observation home_canvas_capture(home_canvas_surface*s)
   if(!count)s->contact_known=false;
   o.activity|=count!=0;
  }
- if(contacts!=local)free(contacts);
+ if(contacts!=local&&!s->retained)free(contacts);
  return o;
 }

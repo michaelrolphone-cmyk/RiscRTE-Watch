@@ -6,7 +6,7 @@ from compact_current_elf import compact
 from normalize_xtensa_relocations import normalize
 from build_inputs import file_manifest, verify_dependency
 ROOT=Path(__file__).resolve().parents[1]
-FLAGS=['-DPORTABLE_QUICK_RADIO_AVAILABILITY','-DWATCH_AUTOMATIC_PROVISION','-DWATCH_RESIDENT_HOST','-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DCRASH_REPORT_SESSION_FILES=1','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_PREFERENCE_STORE','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
+FLAGS=['-DWATCH_HOME_CANVAS','-DPORTABLE_QUICK_RADIO_AVAILABILITY','-DWATCH_AUTOMATIC_PROVISION','-DWATCH_RESIDENT_HOST','-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DCRASH_REPORT_SESSION_FILES=1','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_PREFERENCE_STORE','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
  '-DWATCH_CLOCK_LAUNCHER','-DWATCH_CLOCK_ALARMS','-DWATCH_CLOCK_POINTS',
  '-DPORTABLE_RTC_UTC8_DENVER','-DWATCH_PAIRED_BOOT_CONFIRM','-DWATCH_QUICK_ACTIONS',
  '-DWATCH_QUICK_RADIOS','-DWATCH_MOTION_WAKE','-DWATCH_ALARM_SLEEP_RESUME','-DWATCH_CONTEXTS_CLIENT',
@@ -28,11 +28,11 @@ verified_dependencies={'system':verify_dependency(S,lock['system']['commit'],sys
  'utilities':verify_dependency(U,lock['utilities']['commit'],utility_paths)}
 home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py','scripts/merged_sdk.py','scripts/compact_current_elf.py',
  'scripts/normalize_xtensa_relocations.py','sdk/app','sdk/driver','sdk/source','include/WatchViewport.h','include/WatchLayout.h',
- 'include/WatchHomeLayout.h','include/WatchCapabilityClients.h','include/WatchCapabilities.h',
+ 'include/HomeCanvasSurface.h','include/HomeCanvasTouch.h','include/WatchHomeLayout.h','include/WatchCapabilityClients.h','include/WatchCapabilities.h',
  'include/WatchTapPolicy.h','include/PortableMotionTap.h','include/PortablePowerStatus.h','include/PortableTapSettings.h',
  'include/twatch_calendar.h','include/twatch_caps.h','include/twatch_power.h','include/twatch_util.h',
  'apps/runtime_features/clock_runtime.h','apps/runtime_features/sdk',
- 'apps/clock/clock_resident_effects.inc','apps/clock/clock_resident.inc','apps/clock/clock_resident_attention.inc','apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
+ 'apps/clock/clock_resident_effects.inc','apps/clock/clock_resident.inc','apps/clock/clock_resident_attention.inc','apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/clock_canvas.inc','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
  'apps/clock/points_projection.c','apps/clock/points_projection.h','apps/clock/points_compat.h',
  'apps/clock/nova','apps/clock/faces','apps/clock/transitions','apps/clock/effects/boot.cpp',
  'apps/clock/effects/effects.h','apps/clock/effects/divdi3.c','apps/clock/clock_alarm.inc',

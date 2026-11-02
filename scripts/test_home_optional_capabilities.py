@@ -30,7 +30,7 @@ tree=ast.parse((ROOT/'scripts/build.py').read_text())
 node=next(n.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FLAGS' for t in n.targets))
 selected=eval(compile(ast.Expression(node),'<build FLAGS>','eval'))
 defined=set(re.findall(r'^#define ([A-Z_]+)',fixture_source.read_text(),re.M))
-caps=['storage.key-value','board.battery','rtc.clock','runtime.retained-wake','alarm.service','net.wifi','bluetooth.hci','telemetry.broadcast','contexts.service','power.sleep','input.power-key','display.power','storage.preferences','storage.files','motion.accel','software.installed-apps']
+caps=['ui.canvas','storage.key-value','board.battery','rtc.clock','runtime.retained-wake','alarm.service','net.wifi','bluetooth.hci','telemetry.broadcast','contexts.service','power.sleep','input.power-key','display.power','storage.preferences','storage.files','motion.accel','software.installed-apps']
 required=['display.output','input.touch.raw','runtime.realtime-control','runtime.provider-promotion']
 commands=[];runs=[]
 with tempfile.TemporaryDirectory(prefix='home-optional-') as tmp:
