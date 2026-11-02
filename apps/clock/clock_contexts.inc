@@ -125,7 +125,7 @@ static bool clock_contexts_tick(void) {
 #endif
     if(applied) {
         if(!pqa_session_load(&clock_quick,rt)||!pqa_session_restore(&clock_quick,display))return false;
-        if(applied&(PORTABLE_CONTEXT_VOLUME|PORTABLE_CONTEXT_DND|PORTABLE_CONTEXT_ALERT))
+        if(clock_alarm.api && (applied&(PORTABLE_CONTEXT_VOLUME|PORTABLE_CONTEXT_DND|PORTABLE_CONTEXT_ALERT)))
             (void)clock_alarm.api->refresh(clock_alarm.api->context);
         if(applied&(PORTABLE_CONTEXT_SLEEP|PORTABLE_CONTEXT_FACE)) {
             risc_runtime_capability_v1 g={.struct_size=sizeof(g)};

@@ -1,0 +1,56 @@
+name: Home optional capability contracts
+on:
+  pull_request:
+  push:
+    branches: [work/shared-home-clock-20261102]
+    paths: ['apps/**', 'scripts/**', 'tests/**', 'sdk/**', 'include/**', 'dependencies.lock.json', '.github/workflows/home-optional-capabilities.yml']
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        dimensions: ['240 240', '410 502', '480 800']
+        sanitized: [false, true]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - id: pins
+        run: |
+          python3 - <<'PY'
+          import json,os
+          pins=json.load(open('dependencies.lock.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:
+              for name in ('system','utilities'):print(name+'='+pins[name]['commit'],file=out)
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: ${{ steps.pins.outputs.system }}
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: ${{ steps.pins.outputs.utilities }}
+          path: .source/utilities
+          persist-credentials: false
+      - name: Full production Home contracts
+        env:
+          DIMENSIONS: ${{ matrix.dimensions }}
+          SANITIZED: ${{ matrix.sanitized }}
+        run: |
+          read -r width height <<< "$DIMENSIONS"
+          flag=""
+          if [ "$SANITIZED" = true ]; then flag=--sanitized; fi
+          python3 scripts/test_home_optional_capabilities.py --system .source/system --utilities .source/utilities --output dist/home-optional --width "$width" --height "$height" $flag
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: home-optional-${{ matrix.dimensions }}-${{ matrix.sanitized }}
+          path: dist/home-optional
+          if-no-files-found: error

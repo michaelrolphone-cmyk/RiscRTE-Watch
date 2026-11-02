@@ -18,8 +18,8 @@ class ProofTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.data = b'\x7fELF canonical fixture'
-        self.manifest = {'requires': [{'capability': 'storage.preferences', 'api': 1}],
-                         'optional': [{'capability': 'storage.files', 'api': 1}]}
+        self.manifest = {'requires': [{'capability': cap, 'api': 1} for cap in ('display.output', 'input.touch.raw', 'runtime.realtime-control', 'runtime.provider-promotion')],
+                         'optional': [{'capability': cap, 'api': 1} for cap in ('storage.preferences', 'storage.files')]}
         self.record = {'build_variant': 'shared-no-board-defines', 'preferences': 'runtime-provider',
                        'hardware_profile_inputs': False, 'hardware_verified': False,
                        'compiler_sha256': 'compiler', 'verified_dependencies': {'system': 'same'},
@@ -79,7 +79,28 @@ class ProofTests(unittest.TestCase):
         m = copy.deepcopy(self.manifest)
         m['optional'].append({'capability': 'storage.volume', 'api': 1})
         self.write('b', manifest=m)
-        with self.assertRaisesRegex(ValueError, 'backend-specific contract'):
+        with self.assertRaisesRegex(ValueError, 'Optional removable-volume declaration'):
+            self.verify()
+
+    def test_missing_required(self):
+        m = copy.deepcopy(self.manifest)
+        m['requires'].pop()
+        self.write('b', manifest=m)
+        with self.assertRaisesRegex(ValueError, 'actual startup requirements'):
+            self.verify()
+
+    def test_storage_mandatory(self):
+        m = copy.deepcopy(self.manifest)
+        m['requires'].append(m['optional'].pop(0))
+        self.write('b', manifest=m)
+        with self.assertRaisesRegex(ValueError, 'actual startup requirements'):
+            self.verify()
+
+    def test_duplicate_contract(self):
+        m = copy.deepcopy(self.manifest)
+        m['optional'].append(m['requires'][0])
+        self.write('b', manifest=m)
+        with self.assertRaisesRegex(ValueError, 'both required and optional'):
             self.verify()
 
     def test_dependency_drift(self):
