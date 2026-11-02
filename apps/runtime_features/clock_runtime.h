@@ -68,28 +68,42 @@ static inline void watch_runtime_halt(watch_clock_runtime *c) {
  watch_runtime_retain(c->runtime);
 }
 
-static bool watch_runtime_close(watch_clock_runtime *c) {
+static inline bool watch_runtime_live(watch_clock_runtime *c) {
  if(c->halted)return false;
+#ifdef WATCH_SHARED_HOME_BOOT
+ if(risc_runtime_get_api(1)!=c->runtime){c->halted=true;return false;}
+#endif
+ return true;
+}
+static bool watch_runtime_close(watch_clock_runtime *c) {
+ if(!watch_runtime_live(c))return false;
 #ifdef WATCH_SHARED_HOME_CIVIL
  if(c->civil_live) {
-  if(!c->runtime->release(&c->civil_grant)){watch_runtime_halt(c);return false;}
+  bool released=c->runtime->release(&c->civil_grant);
+  if(!watch_runtime_live(c))return false;
+  if(!released){watch_runtime_halt(c);return false;}
   c->civil_live=false;c->civil=NULL;
  }
 #endif
  if(c->wake_live) {
-  if(!c->runtime->release(&c->wake_grant)){watch_runtime_halt(c);return false;}
+  bool released=c->runtime->release(&c->wake_grant);
+  if(!watch_runtime_live(c))return false;
+  if(!released){watch_runtime_halt(c);return false;}
   c->wake_live=false;c->wake=NULL;
  }
  if(c->time_live) {
-  if(!c->runtime->release(&c->time_grant)){watch_runtime_halt(c);return false;}
+  bool released=c->runtime->release(&c->time_grant);
+  if(!watch_runtime_live(c))return false;
+  if(!released){watch_runtime_halt(c);return false;}
   c->time_live=false;c->time=NULL;
  }
  return true;
 }
 static bool watch_runtime_snapshot(watch_clock_runtime *c,risc_realtime_snapshot_v1 *out) {
- if(c->halted || !c->time)return false;
+ if(!watch_runtime_live(c) || !c->time)return false;
  risc_realtime_snapshot_v1 sample={.struct_size=sizeof(sample)};
  int rc=c->time->read(c->time->context,&sample);
+ if(!watch_runtime_live(c))return false;
  if(rc==RISC_REALTIME_CONTEXT){watch_runtime_halt(c);return false;}
  if(rc!=RISC_REALTIME_OK || sample.struct_size!=sizeof(sample) || sample.reserved ||
     sample.nanoseconds>=1000000000u || sample.nanoseconds%1000u ||
@@ -102,7 +116,7 @@ static bool watch_runtime_snapshot(watch_clock_runtime *c,risc_realtime_snapshot
 /* Explicit foreground-only admission. Caller must classify/replay sparse TIMER
  * before this call; neither open() nor native snapshot() acquires a provider. */
 static inline bool watch_runtime_bind_civil(watch_clock_runtime *c) {
- if(c->halted)return false;
+ if(!watch_runtime_live(c))return false;
  if(c->civil_live)return c->civil!=NULL;
  c->civil_grant=(risc_runtime_capability_v1){.struct_size=sizeof(c->civil_grant)};
  bool acquired=c->runtime->acquire(RISC_CIVIL_CLOCK_CAPABILITY,1,0,&c->civil_grant);
@@ -116,11 +130,12 @@ static inline bool watch_runtime_bind_civil(watch_clock_runtime *c) {
  return c->civil!=NULL;
 }
 static inline bool watch_runtime_civil_result(watch_clock_runtime*c,int rc) {
+ if(!watch_runtime_live(c))return false;
  if(rc!=0 && rc!=-1)watch_runtime_halt(c);
  return rc==0 && !c->halted;
 }
 static inline bool watch_runtime_interpret(watch_clock_runtime*c,const twatch_rtc_time_v1*date,int64_t*out) {
- if(c->halted||!c->civil||!tw_valid_time(date))return false;
+ if(!watch_runtime_live(c)||!c->civil||!tw_valid_time(date))return false;
  risc_civil_calendar_v1 raw={.struct_size=sizeof(raw),.year=date->year,.month=date->month,
   .day=date->day,.hour=date->hour,.minute=date->minute,.second=date->second,.weekday=date->weekday};
  int64_t epoch=-1;int rc=c->civil->interpret_rtc(c->civil->context,&raw,&epoch);
@@ -130,11 +145,12 @@ static inline bool watch_runtime_interpret(watch_clock_runtime*c,const twatch_rt
 /* Returns civil calendar already projected by the installed policy, plus the
  * original snapshot fraction. Caller must NOT apply legacy display_time again. */
 static inline bool watch_runtime_read_policy(watch_clock_runtime*c,int64_t*utc_epoch,risc_civil_calendar_v1*out) {
- if(c->halted||!c->civil)return false;
+ if(!watch_runtime_live(c)||!c->civil)return false;
  int64_t epoch;uint32_t ns=0;
  if(c->fallback) {
   twatch_rtc_time_v1 raw={0};
-  if(!c->fallback->read(c->fallback->context,&raw)||!watch_runtime_interpret(c,&raw,&epoch))return false;
+  bool read=c->fallback->read(c->fallback->context,&raw);
+  if(!watch_runtime_live(c)||!read||!watch_runtime_interpret(c,&raw,&epoch))return false;
  } else {
   risc_realtime_snapshot_v1 sample;
   if(!watch_runtime_snapshot(c,&sample)||sample.validity!=RISC_REALTIME_VALID)return false;
@@ -218,6 +234,7 @@ static bool watch_runtime_open(watch_clock_runtime *c,const risc_runtime_api_v1 
 #else
  c->wake->read(c->wake->context,WATCH_CLOCK_CHECKPOINT_TYPE,WATCH_CLOCK_CHECKPOINT_SCHEMA,&record,&c->cause);
 #endif
+ if(!watch_runtime_live(c))return false;
  if(rc==RISC_RETAINED_WAKE_CONTEXT){watch_runtime_halt(c);return false;}
  if(rc!=RISC_RETAINED_WAKE_OK && rc!=RISC_RETAINED_WAKE_ABSENT && rc!=RISC_RETAINED_WAKE_MISMATCH) {
 #ifdef WATCH_SHARED_HOME_RETAINED
@@ -244,6 +261,7 @@ static bool watch_runtime_open(watch_clock_runtime *c,const risc_runtime_api_v1 
    extended->read_bytes(c->wake->context,PORTABLE_DESK_CLOCK_RECORD_TYPE,
 #endif
       PORTABLE_DESK_CLOCK_RECORD_SCHEMA,bytes,sizeof(bytes),&used,&cause);
+  if(!watch_runtime_live(c))return false;
   if(result!=RISC_RETAINED_WAKE_OK && result!=RISC_RETAINED_WAKE_ABSENT &&
      result!=RISC_RETAINED_WAKE_MISMATCH && result!=RISC_RETAINED_WAKE_INVALID) {
    watch_runtime_halt(c);return false;
@@ -271,6 +289,7 @@ static inline int watch_runtime_stage_desk(watch_clock_runtime *c,const portable
     !portable_desk_encode(record,bytes,sizeof(bytes)))return 0;
  int rc=extended->stage_bytes(c->wake->context,PORTABLE_DESK_CLOCK_RECORD_TYPE,
      PORTABLE_DESK_CLOCK_RECORD_SCHEMA,bytes,sizeof(bytes));
+ if(!watch_runtime_live(c))return -2;
  if(rc==RISC_RETAINED_WAKE_OK)return 1;
  if(rc==RISC_RETAINED_WAKE_INVALID)return 0;
  watch_runtime_halt(c);return -2;
@@ -285,7 +304,9 @@ static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *r
   * supplies that RTC, including deep/light wake. Never write the RTC. */
  twatch_rtc_time_v1 date={0};int64_t epoch=0;
  if(!rtc || !rtc->read)return true; /* Explicit TIME UNSET remains visible. */
- if(!rtc->read(rtc->context,&date)) {
+ bool read=rtc->read(rtc->context,&date);
+ if(!watch_runtime_live(c))return false;
+ if(!read) {
   /* Fresh battery-backed RTCs can have an oscillator-stop flag or invalid
    * calendar. Keep TIME UNSET explicit; never invent compile time or gate the
    * first display frame on a clock the user has not set yet. */
@@ -305,15 +326,17 @@ static bool watch_runtime_seed(watch_clock_runtime *c,const twatch_rtc_api_v1 *r
  }
 #endif
  int rc=c->time->seed(c->time->context,epoch,0);
+ if(!watch_runtime_live(c))return false;
  if(rc==RISC_REALTIME_CONTEXT)watch_runtime_halt(c);
  if(rc==RISC_REALTIME_OK){c->fallback=NULL;c->rtc_reconcile_pending=false;}
  return rc==RISC_REALTIME_OK;
 }
 static inline bool watch_runtime_read(watch_clock_runtime *c,twatch_rtc_time_v1 *out,uint16_t *fraction_ms) {
- if(c->halted)return false;
+ if(!watch_runtime_live(c))return false;
  if(c->fallback) {
   twatch_rtc_time_v1 date={0};
-  if(!c->fallback->read(c->fallback->context,&date) || !tw_valid_time(&date))return false;
+  bool read=c->fallback->read(c->fallback->context,&date);
+  if(!watch_runtime_live(c)||!read||!tw_valid_time(&date))return false;
   *out=date;*fraction_ms=0;return true;
  }
  risc_realtime_snapshot_v1 sample;
@@ -322,29 +345,36 @@ static inline bool watch_runtime_read(watch_clock_runtime *c,twatch_rtc_time_v1 
  *fraction_ms=(uint16_t)(sample.nanoseconds/1000000u);return true;
 }
 static bool watch_runtime_stage(watch_clock_runtime *c) {
- if(c->halted)return false;
+ if(!watch_runtime_live(c))return false;
  if(!c->wake)return true;
  const risc_retained_wake_record_v1 record={.struct_size=sizeof(record),
   .type=WATCH_CLOCK_CHECKPOINT_TYPE,.schema_version=WATCH_CLOCK_CHECKPOINT_SCHEMA,.size=1,.payload={1}};
  int rc=c->wake->stage(c->wake->context,&record);
+ if(!watch_runtime_live(c))return false;
  if(rc==RISC_RETAINED_WAKE_CONTEXT)watch_runtime_halt(c);
  return rc==RISC_RETAINED_WAKE_OK;
 }
 static bool watch_runtime_abandon(watch_clock_runtime *c) {
- if(c->halted)return false;
+ if(!watch_runtime_live(c))return false;
  if(!c->wake)return true;
  int rc=c->wake->clear(c->wake->context);
+ if(!watch_runtime_live(c))return false;
  if(rc==RISC_RETAINED_WAKE_CONTEXT)watch_runtime_halt(c);
  return rc==RISC_RETAINED_WAKE_OK;
 }
 static int watch_runtime_promote(watch_clock_runtime *c) {
  if(c->halted)return RISC_PROVIDER_PROMOTION_RETAINED;
  risc_runtime_capability_v1 grant={.struct_size=sizeof(grant)};
- if(!c->runtime->acquire(RISC_PROVIDER_PROMOTION_CAPABILITY,1,0,&grant)){watch_runtime_halt(c);return RISC_PROVIDER_PROMOTION_RETAINED;}
+ bool acquired=c->runtime->acquire(RISC_PROVIDER_PROMOTION_CAPABILITY,1,0,&grant);
+ if(!watch_runtime_live(c))return RISC_PROVIDER_PROMOTION_RETAINED;
+ if(!acquired){watch_runtime_halt(c);return RISC_PROVIDER_PROMOTION_RETAINED;}
  const risc_provider_promotion_api_v1 *api=grant.api;
  int rc=api && api->api_version==1 && api->struct_size>=sizeof(*api) && api->promote?
   api->promote(api->context):RISC_PROVIDER_PROMOTION_FAILED;
+ if(!watch_runtime_live(c))return RISC_PROVIDER_PROMOTION_RETAINED;
  if(rc==RISC_PROVIDER_PROMOTION_RETAINED){watch_runtime_halt(c);return rc;}
- if(!c->runtime->release(&grant)){watch_runtime_halt(c);return RISC_PROVIDER_PROMOTION_RETAINED;}
+ bool released=c->runtime->release(&grant);
+ if(!watch_runtime_live(c))return RISC_PROVIDER_PROMOTION_RETAINED;
+ if(!released){watch_runtime_halt(c);return RISC_PROVIDER_PROMOTION_RETAINED;}
  return rc;
 }
