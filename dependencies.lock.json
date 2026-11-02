@@ -17,5 +17,14 @@
     "commit": "422e1e81a498fb6bdab9abf086325afc05a532dc",
     "version": "0.1.0"
   },
-  "compiler": "xtensa-esp32s3-elf-gcc 15.2.0 esp-15.2.0_20251204"
+  "compiler": "xtensa-esp32s3-elf-gcc 15.2.0 esp-15.2.0_20251204",
+  "shared_sdk_headers": {
+    "sdk/app/PortableResidentSettingsEffects.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "91d3d24ae08add0f8637192f9c1b8e618a4a1420",
+      "path": "lib/PortableApps/include/PortableResidentSettingsEffects.h",
+      "git_blob": "97d27ceb16aecb5746050488ea0c8ad2d244b0b6",
+      "sha256": "617544d7260d73841fbf76b129371cf647cc40577f015ee73f72b47917e2dee5"
+    }
+  }
 }
