@@ -252,15 +252,18 @@ static int32_t clock_resident_alarm_only(risc_resident_reply_v1 *reply) {
     return RISC_RESIDENT_BUSY;
 #endif
 }
+#include "clock_resident_effects.inc"
 static int32_t clock_resident_dispatch(void *context,const risc_resident_request_v1 *request,risc_resident_reply_v1 *reply) {
     (void)context;
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
+    if(clock_effects.running)return clock_resident_retain();
     if(!clock_resident_child||clock_resident_dispatching||!request||request->struct_size!=sizeof(*request)||!reply||reply->struct_size<sizeof(*reply))return RISC_RESIDENT_INVALID;
     reply->flags=0;
     if(request->reason==RISC_RESIDENT_APPLY_IDLE_ONLY&&!request->flags&&!request->reserved) {
         clock_resident_idle_result_valid=clock_resident_idle_alarm=false;
     }
     if(!clock_resident_settled())return RISC_RESIDENT_BUSY;
+    if(clock_effect_reason(request->reason))return clock_effect_dispatch(request);
     if(request->reason==RISC_RESIDENT_QUERY_LAST_IDLE_ALARM) {
         if(request->flags||request->reserved)return RISC_RESIDENT_INVALID;
         if(!clock_resident_idle_result_valid)return RISC_RESIDENT_BUSY;
@@ -323,6 +326,7 @@ static void clock_resident_failed(void *context,const risc_resident_failure_v1 *
     memcpy(sleep_status,"APP FAILED TO START",sizeof("APP FAILED TO START"));
 }
 static bool clock_resident_init(void) {
+    clock_effect_clear();
     clock_resident=(risc_resident_client_v1){.struct_size=sizeof(clock_resident)};
     clock_resident_extended=(risc_resident_attention_client_v1){.base={.struct_size=sizeof(clock_resident_extended)}};
     clock_resident_enabled=clock_resident_child=clock_resident_dispatching=clock_resident_terminal=clock_resident_continued=clock_resident_handoff=false;
@@ -351,7 +355,7 @@ static int32_t clock_resident_run(const char *path) {
     if(!clock_attention_prime()||!clock_resident_pause())return clock_resident_retain();
     char queued_path[193];
     for(;;) {
-        clock_resident_next[0]=0;clock_resident_child=true;
+        clock_effect_clear();clock_resident_next[0]=0;clock_resident_child=true;
         clock_resident_idle_result_valid=clock_resident_idle_alarm=false;
         uint32_t now,discarded=0;
         if(!clock_key_read(&discarded,"WATCH_KEY stage=resident-entry-discard")||!clock_resident_alive()||!alive(&now))return clock_resident_retain();
@@ -360,7 +364,7 @@ static int32_t clock_resident_run(const char *path) {
         int32_t rc=clock_resident.run_foreground(clock_resident.invocation,path,&result);
         if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
         if(rc==RISC_RESIDENT_RETAINED||result.status==RISC_RESIDENT_RETAINED)return clock_resident_retain();
-        clock_resident_child=false;
+        clock_resident_child=false;clock_effect_clear();
         clock_resident_idle_result_valid=clock_resident_idle_alarm=false;
         if(rc==RISC_RESIDENT_HANDOFF){clock_resident_sleep_pending=false;clock_resident_handoff=true;return rc;}
         if(rc!=RISC_RESIDENT_OK&&rc!=RISC_RESIDENT_NO_PENDING) {
