@@ -12,7 +12,13 @@ static home_canvas_surface clock_canvas;
 static home_canvas_touch clock_canvas_touch;
 static risc_runtime_capability_v1 clock_canvas_grant;
 static bool clock_canvas_selected,clock_canvas_granted;
-static bool clock_canvas_live(void){return !clock_canvas.retained;}
+static bool clock_canvas_live(void){
+#ifdef WATCH_RUNTIME_FEATURES
+ return !clock_canvas.retained&&!native_clock.halted;
+#else
+ return !clock_canvas.retained;
+#endif
+}
 static void clock_canvas_retained(void*context){
  (void)context;
 #ifdef WATCH_RUNTIME_FEATURES
