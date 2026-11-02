@@ -61,7 +61,11 @@ static inline void watch_runtime_retain(const risc_runtime_api_v1 *rt) {
  }
 }
 static inline void watch_runtime_halt(watch_clock_runtime *c) {
- c->halted=true;watch_runtime_retain(c->runtime);
+ c->halted=true;
+#ifdef WATCH_SHARED_HOME_BOOT
+ if(risc_runtime_get_api(1)!=c->runtime)return;
+#endif
+ watch_runtime_retain(c->runtime);
 }
 
 static bool watch_runtime_close(watch_clock_runtime *c) {
@@ -181,13 +185,24 @@ static inline bool watch_runtime_calendar(int64_t epoch,twatch_rtc_time_v1 *out)
 static bool watch_runtime_open(watch_clock_runtime *c,const risc_runtime_api_v1 *rt,bool is_default) {
  *c=(watch_clock_runtime){.runtime=rt,.cause=RISC_BOOT_RESET};
  c->time_grant=(risc_runtime_capability_v1){.struct_size=sizeof(c->time_grant)};
- if(!rt->acquire(RISC_REALTIME_CONTROL_CAPABILITY,1,0,&c->time_grant))return false;
+ bool time_acquired=rt->acquire(RISC_REALTIME_CONTROL_CAPABILITY,1,0,&c->time_grant);
+#ifdef WATCH_SHARED_HOME_BOOT
+ if(risc_runtime_get_api(1)!=rt){c->halted=true;return false;}
+#endif
+ if(!time_acquired)return false;
  c->time_live=true;c->time=c->time_grant.api;
  if(!c->time || c->time->api_version!=1 || c->time->struct_size<sizeof(*c->time) ||
     !c->time->read || !c->time->seed)return false;
  if(!is_default)return true;
  c->wake_grant=(risc_runtime_capability_v1){.struct_size=sizeof(c->wake_grant)};
- if(!rt->acquire(RISC_RETAINED_WAKE_CAPABILITY,1,0,&c->wake_grant)) {
+ bool wake_acquired=rt->acquire(RISC_RETAINED_WAKE_CAPABILITY,1,0,&c->wake_grant);
+#ifdef WATCH_SHARED_HOME_BOOT
+ if(risc_runtime_get_api(1)!=rt){c->halted=true;return false;}
+ if(!wake_acquired&&(c->wake_grant.struct_size!=sizeof(c->wake_grant)||c->wake_grant.api||c->wake_grant.slot||c->wake_grant.generation)){
+  watch_runtime_halt(c);return false;
+ }
+#endif
+ if(!wake_acquired) {
   /* A standalone boot-test or other non-retained deployment can omit this
    * service. Start cold; never claim a restored checkpoint without a grant. */
   rt->diagnostic("WATCH_CLOCK retained-wake=unavailable resume=cold");

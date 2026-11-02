@@ -5,6 +5,9 @@
 #include "AlarmServiceV2.h"
 #endif
 #include "RiscTimedSleepV1.h"
+#ifndef WATCH_ALARM_CALL_SAFE
+#define WATCH_ALARM_CALL_SAFE() true
+#endif
 /* Reuse owned crown sleep with an optional alarm deadline. No persistent
  * suppression: every entry, refusal and timed-Light boundary reconciles anew. */
 #ifdef ALARM_SERVICE_TAGGED_V2
@@ -16,16 +19,20 @@ static int32_t watch_alarm_deadline(const alarm_service_v1 *a,alarm_sleep_v1 *de
     for(unsigned n=0;n<64;n++) {
         *decision=(alarm_sleep_v1){.struct_size=sizeof(*decision)};
         int32_t rc=a->prepare_sleep(a->context,decision);
+        if(!WATCH_ALARM_CALL_SAFE())return -9;
         if(rc!=ALARM_PENDING)return rc;
 #ifdef ALARM_SERVICE_TAGGED_V2
         int32_t stepped=a->step(a->context);
+        if(!WATCH_ALARM_CALL_SAFE())return ALARM_RETAINED;
         if(watch_alarm_terminal(stepped))return ALARM_RETAINED;
         if(stepped!=ALARM_OK&&stepped!=ALARM_PENDING)return stepped;
 #else
         (void)a->step(a->context);
+        if(!WATCH_ALARM_CALL_SAFE())return -9;
 #endif
         alarm_status_v1 status={.struct_size=sizeof(status)};
         int32_t copied=a->status(a->context,&status);
+        if(!WATCH_ALARM_CALL_SAFE())return -9;
 #ifdef ALARM_SERVICE_TAGGED_V2
         if(watch_alarm_terminal(copied))return ALARM_RETAINED;
         if(copied==ALARM_OK&&status.output_uncertain)return ALARM_RETAINED;
@@ -131,6 +138,7 @@ static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *pa
              * refusal/retained native result never authorizes this boundary. */
             if(rc==RISC_LIGHT_SLEEP_OK) {
                 alarm_result=watch_alarm_resume_light(a,&decision);
+                if(!WATCH_ALARM_CALL_SAFE())return WATCH_SLEEP_RETAINED;
 #ifdef ALARM_SERVICE_TAGGED_V2
                 if(watch_alarm_terminal(alarm_result))return WATCH_SLEEP_RETAINED;
 #endif
@@ -182,6 +190,7 @@ static int watch_alarm_sleep_motion_prepared(const risc_display_power_api_v1 *pa
     }
     if(!alarm_failed) {
         int32_t refreshed=a->refresh(a->context);
+        if(!WATCH_ALARM_CALL_SAFE())return WATCH_SLEEP_RETAINED;
 #ifdef ALARM_SERVICE_TAGGED_V2
         if(watch_alarm_terminal(refreshed))return WATCH_SLEEP_RETAINED;
 #else
