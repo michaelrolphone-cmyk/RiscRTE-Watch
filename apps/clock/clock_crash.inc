@@ -58,6 +58,9 @@ static bool clock_crash_step(void) {
   clock_crash_modal=true;
   CLOCK_WAKE_MARK("crash-report-begin");
   if(!clock_crash_prepare(NULL))return false;
+#ifdef WATCH_HOME_CANVAS
+  if(clock_canvas_selected)home_canvas_touch_discard_navigation(&clock_canvas_touch);
+#endif
   uint32_t offset=0,now=0,events=0;
   do {
    uint32_t next=offset;risc_display_surface_v1 s={0};
