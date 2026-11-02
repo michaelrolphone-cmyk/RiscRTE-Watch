@@ -47,7 +47,7 @@ with tempfile.TemporaryDirectory(prefix='home-optional-') as tmp:
  for i,source in enumerate(sources):
   obj=w/f'{i}.o';run(['cc','-std=c11',*flags,*(['-DWATCH_CONTEXTS_CLIENT'] if i else []),'-c',str(source),'-o',str(obj)]);objects.append(str(obj))
  binary=a.output/'test';run(['c++','-std=c++11',*flags,str(ROOT/'apps/clock/effects/boot.cpp'),*objects,'-o',str(binary)])
- for mode,capabilities in [('absent',caps+required),('malformed',[c for c in caps+required if c not in ('storage.preferences','storage.files','motion.accel','software.installed-apps')])]:
+ for mode,capabilities in [('preset',['alarm.service']),('absent',caps+required),('malformed',[c for c in caps+required if c not in ('storage.preferences','storage.files','motion.accel','software.installed-apps')])]:
   for cap in capabilities:
    result=subprocess.run([str(binary),mode,cap],capture_output=True,text=True,timeout=60,env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'})
    log=mode+'-'+cap+'.log';(a.output/log).write_text(result.stdout+result.stderr)

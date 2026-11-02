@@ -1,9 +1,6 @@
 name: Home optional capability contracts
 on:
   pull_request:
-  push:
-    branches: [work/shared-home-clock-20261102]
-    paths: ['apps/**', 'scripts/**', 'tests/**', 'sdk/**', 'include/**', 'dependencies.lock.json', '.github/workflows/home-optional-capabilities.yml']
 permissions:
   contents: read
 jobs:
@@ -44,6 +41,7 @@ jobs:
           DIMENSIONS: ${{ matrix.dimensions }}
           SANITIZED: ${{ matrix.sanitized }}
         run: |
+          python3 tests/test_shared_default_proof.py
           read -r width height <<< "$DIMENSIONS"
           flag=""
           if [ "$SANITIZED" = true ]; then flag=--sanitized; fi
