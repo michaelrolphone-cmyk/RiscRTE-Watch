@@ -14,6 +14,7 @@ p.add_argument('--sanitized',action='store_true');a=p.parse_args();a.output.mkdi
 fixture_source=ROOT/'tests/fast_wake_clock_test.c'
 text=fixture_source.read_text()
 changes=[
+ ('static bool fast_diagnostic(const char*s){','static bool fast_diagnostic(const char*s){fprintf(stderr,"%s\\n",s);'),
  ('static const risc_runtime_api_v1 fast_runtime=','static risc_runtime_api_v1 fast_runtime='),
  ('int main(void){','int inherited_fast_main(void){'),
  (' if(fail_capability&&!strcmp(n,fail_capability))return false;',''),
