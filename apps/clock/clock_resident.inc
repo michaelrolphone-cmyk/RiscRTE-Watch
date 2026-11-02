@@ -109,7 +109,7 @@ static bool clock_resident_actions(uint32_t events) {
 #endif
 #ifdef WATCH_QUICK_RADIOS
 #ifdef WATCH_ATOMIC_PREFERENCES
-    if(!pqa_radios_apply_user(&clock_radios,&clock_quick.ui,rt,actions,quick_atomic_save,NULL,quick_atomic_guard))return false;
+    if(!clock_radios_apply_user(actions))return false;
 #else
     if(!pqa_radios_apply(&clock_radios,&clock_quick.ui,rt,actions))return false;
 #endif

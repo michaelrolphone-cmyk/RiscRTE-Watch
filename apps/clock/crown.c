@@ -730,6 +730,53 @@ static unsigned clock_brightness(void) {
 #ifdef WATCH_ATOMIC_PREFERENCES
 #include "clock_atomic.inc"
 #endif
+/* The gauge API returns copied samples, not an app-owned session. Its direct
+ * grant need not occupy a slot while an explicit radio edit holds both radio
+ * grants plus the existing atomic preference transaction. Power/key provider
+ * dependencies retain their own hardware ownership; never borrow that API
+ * after releasing this app grant. Cached face/low-battery samples stay intact. */
+#if defined(WATCH_ATOMIC_PREFERENCES) && defined(WATCH_QUICK_RADIOS)
+static bool clock_radios_apply_user(uint32_t actions) {
+#ifdef WATCH_SHARED_HOME_BOOT
+    bool detached=false;
+    if((actions&(PQA_WIFI|PQA_BLUETOOTH|PQA_AIRPLANE))&&device_clients.live[0]) {
+        if(!clock_canvas_live()||held)return false;
+        battery_api=NULL;device_clients.battery=NULL;
+        bool released=rt->release(&device_clients.grants[0]);
+        if(!clock_canvas_live())return false;
+        if(!released||device_clients.grants[0].api||device_clients.grants[0].slot||device_clients.grants[0].generation) {
+            clock_atomic_retain();return false;
+        }
+        device_clients.live[0]=false;detached=true;
+    }
+#endif
+    bool applied=pqa_radios_apply_user(&clock_radios,&clock_quick.ui,rt,actions,quick_atomic_save,NULL,quick_atomic_guard);
+#ifdef WATCH_SHARED_HOME_BOOT
+    if(!clock_canvas_live())return false;
+    /* False means radio restoration or cleanup was not proved. Do not acquire
+     * another provider, restore a stale pointer, or continue ordinary cleanup. */
+    if(!applied){clock_atomic_retain();return false;}
+    if(detached) {
+        risc_runtime_capability_v1 *grant=&device_clients.grants[0];
+        *grant=(risc_runtime_capability_v1){.struct_size=sizeof(*grant)};
+        bool acquired=rt->acquire(RISC_BATTERY_GAUGE_CAPABILITY,1,0,grant);
+        if(!clock_canvas_live())return false;
+        if(!acquired) {
+            if(grant->api||grant->slot||grant->generation){clock_atomic_retain();return false;}
+            rt->diagnostic("HOME battery rebind refused after radio edit");
+            return false;
+        }
+        device_clients.live[0]=true;
+        const risc_battery_gauge_api_v1 *api=grant->api;
+        if(!api||api->api_version!=1||api->struct_size<sizeof(*api)||!api->read) {
+            clock_atomic_retain();return false;
+        }
+        device_clients.battery=api;battery_api=api;
+    }
+#endif
+    return applied;
+}
+#endif
 #ifdef PORTABLE_LOW_BATTERY
 static bool clock_low_battery_poll(uint32_t now) {
     if(held)return true;
@@ -1649,7 +1696,7 @@ __attribute__((visibility("default"))) void app_main(void) {
         if((quick_actions&(PQA_WIFI|PQA_BLUETOOTH|PQA_AIRPLANE)) && !clock_broadcast_pause()){clock_exit_checkpoint(__LINE__);return;}
 #endif
 #ifdef WATCH_ATOMIC_PREFERENCES
-        if(!pqa_radios_apply_user(&clock_radios,&clock_quick.ui,rt,quick_actions,quick_atomic_save,NULL,quick_atomic_guard)){clock_exit_checkpoint(__LINE__);break;}
+        if(!clock_radios_apply_user(quick_actions)){clock_exit_checkpoint(__LINE__);break;}
 #else
         if(!pqa_radios_apply(&clock_radios,&clock_quick.ui,rt,quick_actions)){clock_exit_checkpoint(__LINE__);break;}
 #endif
