@@ -28,6 +28,8 @@ with tempfile.TemporaryDirectory(prefix='frequency-idle-full-') as tmp:
   flags += [v for v in selected if v.startswith('-D') and v not in flags and v[2:].split('=')[0] not in defined]
  if a.sanitized:flags+=['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer','-no-pie']
  sources=[fixture,*[ROOT/'apps/clock'/n for n in ('nova/nova.c','points_projection.c','viewport.c','capability_clients.c','quick_radios.c')],*[a.system/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')]]
+ if '-DWATCH_AUTOMATIC_PROVISION' in flags:
+  sources += [a.system/'lib/PortableApps/src'/n for n in ('PortableAutomaticProvision.c','PortableNetworkSession.c')]
  for src in [*sources,ROOT/'apps/clock/effects/boot.cpp']:
   extra=['-DWATCH_CONTEXTS_CLIENT'] if src!=fixture and src.suffix!='.cpp' else []
   cmd=['c++' if src.suffix=='.cpp' else 'cc','-std=c++11' if src.suffix=='.cpp' else '-std=c11',*flags,*extra,'-MM',str(src)]
