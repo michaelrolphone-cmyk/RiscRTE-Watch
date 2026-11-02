@@ -2,13 +2,24 @@
 /* Watch-owned policy over public Runtime mechanisms. No hardware identities,
  * pointers, grant tokens, or boot-local counters enter the checkpoint. */
 #include "RiscRuntimeV1.h"
+#ifdef WATCH_SHARED_HOME_BOOT
+#include "RiscRetainedWakeV1.h"
+#include "RiscRealtimeV1.h"
+#include "RiscProviderPromotionV1.h"
+#include "PortableHomeBoot.h"
+#else
 #include "sdk/RiscRetainedWakeV1.h"
 #include "sdk/RiscRealtimeV1.h"
 #include "sdk/RiscProviderPromotionV1.h"
+#endif
 #include "../clock/display_time.h"
 #include <string.h>
 #ifdef WATCH_SHARED_HOME_CIVIL
+#ifdef WATCH_SHARED_HOME_BOOT
+#include "RiscCivilClockV1.h"
+#else
 #include "sdk/RiscCivilClockV1.h"
+#endif
 #endif
 #ifdef WATCH_SHARED_HOME_RETAINED
 #include "PortableDeskClock.h"
@@ -182,7 +193,12 @@ static bool watch_runtime_open(watch_clock_runtime *c,const risc_runtime_api_v1 
  if(!c->wake || c->wake->api_version!=1 || c->wake->struct_size<sizeof(*c->wake) ||
     !c->wake->read || !c->wake->stage || !c->wake->clear)return false;
  risc_retained_wake_record_v1 record={.struct_size=sizeof(record)};
- int rc=c->wake->read(c->wake->context,WATCH_CLOCK_CHECKPOINT_TYPE,WATCH_CLOCK_CHECKPOINT_SCHEMA,&record,&c->cause);
+ int rc=
+#ifdef WATCH_SHARED_HOME_BOOT
+ portable_home_boot_read(c->wake,WATCH_CLOCK_CHECKPOINT_TYPE,WATCH_CLOCK_CHECKPOINT_SCHEMA,&record,&c->cause);
+#else
+ c->wake->read(c->wake->context,WATCH_CLOCK_CHECKPOINT_TYPE,WATCH_CLOCK_CHECKPOINT_SCHEMA,&record,&c->cause);
+#endif
  if(rc==RISC_RETAINED_WAKE_CONTEXT){watch_runtime_halt(c);return false;}
  if(rc!=RISC_RETAINED_WAKE_OK && rc!=RISC_RETAINED_WAKE_ABSENT && rc!=RISC_RETAINED_WAKE_MISMATCH) {
 #ifdef WATCH_SHARED_HOME_RETAINED
@@ -202,7 +218,12 @@ static bool watch_runtime_open(watch_clock_runtime *c,const risc_runtime_api_v1 
  c->desk_supported=extended && extended->max_payload_bytes>=PORTABLE_DESK_CLOCK_RECORD_BYTES;
  if(rc==RISC_RETAINED_WAKE_MISMATCH && c->desk_supported) {
   uint8_t bytes[PORTABLE_DESK_CLOCK_RECORD_BYTES];uint32_t used=0,cause=UINT32_MAX;
-  int result=extended->read_bytes(c->wake->context,PORTABLE_DESK_CLOCK_RECORD_TYPE,
+  int result=
+#ifdef WATCH_SHARED_HOME_BOOT
+   portable_home_boot_read_bytes(extended,PORTABLE_DESK_CLOCK_RECORD_TYPE,
+#else
+   extended->read_bytes(c->wake->context,PORTABLE_DESK_CLOCK_RECORD_TYPE,
+#endif
       PORTABLE_DESK_CLOCK_RECORD_SCHEMA,bytes,sizeof(bytes),&used,&cause);
   if(result!=RISC_RETAINED_WAKE_OK && result!=RISC_RETAINED_WAKE_ABSENT &&
      result!=RISC_RETAINED_WAKE_MISMATCH && result!=RISC_RETAINED_WAKE_INVALID) {
