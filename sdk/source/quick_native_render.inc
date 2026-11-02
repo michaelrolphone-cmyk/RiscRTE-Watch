@@ -93,11 +93,17 @@ static void native_panel_row(pqa_row *r,const pqa_state *s,const pqa_layout *l,c
         if(i==2)disabled=!s->radios_valid;
         if(i==3 && s->radio_controls)disabled=!s->wifi_valid;
         if(i==4)disabled=!s->bluetooth_valid;
+#ifdef PORTABLE_QUICK_RADIO_AVAILABILITY
+        if((i==3||i==4)&&!s->radios_valid)disabled=true;
+#endif
 #endif
         bool on=(i==1&&s->dnd_valid&&s->dnd_enabled)||(i==0&&s->volume_valid&&!s->volume)||(i==5&&s->torch)||(s->radios_valid&&((i==2&&s->airplane)||(i==3&&s->wifi_enabled)||(i==4&&s->bluetooth_enabled)));
 #if defined(PORTABLE_QUICK_CAPABILITY_SAFE) || defined(PORTABLE_QUICK_RADIO_AVAILABILITY)
         if(i==3)on=s->wifi_valid&&s->wifi_enabled;
         if(i==4)on=s->bluetooth_valid&&s->bluetooth_enabled;
+#ifdef PORTABLE_QUICK_RADIO_AVAILABILITY
+        if((i==3||i==4)&&!s->radios_valid)on=false;
+#endif
 #endif
         int border=pqa_layout_size(l,1),radius=pqa_layout_size(l,12);
         rect(r,tile.x,tile.y,tile.w,tile.h,radius,on?CYAN:LINE,256);

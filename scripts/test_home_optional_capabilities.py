@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='home-optional-') as tmp:
   obj=w/f'{i}.o';run(['cc','-std=c11',*flags,*(['-DWATCH_CONTEXTS_CLIENT'] if i else []),'-c',str(source),'-o',str(obj)]);objects.append(str(obj))
  radio_binary=a.output/'radios-test'
  run(['cc','-std=c11',*flags,str(ROOT/'tests/home_radio_independence_test.c'),
-      str(ROOT/'apps/clock/quick_radios.c'),str(staged_sources/'quick_actions.c'),'-o',str(radio_binary)])
+      str(ROOT/'apps/clock/quick_radios.c'),str(staged_sources/'quick_actions.c'),str(staged_sources/'quick_render.c'),'-o',str(radio_binary)])
  radio_result=subprocess.run([str(radio_binary)],capture_output=True,text=True,env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'})
  (a.output/'radios.log').write_text(radio_result.stdout+radio_result.stderr)
  print(radio_result.stdout+radio_result.stderr,end='',flush=True);radio_result.check_returncode()

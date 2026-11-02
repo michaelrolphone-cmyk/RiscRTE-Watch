@@ -3,6 +3,9 @@
 #include <string.h>
 #include "PortableQuickRadios.h"
 #include "PortableQuickLayout.h"
+#include "PortableQuickRender.h"
+static uint16_t pixels[TEST_WIDTH*TEST_HEIGHT];
+static uint32_t snapshots[4];
 static unsigned present,malformed,grants,writes,ble_sets,wifi_disconnects;
 static bool corrupt,save_ok,safe_ok,release_ok,ble_fail,wifi_fail;
 static uint8_t record,ble_state;
@@ -45,10 +48,21 @@ static uint32_t tap(pqa_state*u,unsigned tile){
  assert(pqa_input(u,100,true,1,1,r.x+r.w/2,r.y+r.h/2,true));
  assert(pqa_input(u,120,true,0,1,r.x+r.w/2,r.y+r.h/2,true));return pqa_take_action(u);
 }
+static uint32_t raster(pqa_state*u){
+ memset(pixels,0,sizeof(pixels));
+ risc_display_surface_v1 surface={.pixels=pixels,.width=TEST_WIDTH,.height=TEST_HEIGHT,
+ .stride_bytes=TEST_WIDTH*2,.size_bytes=sizeof(pixels),.pixel_format=RISC_DISPLAY_FORMAT_RGB565};
+ assert(pqa_render(&surface,u,"12:34",true,75));
+ uint32_t hash=2166136261u;for(unsigned i=0;i<sizeof(pixels)/sizeof(pixels[0]);++i)hash=(hash^pixels[i])*16777619u;
+ return hash;
+}
 static void check_ui(pqa_state*u,unsigned mask,unsigned width,unsigned height){
  assert(pqa_set_dimensions(u,width,height));assert(u->wifi_valid==!!(mask&1)&&u->bluetooth_valid==!!(mask&2));
  assert(tap(u,3)==((mask&1)?PQA_WIFI:0));assert(tap(u,4)==((mask&2)?PQA_BLUETOOTH:0));
  assert(tap(u,2)==(mask?PQA_AIRPLANE:0));
+ uint32_t before=raster(u);u->radios_valid=false;
+ assert(!tap(u,3)&&!tap(u,4)&&!tap(u,2));
+ if(mask)assert(raster(u)!=before);u->radios_valid=mask!=0;
 }
 int main(void){
  unsigned scenarios=0;const uint8_t flags[]={0,1,2,3,4|8|16};
@@ -56,7 +70,7 @@ int main(void){
   reset(mask,flags[f]);pqa_state u;pqa_init(&u);pqa_radios s;
   assert(pqa_radios_load(&s,&u,&rt)&&!grants&&!writes&&!ble_sets);
   assert(s.available==(mask!=0)&&s.flags==flags[f]);
-  check_ui(&u,mask,TEST_WIDTH,TEST_HEIGHT);++scenarios;
+  check_ui(&u,mask,TEST_WIDTH,TEST_HEIGHT);if(flags[f]==3)snapshots[mask]=raster(&u);++scenarios;
   unsigned before=ble_sets;assert(pqa_radios_resume(&s,&u,&rt)&&ble_sets==before&&!grants);++scenarios;
   const uint32_t actions[]={PQA_WIFI,PQA_BLUETOOTH,PQA_AIRPLANE};
   for(unsigned a=0;a<3;++a){
@@ -92,5 +106,7 @@ int main(void){
   safe_ok=false;assert(!pqa_radios_apply_user(&s,&u,&rt,PQA_AIRPLANE,save,NULL,safe)&&grants==2);++scenarios;}
  {reset(2,2);pqa_state u;pqa_init(&u);pqa_radios s;assert(pqa_radios_load(&s,&u,&rt));
   release_ok=false;assert(!pqa_radios_apply_user(&s,&u,&rt,PQA_BLUETOOTH,save,NULL,safe)&&grants==1);++scenarios;}
+ for(unsigned i=0;i<4;++i){for(unsigned j=0;j<i;++j)assert(snapshots[i]!=snapshots[j]);
+  printf("Native radio availability mask=%u raster=%08x\\n",i,snapshots[i]);}
  printf("Independent radios: %u production policy/input, lease, atomic rollback/custody cases PASS\n",scenarios);return 0;
 }

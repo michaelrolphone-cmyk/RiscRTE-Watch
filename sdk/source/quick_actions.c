@@ -79,6 +79,9 @@ bool pqa_set_safe_content(pqa_state *s,unsigned left,unsigned top,unsigned width
 }
 #endif
 static bool wifi_valid(const pqa_state *s) {
+#ifdef PORTABLE_QUICK_RADIO_AVAILABILITY
+    if(!s->radios_valid)return false; /* Deferred/resuming Home is not ready. */
+#endif
 #if defined(PORTABLE_QUICK_CAPABILITY_SAFE) || defined(PORTABLE_QUICK_RADIO_AVAILABILITY)
     return s->wifi_valid;
 #else
@@ -86,6 +89,9 @@ static bool wifi_valid(const pqa_state *s) {
 #endif
 }
 static bool bluetooth_valid(const pqa_state *s) {
+#ifdef PORTABLE_QUICK_RADIO_AVAILABILITY
+    if(!s->radios_valid)return false; /* Deferred/resuming Home is not ready. */
+#endif
 #if defined(PORTABLE_QUICK_CAPABILITY_SAFE) || defined(PORTABLE_QUICK_RADIO_AVAILABILITY)
     return s->bluetooth_valid;
 #else

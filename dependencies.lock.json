@@ -51,17 +51,17 @@
   "shared_source_overlays": {
     "sdk/source/quick_actions.c": {
       "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
-      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "commit": "e0badab4eaf97f2054475fbba1b7fa1fda4811c4",
       "path": "lib/PortableApps/src/quick_actions.c",
-      "git_blob": "7e4a224da0add1a67869e2433a214459165b953f",
-      "sha256": "7a639683e94788335bed82cac21c9470372af9ea7b66b342cb1a900796ae5074"
+      "git_blob": "b0a3061fab97dadc6506834f4ee84349d8f3ecfa",
+      "sha256": "23c5aef0371300a86688b023a02bb08a44889dc53a1b4b5fa98f734eee15b33e"
     },
     "sdk/source/quick_native_render.inc": {
       "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
-      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "commit": "e0badab4eaf97f2054475fbba1b7fa1fda4811c4",
       "path": "lib/PortableApps/src/quick_native_render.inc",
-      "git_blob": "74476c8f927d4e76c3ab97af43e6fd88de0a92a8",
-      "sha256": "b572ce21b82c07b268e919660c8e427a343fd30ce563deb1f28e1b5dfc497bc0"
+      "git_blob": "8c2599145271cb02325b0cbe6894443a3bca5b1c",
+      "sha256": "15d1df79a66b75d9f3fb30a7d16e94d93bb9a5704f7dfcb0145c9a9091d395f6"
     }
   }
 }
