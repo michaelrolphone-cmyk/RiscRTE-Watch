@@ -10,7 +10,14 @@ static unsigned char *physical_pixels;
 static unsigned canvas_grants,canvas_calls,canvas_submits,converted_frames,canvas_rotation,raw_touch_acquires;
 static void hc_yield(uint32_t milliseconds){check_io();yield(milliseconds);}
 static bool canvas_faulted,canvas_missing_touch;
-static unsigned navigation_phase,navigation_at;static bool navigation_release;
+static unsigned navigation_phase,navigation_at;static bool navigation_release,canvas_controls_emitted;
+static int32_t hc_touch_next(void*c,uint64_t id,risc_touch_event_v1*out){
+ check_io();
+ if(!strcmp(canvas_case,"controls-button")&&first_seen&&clock_ms>=300&&!canvas_controls_emitted){
+  canvas_controls_emitted=true;*out=(risc_touch_event_v1){.sequence=1,.kind=RISC_TOUCH_EVENT_BUTTON_DOWN,.id=0};return 1;
+ }
+ return fast_touch_next(c,id,out);
+}
 static bool hc_touch_poll(void*c,size_t n){check_io();assert(n&&n<=RISC_TOUCH_QUEUE_LENGTH);return poll(c,1);}
 static bool hc_navigation_foreground(void*c,const risc_input_foreground_v1*claims,size_t count){check_io();(void)c;(void)claims;assert(count<=1);return true;}
 static bool hc_navigation_reset(void*c){check_io();(void)c;return true;}
@@ -117,8 +124,8 @@ static void hc_reset(unsigned format,unsigned rotation){
  physical_stride=(format==RISC_DISPLAY_FORMAT_RGB565?physical_width*2:(physical_width+7)/8)+4;
  physical_pixels=calloc(physical_height,physical_stride);assert(physical_pixels);
  fixture_physical=da.base;fixture_physical.get_info=physical_info;fixture_physical.acquire=physical_acquire;fixture_physical.submit=physical_submit;
- fixture_touch=ta;fixture_touch.poll=hc_touch_poll;
- navigation_phase=navigation_at=0;navigation_release=false;
+ fixture_touch=ta;fixture_touch.poll=hc_touch_poll;fixture_touch.next=hc_touch_next;
+ navigation_phase=navigation_at=0;navigation_release=canvas_controls_emitted=false;
  canvas_provider_init(&fixture_canvas,&fixture_physical,&fixture_touch,rotation);
  fixture_canvas.navigation=&hc_navigation;
  fixture_canvas_api=fixture_canvas.api;
@@ -154,6 +161,7 @@ int main(int argc,char **argv){
   if(!strcmp(canvas_case,"cold"))assert(first_frames>10&&first_at>2000);
   if(!strcmp(canvas_case,"deep"))assert(first_frames==1&&first_at==95);
   if(!strcmp(canvas_case,"sleep"))assert(sleeps==1&&wake_count==1&&soft_frames==1);
+  if(!strcmp(canvas_case,"controls-button"))assert(canvas_controls_emitted&&pqa_visible(&clock_quick.ui));
   if(!strncmp(canvas_case,"alarm-",6))assert(alarm_touch_phase==4&&!alarm_view.occurrence.generation&&alarm_frames);
   if(!strncmp(canvas_case,"face-",5))assert(picker.selected==(unsigned)strtoul(canvas_case+5,NULL,10));
   if(!strcmp(canvas_case,"saved"))assert(picker.selected==1&&face.hour_24&&hardware_brightness==60);
