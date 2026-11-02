@@ -55,12 +55,16 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
   'begin-retained','begin-unknown','malformed-frame','submit-retained','poll-retained','poll-unknown',
   'input-retained','quiesce-retained','close-retained','physical-retained')]
  for mode,encoding,rotation in cases:
-  result=subprocess.run([str(binary),mode,str(encoding),str(rotation)],capture_output=True,text=True,timeout=90,
-   env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'})
+  command=[str(binary),mode,str(encoding),str(rotation)]
+  try:
+   result=subprocess.run(command,capture_output=True,text=True,timeout=90,
+    env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'})
+  except subprocess.TimeoutExpired as exc:
+   def decoded(value):return value.decode(errors='replace') if isinstance(value,bytes) else value or ''
+   result=subprocess.CompletedProcess(command,124,decoded(exc.stdout),decoded(exc.stderr)+'\nCase timed out after 90 seconds\n')
   log=f'{mode}-{encoding}-{rotation}.log';(a.output/log).write_text(result.stdout+result.stderr)
   runs.append(dict(mode=mode,physical_encoding=encoding,rotation=rotation,exit_code=result.returncode,log=log))
   print(result.stdout+result.stderr,end='',flush=True);(a.output/'runs.json').write_text(json.dumps(runs,indent=2)+'\n')
-  result.check_returncode()
  compiled={str(f.relative_to(w)):digest(f) for folder in (sdk,staged) for f in folder.rglob('*') if f.is_file()}
  dependency_files=set()
  for dep in w.glob('*.d'):
@@ -76,3 +80,8 @@ provider={str(f.relative_to(a.canvas_source)):digest(f) for f in (a.canvas_sourc
  generated_fixture_sha256=hashlib.sha256(text.encode()).hexdigest(),commands=commands,runs=runs,
  source_sha256={str(v.relative_to(ROOT)):digest(v) for v in sources},
  staged_source_header_sha256=compiled,compiled_dependency_sha256=compiled_dependencies,canvas_provider_source_sha256=provider),indent=2)+'\n')
+
+failures=[case for case in runs if case['exit_code']]
+if failures:
+ print(json.dumps({'failed_cases':failures},indent=2),flush=True)
+ raise SystemExit(1)
