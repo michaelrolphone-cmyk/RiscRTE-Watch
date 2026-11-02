@@ -42,6 +42,7 @@ jobs:
           SANITIZED: ${{ matrix.sanitized }}
         run: |
           python3 tests/test_shared_default_proof.py
+          python3 tests/test_shared_source_overlays.py
           read -r width height <<< "$DIMENSIONS"
           flag=""
           if [ "$SANITIZED" = true ]; then flag=--sanitized; fi

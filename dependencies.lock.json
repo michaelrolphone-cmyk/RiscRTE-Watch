@@ -25,6 +25,36 @@
       "path": "lib/PortableApps/include/PortableResidentSettingsEffects.h",
       "git_blob": "97d27ceb16aecb5746050488ea0c8ad2d244b0b6",
       "sha256": "617544d7260d73841fbf76b129371cf647cc40577f015ee73f72b47917e2dee5"
+    },
+    "sdk/app/PortableQuickRadios.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "path": "lib/PortableApps/include/PortableQuickRadios.h",
+      "git_blob": "e9d934d034010c22b03421cf629799befc355133",
+      "sha256": "ba7d68322b7a1ca0c44348733171c47b26fef595e57ced53bb70cc3ee90ac14f"
+    },
+    "sdk/app/PortableQuickActions.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "path": "lib/PortableApps/include/PortableQuickActions.h",
+      "git_blob": "07be991d5fffb7860e353796f774dbf67a265655",
+      "sha256": "41eb378e88c2ff0d1475b6742d07a9c892606dd785d72b18f90abb0eb1e2c0ab"
+    }
+  },
+  "shared_source_overlays": {
+    "sdk/source/quick_actions.c": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "path": "lib/PortableApps/src/quick_actions.c",
+      "git_blob": "7e4a224da0add1a67869e2433a214459165b953f",
+      "sha256": "7a639683e94788335bed82cac21c9470372af9ea7b66b342cb1a900796ae5074"
+    },
+    "sdk/source/quick_native_render.inc": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "path": "lib/PortableApps/src/quick_native_render.inc",
+      "git_blob": "74476c8f927d4e76c3ab97af43e6fd88de0a92a8",
+      "sha256": "b572ce21b82c07b268e919660c8e427a343fd30ce563deb1f28e1b5dfc497bc0"
     }
   }
 }

@@ -72,6 +72,11 @@ int main(int argc,char **argv){
  }
  if(optional_preset)assert(optional_applied==1&&quick_values[1]==30&&quick_saved[1]&&!clock_alarm.api);
  if(!malformed&&!strcmp(capability,"board.battery"))assert(!face.battery_valid);
+ if(!strcmp(capability,"net.wifi")||!strcmp(capability,"bluetooth.hci")){
+  bool absent_wifi=!strcmp(capability,"net.wifi");
+  assert(clock_radios.available&&clock_quick.ui.radios_valid);
+  assert(clock_quick.ui.wifi_valid==!absent_wifi&&clock_quick.ui.bluetooth_valid==absent_wifi);
+ }
  printf("Full crown %s %s: %s; checked custody PASS\n",argv[1],capability,stops?"refused":"continued");
  return 0;
 }

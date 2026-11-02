@@ -5,7 +5,7 @@ explicit, exact-match checked and hashed in the receipt.
 """
 import argparse,ast,hashlib,json,os,re,subprocess,tempfile
 from pathlib import Path
-from merged_sdk import headers
+from merged_sdk import headers,sources as stage_sources
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
 for name in ('system','utilities','output'):p.add_argument('--'+name,type=Path,required=True)
@@ -34,19 +34,25 @@ caps=['storage.key-value','board.battery','rtc.clock','runtime.retained-wake','a
 required=['display.output','input.touch.raw','runtime.realtime-control','runtime.provider-promotion']
 commands=[];runs=[]
 with tempfile.TemporaryDirectory(prefix='home-optional-') as tmp:
- w=Path(tmp);sdk=headers(w,a.system,a.utilities,ROOT);fixture=w/'fixture.c';fixture.write_text(text)
+ w=Path(tmp);sdk=headers(w,a.system,a.utilities,ROOT);staged_sources=stage_sources(w,a.system,ROOT);fixture=w/'fixture.c';fixture.write_text(text)
  flags=['-O1','-g1','-Wall','-Wextra','-Werror','-Wno-unused-function','-Wno-misleading-indentation',
   '-DPORTABLE_LOW_BATTERY', f'-DTEST_WIDTH={a.width}u',f'-DTEST_HEIGHT={a.height}u',
   *[v for v in selected if v.startswith('-D') and v[2:].split('=')[0] not in defined],
-  *['-I'+str(v) for v in (sdk,ROOT/'include',ROOT,ROOT/'tests',a.system/'lib/PortableApps/src')]]
+  *['-I'+str(v) for v in (sdk,ROOT/'include',ROOT,ROOT/'tests',staged_sources)]]
  if a.sanitized:flags+=['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer','-no-pie']
  sources=[fixture,*[ROOT/'apps/clock'/n for n in ('nova/nova.c','points_projection.c','viewport.c','capability_clients.c','quick_radios.c')],
-  *[a.system/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c','PortableAutomaticProvision.c','PortableNetworkSession.c')]]
+  *[staged_sources/n for n in ('quick_actions.c','quick_render.c','quick_session.c','PortableAutomaticProvision.c','PortableNetworkSession.c')]]
  def run(cmd):
   commands.append(list(map(str,cmd)));subprocess.run(cmd,check=True)
  objects=[]
  for i,source in enumerate(sources):
   obj=w/f'{i}.o';run(['cc','-std=c11',*flags,*(['-DWATCH_CONTEXTS_CLIENT'] if i else []),'-c',str(source),'-o',str(obj)]);objects.append(str(obj))
+ radio_binary=a.output/'radios-test'
+ run(['cc','-std=c11',*flags,str(ROOT/'tests/home_radio_independence_test.c'),
+      str(ROOT/'apps/clock/quick_radios.c'),str(staged_sources/'quick_actions.c'),'-o',str(radio_binary)])
+ radio_result=subprocess.run([str(radio_binary)],capture_output=True,text=True,env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'})
+ (a.output/'radios.log').write_text(radio_result.stdout+radio_result.stderr)
+ print(radio_result.stdout+radio_result.stderr,end='',flush=True);radio_result.check_returncode()
  binary=a.output/'test';run(['c++','-std=c++11',*flags,str(ROOT/'apps/clock/effects/boot.cpp'),*objects,'-o',str(binary)])
  for mode,capabilities in [('preset',['alarm.service']),('absent',caps+required),('malformed',[c for c in caps+required if c not in ('storage.preferences','storage.files','motion.accel','software.installed-apps')])]:
   for cap in capabilities:
@@ -56,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix='home-optional-') as tmp:
    print(result.stdout+result.stderr,end='',flush=True)
    (a.output/'runs.json').write_text(json.dumps(runs,indent=2)+'\n')
    result.check_returncode()
-sources=[fixture_source,ROOT/'tests/home_optional_controls.inc',Path(__file__).resolve(),ROOT/'scripts/build.py',*ROOT.glob('apps/clock/*.c'),*ROOT.glob('apps/clock/*.inc')]
+sources=[fixture_source,ROOT/'tests/home_radio_independence_test.c',ROOT/'tests/home_optional_controls.inc',*ROOT.glob('sdk/source/*'),*ROOT.glob('sdk/app/*.h'),Path(__file__).resolve(),ROOT/'scripts/build.py',*ROOT.glob('apps/clock/*.c'),*ROOT.glob('apps/clock/*.inc')]
 (a.output/'receipt.json').write_text(json.dumps(dict(schema=1,width=a.width,height=a.height,sanitized=a.sanitized,
  production_flags=True,hardware_tested=False,fixture_edits=changes,generated_fixture_sha256=hashlib.sha256(text.encode()).hexdigest(),
  commands=commands,runs=runs,source_sha256={str(v.relative_to(ROOT)):hashlib.sha256(v.read_bytes()).hexdigest() for v in sources}),indent=2)+'\n')
