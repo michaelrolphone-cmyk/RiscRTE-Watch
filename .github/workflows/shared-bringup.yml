@@ -1,0 +1,50 @@
+name: Shared Bringup diagnostics
+on:
+  pull_request:
+    paths: ['apps/bringup/**', 'scripts/*bringup*', 'tests/*bringup*', '.github/workflows/shared-bringup.yml']
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: 710b200021b983ea55eb86a6fbddbbf5ce10a984
+          path: System
+          persist-credentials: false
+      - name: Existing native raster and lifecycle
+        run: python3 scripts/test_bringup_native.py --output out/native
+      - name: Shared entry actual controller normal and sanitized
+        run: |
+          set -euo pipefail
+          mkdir -p out/shared
+          for mode in normal sanitized; do
+            flags=(); if [ "$mode" = sanitized ]; then flags+=(-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -no-pie); fi
+            cc -std=c11 -O1 -g -Wall -Wextra -Werror -Wno-misleading-indentation "${flags[@]}" -ISystem/sdk/usb -ISystem/sdk/app -Iinclude -Isdk/app -Isdk/driver tests/shared_bringup_test.c apps/clock/viewport.c -o "out/shared/$mode"
+            ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 "out/shared/$mode" 2>&1 | tee "out/shared/$mode.log"
+          done
+      - name: Pinned compiler
+        run: |
+          curl --fail --location --retry 3 https://github.com/espressif/crosstool-NG/releases/download/esp-15.2.0_20251204/xtensa-esp-elf-15.2.0_20251204-x86_64-linux-gnu.tar.xz -o "$RUNNER_TEMP/xtensa.tar.xz"
+          echo "3d50f5cd5f173acfd524e07c1cd69bc99585731a415ca2e5bce879997fe602b8  $RUNNER_TEMP/xtensa.tar.xz" | sha256sum --check
+          mkdir -p toolchain
+          tar -xJf "$RUNNER_TEMP/xtensa.tar.xz" -C toolchain
+      - name: One ELF and independent byte-identical repeat
+        run: |
+          python3 scripts/build_shared_bringup.py --system System --compiler toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc --output out/target
+          python3 scripts/build_shared_bringup.py --system System --compiler toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc --output out/repeat
+          cmp out/target/bringup.elf out/repeat/bringup.elf
+          git archive HEAD | gzip -n > out/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-bringup-${{ github.event.pull_request.head.sha }}
+          path: out/
+          if-no-files-found: error

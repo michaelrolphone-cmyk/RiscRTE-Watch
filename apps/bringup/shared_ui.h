@@ -95,7 +95,7 @@ __attribute__((visibility("default"))) void app_main(void){
  if(!br_get(RISC_SCENE_CAPABILITY,1,&grants[0],&own[0]))goto cleanup;
  scene=grants[0].api;
  const risc_scene_components_api_v1 *components=risc_scene_components_get_v1(scene);
- if(!components||!scene->next||!scene->snapshot||!scene->close)goto cleanup;
+ if(!components||!components->lifecycle.configure||!scene->next||!scene->snapshot||!scene->close)goto cleanup;
  if(br_get("board.battery",1,&grants[1],&own[1])){
   battery=grants[1].api;
   if(!VALID(battery,1,sizeof(*battery))||!battery->read)battery=NULL;
@@ -132,6 +132,9 @@ __attribute__((visibility("default"))) void app_main(void){
  int rc=components->open(scene->context,&br_doc,&nav,&session);
  if(!br_live())return;
  if(rc!=RISC_SCENE_OK||!session){if(session||rc==RISC_SCENE_AGAIN||rc==RISC_SCENE_RETAINED){br_retain();return;}goto cleanup;}
+ rc=components->lifecycle.configure(scene->context,session,0);
+ if(!br_live())return;
+ if(rc!=RISC_SCENE_OK){br_retain();return;}
  for(;;){
   risc_runtime_health_v1 health={.struct_size=sizeof(health)};
   if(!br_live())return;
