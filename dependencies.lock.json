@@ -39,6 +39,13 @@
       "path": "lib/PortableApps/include/PortableQuickActions.h",
       "git_blob": "07be991d5fffb7860e353796f774dbf67a265655",
       "sha256": "41eb378e88c2ff0d1475b6742d07a9c892606dd785d72b18f90abb0eb1e2c0ab"
+    },
+    "sdk/app/PortableQuickLayout.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "path": "lib/PortableApps/include/PortableQuickLayout.h",
+      "git_blob": "32e794a778ed0a7f03bd17c5487eca5a3abf3353",
+      "sha256": "8b6757fcae081554eb3333ea475a83c74506f64c42e86e791d42663da55aa654"
     }
   },
   "shared_source_overlays": {
