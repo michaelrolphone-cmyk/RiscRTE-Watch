@@ -33,7 +33,11 @@ static bool resync(const risc_touch_api_v1 *touch, risc_touch_snapshot_v1 *snaps
     return true;
 }
 
+#ifdef BRINGUP_SHARED
+static void bringup_native_main(void) {
+#else
 __attribute__((visibility("default"))) void app_main(void) {
+#endif
     const risc_runtime_api_v1 *rt = risc_runtime_get_api(1);
     if (!rt || rt->api_version != 1 || rt->struct_size < RISC_RUNTIME_CAPABILITIES_V1_SIZE ||
             !rt->health || !rt->yield_ms || !rt->diagnostic || !rt->acquire || !rt->release) return;
@@ -240,3 +244,7 @@ cleanup:
         if (live[n - 1] && !rt->release(&grants[n - 1])) retain(rt, "WATCH_TEST retained=release");
     rt->diagnostic("WATCH_TEST return=home");
 }
+
+#ifdef BRINGUP_SHARED
+#include "shared_ui.h"
+#endif
