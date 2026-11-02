@@ -77,7 +77,8 @@ static int hc_shared_acquire(const char*name,uint32_t version,uint64_t instance,
  return -1;
 }
 static void hc_shared_start(void){
- if(!strcmp(canvas_case,"nav-radio-both"))saved_radio(0);
+ hc_battery_api=NULL;hc_battery_detached=hc_ble_refused=false;hc_battery_acquires=hc_battery_detaches=hc_rebind_refused=0;
+ if(!strncmp(canvas_case,"nav-radio-",10))saved_radio(0);
  hc_dnd_value=0;hc_dnd_writes=0;
  if(hc_dnd_save_case()&&strcmp(canvas_case+27,"absent"))alarm_api.output_modes=(unsigned)strtoul(canvas_case+27,NULL,10);
  hc_brightness_supported=strncmp(canvas_case,"brightness-absent-",18)!=0;hc_brightness_calls=0;
@@ -127,7 +128,14 @@ static void hc_shared_run(void){
  assert(!hc_entry_init());hc_entry_main();
  fprintf(stderr,"Home actual acquisition boundary peak=%u overflows=%u live=%u\n",hc_live_peak,hc_capacity_refusals,grants-ungrants);
  assert(!hc_capacity_refusals);
- if(!strcmp(canvas_case,"nav-radio-both")){assert(radio_saved&&(radio_bytes[2]&PORTABLE_RADIO_BLUETOOTH));assert(atomic_count==1&&!strcmp(atomic_keys[0],PORTABLE_RADIO_KEY));}
+ if(!strncmp(canvas_case,"nav-radio-",10)){
+  assert(hc_battery_detaches==1);
+  if(!strcmp(canvas_case,"nav-radio-detach-retained"))assert(hc_battery_acquires==1&&!(radio_bytes[2]&PORTABLE_RADIO_BLUETOOTH)&&!atomic_count);
+  else if(!strcmp(canvas_case,"nav-radio-rollback"))assert(hc_ble_refused&&hc_battery_acquires==2&&!hc_battery_detached&&!(radio_bytes[2]&PORTABLE_RADIO_BLUETOOTH)&&!atomic_count);
+  else{assert(radio_saved&&(radio_bytes[2]&PORTABLE_RADIO_BLUETOOTH));assert(atomic_count==1&&!strcmp(atomic_keys[0],PORTABLE_RADIO_KEY));assert(hc_battery_acquires==2);}
+  if(!strcmp(canvas_case,"nav-radio-both"))assert(hc_live_peak==16&&!hc_battery_detached);
+  if(!strcmp(canvas_case,"nav-radio-rebind-refused"))assert(hc_rebind_refused==1&&hc_battery_detached&&!battery_api);
+ }
  if(!strcmp(canvas_case,"zero-crash-namespace"))assert(first_seen&&ready&&confirmations&&hc_zero_namespace_warnings==1&&!hc_evidence_calls&&!clock_crash_namespace_ready);
  if(!hc_brightness_supported){
   assert(!hc_brightness_calls&&hardware_brightness==40&&quick_saved[0]&&quick_values[0]==60&&canvas_submits);
@@ -159,6 +167,7 @@ static bool hc_crash_navigation(risc_input_navigation_frame_v1*out){
  out->buttons=out->pressed=RISC_NAV_CONFIRM;return true;
 }
 static void hc_shared_diagnostic(const char*s){
+ if(!strcmp(s,"HOME battery rebind refused after radio edit"))++hc_rebind_refused;
  if(!strncmp(canvas_case,"brightness-absent-save",22)&&strstr(s,"stage=services-ready"))ended=false;
  if(!strcmp(canvas_case,"zero-crash-namespace")){
   if(strstr(s,"stage=services-ready"))ended=false;
@@ -200,18 +209,30 @@ static bool hc_evidence(risc_failure_evidence_client_v1*out){
 static bool hc_bounded_acquire(const char*name,uint32_t version,uint64_t instance,risc_runtime_capability_v1*g){
  check_io();assert(grants>=ungrants);
  if(!strcmp(name,RISC_APP_DATA_CAPABILITY))assert(instance!=0);
+ if(!strcmp(name,RISC_BATTERY_GAUGE_CAPABILITY)){
+  ++hc_battery_acquires;
+  if(hc_battery_acquires>1){
+   if(hc_lost_case("nav-radio-rebind-lost-retained"))return false;
+   if(!strcmp(canvas_case,"nav-radio-rebind-refused"))return false;
+  }
+ }
  bool acquired=hc_acquire(name,version,instance,g);
+ if(acquired&&!strcmp(name,RISC_BATTERY_GAUGE_CAPABILITY)){hc_battery_api=g->api;hc_battery_detached=false;}
  if(acquired&&g->api==&qa_wifi)g->api=&hc_wifi;
  if(grants-ungrants>hc_live_peak)hc_live_peak=grants-ungrants;
- if(!strcmp(canvas_case,"nav-radio-both"))fprintf(stderr,"Home actual app acquire name=%s api=%u instance=%llu accepted=%u live=%u peak=%u\n",name,version,(unsigned long long)instance,acquired?1u:0u,grants-ungrants,hc_live_peak);
- fprintf(stderr,"Home actual acquisition boundary peak=%u overflows=%u live=%u\n",hc_live_peak,hc_capacity_refusals,grants-ungrants);
+ if(!strncmp(canvas_case,"nav-radio-",10))fprintf(stderr,"Home actual app acquire name=%s api=%u instance=%llu accepted=%u live=%u peak=%u\n",name,version,(unsigned long long)instance,acquired?1u:0u,grants-ungrants,hc_live_peak);
  if(grants-ungrants>16){++hc_capacity_refusals;fprintf(stderr,"Home would exceed Runtime live-slot bound: %s instance=%llu peak=%u\n",name,(unsigned long long)instance,hc_live_peak);}
+ fprintf(stderr,"Home actual acquisition boundary peak=%u overflows=%u live=%u\n",hc_live_peak,hc_capacity_refusals,grants-ungrants);
  assert(grants-ungrants<=16);
  return acquired;
 }
 
 static bool hc_shared_release(risc_runtime_capability_v1*g){
  check_io();
+ if(hc_battery_api&&g->api==hc_battery_api&&!strncmp(canvas_case,"nav-radio-",10)&&navigation_phase>=8&&clock_quick_scope){
+  ++hc_battery_detaches;hc_battery_detached=true;
+  if(!strcmp(canvas_case,"nav-radio-detach-retained")){canvas_faulted=true;return false;}
+ }
  if(g->slot==65533){
   assert(g->generation==1&&!g->api);
   if(strstr(canvas_case,"release-retained")){canvas_faulted=true;return false;}
@@ -299,3 +320,5 @@ static void hc_radio_ready(void){
  assert(clock_quick.ui.wifi_available&&clock_quick.ui.bluetooth_available&&clock_quick.ui.wifi_valid&&clock_quick.ui.bluetooth_valid);
  fprintf(stderr,"Home all-present radio before drawer: live=%u; time/wake/display/raster/input/battery/sleep/key/panel/RTC/civil/alarm/broadcast/Contexts available\n",grants-ungrants);
 }
+
+static bool hc_radio_ble_fail(void){if(!strcmp(canvas_case,"nav-radio-rollback")&&navigation_phase>=8&&!hc_ble_refused){hc_ble_refused=true;return true;}return false;}

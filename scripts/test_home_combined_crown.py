@@ -30,6 +30,7 @@ def replace_once(value,before,after):
  assert value.count(before)==1,(before,value.count(before))
  changes.append((before,after));return value.replace(before,after)
 quick_text=replace_once(quick_text,'static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){(void)c;*z=0;','static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){(void)c;*z=0;if(hc_dnd_save_case()&&!strcmp(k,PQA_DND_KEY)){assert(n==1);*(uint8_t*)b=hc_dnd_value;*z=1;return RISC_KEY_VALUE_OK;}')
+quick_text=replace_once(quick_text,'static bool battery(void*c,risc_battery_sample_v1*s){(void)c;','static bool battery(void*c,risc_battery_sample_v1*s){(void)c;assert(!hc_battery_detached);')
 quick_text=replace_once(quick_text,'assert(atomic_publishing);','assert(atomic_publishing);if(hc_dnd_save_case()&&!strcmp(k,PQA_DND_KEY)){assert(n==1);hc_dnd_value=*(const uint8_t*)b;++hc_dnd_writes;return RISC_KEY_VALUE_OK;}')
 text=replace_once(text,'#include "quick_clock_test.c"','#include "derived_quick.c"')
 before='if(face.time_valid){twatch_rtc_time_v1 raw={0},expected={0};assert(watch_runtime_calendar(native_time.epoch_seconds,&raw));assert(watch_display_time(&raw,&expected));assert(!memcmp(&face.time,&expected,sizeof(expected)));}'
@@ -41,6 +42,7 @@ for op in ('status','step','refresh','ack'):
 text=replace_once(text,'check_io();(void)c;*cause=boot_cause;','check_io();if(hc_lost_case("boot-read-lost-retained"))return RISC_RETAINED_WAKE_ABSENT;(void)c;*cause=boot_cause;')
 text=replace_once(text,'static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_io();','static int32_t fast_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){check_io();if(!strcmp(k,"home_view")&&hc_lost_case("view-read-lost-retained"))return RISC_KEY_VALUE_NOT_FOUND;')
 text=replace_once(text,'assert(hardware_brightness==clock_quick.brightness&&!pending&&!owned&&touch.subscription&&last_complete==submitted);','assert(hardware_brightness==hc_expected_brightness()&&!pending&&!owned&&touch.subscription&&last_complete==submitted);')
+text=replace_once(text,'radio_apply_count++;if(fail_ble_enable)return false;','radio_apply_count++;if(hc_radio_ble_fail()||fail_ble_enable)return false;')
 text=replace_once(text,'return &fast_runtime;}','return hc_runtime_lost?NULL:&fast_runtime;}')
 
 text=replace_once(text,'assert(points_loads==1&&face.points==&clock_points_view','assert(points_loads==hc_expected_points_loads()&&face.points==&clock_points_view')
@@ -54,9 +56,9 @@ controls=replace_once(controls,'if(!strncmp(canvas_case,"alarm-",6))assert(alarm
 controls=replace_once(controls,'if(!strcmp(canvas_case,"controls-button")&&first_seen','if((!strcmp(canvas_case,"controls-button")||(!strncmp(canvas_case,"brightness-absent-",18)&&strncmp(canvas_case,"brightness-absent-save",22)))&&first_seen')
 controls=replace_once(controls,'  check_clean();','  check_clean();if(!strcmp(canvas_case,"brightness-refuse")||!strcmp(canvas_case,"brightness-null-advertised")){assert(!first_seen&&!confirmations);free(physical_pixels);puts("Advertised malformed/refused brightness safely refuses startup PASS");return 0;}')
 controls=replace_once(controls,'.supported_formats=RISC_DISPLAY_FORMAT_BIT(physical_format)};return true;','.supported_formats=RISC_DISPLAY_FORMAT_BIT(physical_format),.flags=hc_brightness_supported?RISC_DISPLAY_INFO_BRIGHTNESS:0};return true;')
-controls=replace_once(controls,'const uint32_t home[]={RISC_NAV_HOME};','if(!strcmp(canvas_case,"nav-radio-both")){if(!stage_calls)return true;if(!navigation_phase)hc_radio_ready();}\n const uint32_t radio_keys[]={RISC_NAV_UP,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_CONFIRM,RISC_NAV_BACK};\n const uint32_t home[]={RISC_NAV_HOME};')
-controls=replace_once(controls,'const uint32_t *keys=!strcmp(canvas_case,"nav-home")?home:','const uint32_t *keys=!strcmp(canvas_case,"nav-radio-both")?radio_keys:!strcmp(canvas_case,"nav-home")?home:')
-controls=replace_once(controls,'unsigned count=!strcmp(canvas_case,"nav-home")?1:','unsigned count=!strcmp(canvas_case,"nav-radio-both")?9:!strcmp(canvas_case,"nav-home")?1:')
+controls=replace_once(controls,'const uint32_t home[]={RISC_NAV_HOME};','if(!strncmp(canvas_case,"nav-radio-",10)){if(!stage_calls)return true;if(!navigation_phase)hc_radio_ready();}\n const uint32_t radio_keys[]={RISC_NAV_UP,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_CONFIRM,RISC_NAV_BACK};\n const uint32_t home[]={RISC_NAV_HOME};')
+controls=replace_once(controls,'const uint32_t *keys=!strcmp(canvas_case,"nav-home")?home:','const uint32_t *keys=!strncmp(canvas_case,"nav-radio-",10)?radio_keys:!strcmp(canvas_case,"nav-home")?home:')
+controls=replace_once(controls,'unsigned count=!strcmp(canvas_case,"nav-home")?1:','unsigned count=!strncmp(canvas_case,"nav-radio-",10)?9:!strcmp(canvas_case,"nav-home")?1:')
 controls=replace_once(controls,' hc_reset(format,rotation);',' hc_reset(format,rotation);hc_shared_start();')
 controls=replace_once(controls,' app_main();',' hc_shared_run();')
 controls=replace_once(controls,'retained_fence&&retains&&native_clock.halted','retained_fence&&(retains||hc_runtime_lost)&&(native_clock.halted||portable_home_bindings_retained())')
@@ -102,7 +104,7 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  flags=['-O1','-g1','-Wall','-Wextra','-Werror','-Wno-unused-function',
   '-include',str(sdk/'PortableHomeBindings.h'),'-DPORTABLE_LOW_BATTERY',f'-DTEST_WIDTH={a.width}u',f'-DTEST_HEIGHT={a.height}u',
   *[v for v in selected if v.startswith('-D') and v[2:].split('=')[0] not in defined],
-  *['-I'+str(v) for v in (sdk,ROOT/'include',ROOT,ROOT/'tests',staged,a.canvas_source/'Services/canvas_host',a.canvas_source/'lib/PortableApps/include')]]
+  *['-I'+str(v) for v in (sdk,ROOT/'include',ROOT,ROOT/'apps/clock',ROOT/'tests',staged,a.canvas_source/'Services/canvas_host',a.canvas_source/'lib/PortableApps/include')]]
  if a.sanitized:flags+=['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer','-no-pie']
  sources=[fixture,*[ROOT/'apps/clock'/n for n in ('nova/nova.c','points_projection.c','viewport.c','capability_clients.c','quick_radios.c')],
   *[staged/n for n in ('quick_actions.c','quick_render.c','quick_session.c','PortableAutomaticProvision.c','PortableNetworkSession.c')]]
@@ -119,8 +121,30 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  for i,source in enumerate(sources):
   obj=w/f'{i}.o';run(['cc','-std=c11',*flags,*(['-DWATCH_CONTEXTS_CLIENT'] if i else []),'-MMD','-MF',str(obj)+'.d',*source_flags(source),'-c',str(source),'-o',str(obj)]);objects.append(str(obj))
  binary=a.output/'test';run(['c++','-std=c++11',*flags,'-MMD','-MF',str(w/'boot.d'),str(ROOT/'apps/clock/effects/boot.cpp'),*objects,'-o',str(binary)])
+ # Negative control changes exactly the source-owned gauge scope wrapper back
+ # to its pre-fix direct call. No other source or mock changes are permitted.
+ wrapper_path=ROOT/'tests/home_radio_negative_wrapper.inc'
+ wrapper=wrapper_path.read_text();crown_path=ROOT/'apps/clock/crown.c';crown=crown_path.read_text()
+ assert crown.count(wrapper)==1
+ old='static bool clock_radios_apply_user(uint32_t actions) { return pqa_radios_apply_user(&clock_radios,&clock_quick.ui,rt,actions,quick_atomic_save,NULL,quick_atomic_guard); }'
+ negative_crown=w/'negative_crown.c';negative_crown.write_text(crown.replace(wrapper,old))
+ assert quick_text.count('#include "apps/clock/crown.c"')==1
+ (w/'negative_quick.c').write_text(quick_text.replace('#include "apps/clock/crown.c"','#include "negative_crown.c"'))
+ assert text.count('#include "derived_quick.c"')==1
+ negative_fixture=w/'negative_fixture.c';negative_fixture.write_text(text.replace('#include "derived_quick.c"','#include "negative_quick.c"'))
+ negative_obj=w/'negative.o'
+ run(['cc','-std=c11',*flags,'-MMD','-MF',str(negative_obj)+'.d','-c',str(negative_fixture),'-o',str(negative_obj)])
+ negative_binary=a.output/'negative-control-test'
+ run(['c++','-std=c++11',*flags,str(ROOT/'apps/clock/effects/boot.cpp'),str(negative_obj),*objects[1:],'-o',str(negative_binary)])
+ negative_result=subprocess.run([str(negative_binary),'nav-radio-both','5','0'],capture_output=True,text=True,timeout=90,env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'})
+ negative_log=negative_result.stdout+negative_result.stderr
+ (a.output/'negative-control.log').write_text(negative_log);(a.output/'negative_crown.c').write_text(negative_crown.read_text())
+ print(negative_log,end='',flush=True)
+ negative_control=dict(exit_code=negative_result.returncode,log='negative-control.log',source_crown_sha256=digest(crown_path),wrapper_sha256=digest(wrapper_path),
+  source_wrapper_commit='a236cfe66b4bc29bb83aef0c6ba9478307321e18',generated_crown_sha256=digest(negative_crown),
+  passed=negative_result.returncode!=0 and 'Home would exceed Runtime live-slot bound:' in negative_log and 'peak=17' in negative_log and 'hc_bounded_acquire' in negative_log)
  modes=['normal','cold','deep','sleep','saved','no-raw-touch','nav-home','nav-picker','nav-repeat','nav-quick','controls-button','multitouch','alarm-above','alarm-retry']
- cases=[('nav-radio-both',5,0)]+[(mode,encoding,rotation) for mode in modes for encoding in (5,1) for rotation in (0,1)]
+ cases=[(mode,5,0) for mode in ('nav-radio-both','nav-radio-rollback','nav-radio-detach-retained','nav-radio-rebind-refused','nav-radio-rebind-lost-retained')]+[(mode,encoding,rotation) for mode in modes for encoding in (5,1) for rotation in (0,1)]
  face_count=int(subprocess.check_output([str(binary),'face-count'],text=True))
  cases += [(f'face-{face}',encoding,0) for face in range(face_count) for encoding in (5,1)]
  cases+=[(mode,5,0) for mode in ('absent','malformed-api','open-retained','open-unknown','geometry-retained',
@@ -148,16 +172,17 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
    path=Path(name);assert path.is_file(),name;dependency_files.add(path)
  compiled_dependencies={str(path):digest(path) for path in sorted(dependency_files)}
 sources=[fixture_source,quick_source,ROOT/'tests/home_canvas_crown_controls.inc',ROOT/'tests/home_combined_crown_prefix.inc',ROOT/'tests/home_combined_crown_services.inc',Path(__file__).resolve(),
- ROOT/'scripts/build.py',ROOT/'scripts/merged_sdk.py',ROOT/'scripts/home_alarm_fixture.py',ROOT/'dependencies.lock.json']
+ ROOT/'scripts/build.py',ROOT/'scripts/merged_sdk.py',ROOT/'scripts/home_alarm_fixture.py',ROOT/'tests/home_radio_negative_wrapper.inc',ROOT/'dependencies.lock.json']
 sources+=list((ROOT/'apps/clock').rglob('*.h'))+list((ROOT/'apps/clock').glob('*.c'))+list((ROOT/'apps/clock').glob('*.inc'))+list((ROOT/'include').glob('*.h'))
 provider={str(f.relative_to(a.canvas_source)):digest(f) for f in (a.canvas_source/'Services/canvas_host').glob('*.h')}
 (a.output/'receipt.json').write_text(json.dumps(dict(schema=1,width=a.width,height=a.height,sanitized=a.sanitized,
- production_flags=True,canvas_source_commit=actual,hardware_tested=False,fixture_edits=changes,
+ production_flags=True,negative_control=negative_control,canvas_source_commit=actual,hardware_tested=False,fixture_edits=changes,
  generated_fixture_sha256=hashlib.sha256(text.encode()).hexdigest(),generated_quick_sha256=hashlib.sha256(quick_text.encode()).hexdigest(),commands=commands,runs=runs,
  source_sha256={str(v.relative_to(ROOT)):digest(v) for v in sources},
  staged_source_header_sha256=compiled,compiled_dependency_sha256=compiled_dependencies,canvas_provider_source_sha256=provider),indent=2)+'\n')
 
 failures=[case for case in runs if case['exit_code']]
-if failures:
+if failures or not negative_control['passed']:
+ print(json.dumps({'negative_control':negative_control},indent=2),flush=True)
  print(json.dumps({'failed_cases':failures},indent=2),flush=True)
  raise SystemExit(1)

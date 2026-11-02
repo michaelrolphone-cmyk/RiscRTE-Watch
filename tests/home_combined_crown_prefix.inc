@@ -47,3 +47,8 @@ static uint8_t hc_dnd_value;
 static unsigned hc_dnd_writes;
 static bool hc_dnd_save_case(void);
 static void hc_radio_ready(void);
+
+static const void*hc_battery_api;
+static bool hc_battery_detached,hc_ble_refused;
+static unsigned hc_battery_acquires,hc_battery_detaches,hc_rebind_refused;
+static bool hc_radio_ble_fail(void);
