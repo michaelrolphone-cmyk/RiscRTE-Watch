@@ -20,7 +20,7 @@ def contract():
             arguments.extend(x.value for x in node.args if isinstance(x,ast.Constant) and isinstance(x.value,str))
         if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FLAGS' for t in node.targets):
             defines=[n.value for n in ast.walk(node.value) if isinstance(n,ast.Constant) and isinstance(n.value,str)]
-    assert set(arguments)-{'--'}=={'--output','--cc','--role','--automatic-provision','--serial-transfer-mode'}, arguments
+    assert set(arguments)-{'--'}=={'--output','--cc','--role','--automatic-provision','--serial-transfer-mode','--shared-view-output','--shared-system'}, arguments
     assert not any('WATCH_SERIAL_TRANSFER_MODE' in value for value in defines)
     assert '-DWATCH_AUTOMATIC_PROVISION' in defines
     assert 'WATCH_SERIAL_TRANSFER_MODE' not in (ROOT/'apps/clock/crown.c').read_text()

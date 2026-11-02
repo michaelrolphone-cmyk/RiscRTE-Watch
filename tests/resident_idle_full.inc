@@ -1,3 +1,6 @@
+#ifdef WATCH_HOME_CANVAS
+static unsigned attention_canvas_absent;
+#endif
 static bool attention_idle;
 static risc_resident_callbacks_v1 attention_host;
 static risc_resident_attention_callbacks_v1 attention_callback;
@@ -18,7 +21,16 @@ static int32_t att_step(void*c){(void)c;assert(!attention_capture);attention_ste
 static int32_t att_ack(void*c,const alarm_token_v1*t){assert(!attention_capture&&t->generation==12&&t->revision==9&&t->deadline==attention_base_seconds+3);attention_acknowledges++;return alarm_ack(c,t);}
 static int32_t att_deadline(void*c,alarm_sleep_v1*d){(void)c;assert(!attention_capture);*d=(alarm_sleep_v1){sizeof(*d),alarm_view.snapshot,attention_base_seconds+clock_ms/1000u,attention_alarm_case&&!attention_acknowledges?attention_base_seconds+3:0};return 0;}
 static alarm_service_sleep_v1 att_alarm;
-static bool att_acquire(const char*n,uint32_t v,uint64_t i,risc_runtime_capability_v1*g){assert(!attention_capture);bool ok=fast_acquire(n,v,i,g);if(ok&&g->api==&alarm_api)g->api=&att_alarm;return ok;}
+static bool att_acquire(const char*n,uint32_t v,uint64_t i,risc_runtime_capability_v1*g){
+#ifdef WATCH_HOME_CANVAS
+ /* Preserve this raw-provider fixture: only the exact clean optional probe is absent. */
+ if(!strcmp(n,RISC_CANVAS_CAPABILITY)){
+  assert(v==1&&!i&&g&&g->struct_size==sizeof(*g)&&!g->api&&!g->slot&&!g->generation);
+  assert(!attention_runs&&!attention_capture&&!owned&&!pending&&++attention_canvas_absent==1);
+  return false;
+ }
+#endif
+assert(!attention_capture);bool ok=fast_acquire(n,v,i,g);if(ok&&g->api==&alarm_api)g->api=&att_alarm;return ok;}
 static int32_t att_sleep_begin(uint64_t*t){assert(!attention_capture&&!touch.subscription&&!held&&!pending&&!owned);*t=99;return RISC_RUNTIME_SLEEP_OK;}
 static int32_t att_sleep_end(uint64_t t){assert(t==99&&!attention_capture&&!held&&!pending&&!owned);return RISC_RUNTIME_SLEEP_OK;}
 static bool att_diagnostic(const char*s){(void)s;return true;}
@@ -65,6 +77,10 @@ int main(int argc,char**argv){
  att_alarm=alarm_api;att_alarm.base.status=att_status;att_alarm.base.step=att_step;att_alarm.base.acknowledge=att_ack;att_alarm.base.prepare_sleep=att_deadline;
  pa.key_events=att_key;ra.read=att_rtc;
  fast_runtime.struct_size=sizeof(fast_runtime);fast_runtime.resident_shell=att_get;fast_runtime.health=att_health;fast_runtime.diagnostic=att_diagnostic;fast_runtime.acquire=att_acquire;fast_runtime.sleep_prepare=att_sleep_begin;fast_runtime.sleep_resume=att_sleep_end;
- app_main();if(attention_bind_failure){assert(clock_resident_terminal&&retains&&!attention_runs);puts("Full production Home rejected attention registration: retained with no child dispatch PASS");return 0;}assert(attention_runs==1&&!retains&&!retained_fence&&!owned&&!pending&&!held&&!touch.subscription);fprintf(stderr,"cleanup grants=%u/%u subscriptions=%u/%u allocations=%u terminal=%u\n",grants,ungrants,subscribed,unsubscribed,allocations,clock_resident_terminal);assert(grants==ungrants&&subscribed==unsubscribed&&!allocations);
+ app_main();
+#ifdef WATCH_HOME_CANVAS
+ assert(attention_canvas_absent==1&&!clock_canvas_selected&&!clock_canvas.session);
+#endif
+if(attention_bind_failure){assert(clock_resident_terminal&&retains&&!attention_runs);puts("Full production Home rejected attention registration: retained with no child dispatch PASS");return 0;}assert(attention_runs==1&&!retains&&!retained_fence&&!owned&&!pending&&!held&&!touch.subscription);fprintf(stderr,"cleanup grants=%u/%u subscriptions=%u/%u allocations=%u terminal=%u\n",grants,ungrants,subscribed,unsubscribed,allocations,clock_resident_terminal);assert(grants==ungrants&&subscribed==unsubscribed&&!allocations);
  printf("Full production Home attention %s: quiet capture, checked handoff, exact alarm/key behavior PASS\n",argc>1?argv[1]:"quiet");return 0;
 }
