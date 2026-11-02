@@ -287,7 +287,15 @@ static int hc_alarm_fault(const char*operation){
 
 static bool hc_lost_case(const char*name){if(strcmp(canvas_case,name))return false;hc_runtime_lost=retained_fence=canvas_faulted=true;return true;}
 
-static bool hc_display_info(void*c,risc_display_info_v1*out){check_io();bool ok=info(c,out);out->flags=hc_brightness_supported?RISC_DISPLAY_INFO_BRIGHTNESS:0;return ok;}
+static bool hc_display_info(void*c,risc_display_info_v1*out){
+ check_io();bool ok=info(c,out);
+ /* The inherited legacy fixture predates descriptor validation. Model the
+  * public physical provider contract; do not relax the actual Home validator. */
+ out->api_version=!strcmp(canvas_case,"display-info-version")?2u:1u;
+ out->struct_size=!strcmp(canvas_case,"display-info-short")?sizeof(*out)-1u:sizeof(*out);
+ out->flags=hc_brightness_supported?RISC_DISPLAY_INFO_BRIGHTNESS:0;
+ return ok;
+}
 static bool hc_brightness(void*c,uint16_t value,uint16_t maximum){
  check_io();++hc_brightness_calls;
  if(!hc_brightness_supported||!strcmp(canvas_case,"brightness-refuse"))return false;
