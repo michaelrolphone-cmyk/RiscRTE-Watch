@@ -52,3 +52,19 @@ static inline const risc_civil_clock_schedule_v1 *risc_civil_clock_get_schedule(
  const risc_civil_clock_schedule_v1 *a=ptr;
  return a->schedule_version==1&&a->schedule_tag==RISC_CIVIL_CLOCK_SCHEDULE_TAG&&a->inverse?a:NULL;
 }
+
+/* Optional provider-owned pure-TIMER conversion snapshot. The 40-byte printable
+ * token fits the existing DCLK zone field; it is not a preference or device ID.
+ * No output write on failure. Call only during normal-service preparation. */
+#define RISC_CIVIL_CLOCK_RETAINED_TAG UINT32_C(0x43495231)
+typedef struct {
+ risc_civil_clock_schedule_v1 base;
+ uint32_t retained_version,retained_tag;
+ int32_t (*cached_rule)(void *,char *,uint32_t);
+} risc_civil_clock_retained_v1;
+static inline const risc_civil_clock_retained_v1 *risc_civil_clock_get_retained(const void *ptr,size_t bytes) {
+ const risc_civil_clock_schedule_v1 *base=risc_civil_clock_get_schedule(ptr,bytes);
+ if(!base||bytes<sizeof(risc_civil_clock_retained_v1)||base->base.struct_size<sizeof(risc_civil_clock_retained_v1))return NULL;
+ const risc_civil_clock_retained_v1 *a=ptr;
+ return a->retained_version==1&&a->retained_tag==RISC_CIVIL_CLOCK_RETAINED_TAG&&a->cached_rule?a:NULL;
+}

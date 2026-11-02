@@ -60,9 +60,9 @@ if a.shared_view_output:
  shared=a.shared_system.resolve();sys.path.insert(0,str(shared/'scripts'))
  from shared_home_objects import emit_view
  # Single canonical SDK directory; do not mix pragma-once copies by search order.
- for name in ('PortableHomeBoot.h','PortableHomeBindings.h','PortableDeskClock.h'):
+ for name in ('PortableHomeBoot.h','PortableHomeBindings.h','PortableDeskClock.h','PortableTimeZone.h'):
   shutil.copyfile(shared/'lib/PortableApps/include'/name,includes[0]/name)
- for name in ('RiscCanvasV1.h','RiscCanvasInputV1.h','RiscHomePresentationV1.h','RiscResidentContextsV1.h'):
+ for name in ('RiscCanvasV1.h','RiscCanvasInputV1.h','RiscCivilClockV1.h','RiscHomePresentationV1.h','RiscResidentContextsV1.h'):
   shutil.copyfile(shared/'sdk/app'/name,includes[0]/name)
  sources += [shared/'lib/PortableApps/src/PortableTimeZone.c',shared/'lib/PortableApps/src/PortableTimeZoneCatalog.c']
  flags=[f for f in FLAGS if not f.startswith('-DWATCH_CRASH_REPORT_NAMESPACE=') and f!='-DPORTABLE_RTC_UTC8_DENVER']

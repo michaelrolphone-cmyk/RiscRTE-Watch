@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: michaelrolphone-cmyk/RiscRTE-System-Apps
-          ref: 198eadc44789f074072ebcb2df555bd9bf8055fd
+          ref: 0b74e200514fe8783c0b78841045611b91ef7358
           path: deps/system
           persist-credentials: false
       - uses: actions/checkout@v4
