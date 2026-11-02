@@ -1,6 +1,7 @@
 /* Real shared entry and installed provider implementations, controlled hardware only. */
 #include "RiscProviderV2.h"
 #include "RiscRuntimeV1.h"
+#include "RiscDisplayOutputV1.h"
 #include "RiscFailureEvidenceV1.h"
 #include "RiscCivilClockV1.h"
 #include "RiscCanvasInputV1.h"

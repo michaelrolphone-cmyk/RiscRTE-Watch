@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  shared=a.canvas_source
  for name in ('PortableHomeBoot.h','PortableHomeBindings.h','PortableDeskClock.h','PortableTimeZone.h'):
   shutil.copyfile(shared/'lib/PortableApps/include'/name,sdk/name)
- for name in ('RiscCanvasV1.h','RiscCanvasInputV1.h','RiscCivilClockV1.h','RiscHomePresentationV1.h','RiscResidentContextsV1.h'):
+ for name in ('RiscCanvasV1.h','RiscCanvasInputV1.h','RiscDisplayHistoryV1.h','RiscTouchPowerV1.h','RiscCivilClockV1.h','RiscHomePresentationV1.h','RiscResidentContextsV1.h'):
   shutil.copyfile(shared/'sdk/app'/name,sdk/name)
  for name in ('RiscRetainedWakeV1.h','RiscRealtimeV1.h','RiscProviderPromotionV1.h'):
   shutil.copyfile(ROOT/'apps/runtime_features/sdk'/name,sdk/name)
