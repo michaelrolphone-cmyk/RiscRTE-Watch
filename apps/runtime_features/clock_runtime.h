@@ -110,7 +110,7 @@ static inline bool watch_runtime_interpret(watch_clock_runtime*c,const twatch_rt
 }
 /* Returns civil calendar already projected by the installed policy, plus the
  * original snapshot fraction. Caller must NOT apply legacy display_time again. */
-static inline bool watch_runtime_read_projected(watch_clock_runtime*c,int64_t*utc_epoch,twatch_rtc_time_v1*out,uint16_t*fraction_ms) {
+static inline bool watch_runtime_read_policy(watch_clock_runtime*c,int64_t*utc_epoch,risc_civil_calendar_v1*out) {
  if(c->halted||!c->civil)return false;
  int64_t epoch;uint32_t ns=0;
  if(c->fallback) {
@@ -124,11 +124,19 @@ static inline bool watch_runtime_read_projected(watch_clock_runtime*c,int64_t*ut
  risc_civil_calendar_v1 value={.struct_size=sizeof(value)};
  int rc=c->civil->project(c->civil->context,epoch,ns,&value);
  if(!watch_runtime_civil_result(c,rc)||value.struct_size!=sizeof(value)||value.reserved||
-    value.nanoseconds!=ns||value.year<2000||value.year>2099)return false;
+    value.nanoseconds!=ns||value.year<2000||value.year>2099||!value.zone[0]||
+    !memchr(value.zone,0,sizeof(value.zone)))return false;
  twatch_rtc_time_v1 result={.year=(uint16_t)value.year,.month=value.month,.day=value.day,
   .hour=value.hour,.minute=value.minute,.second=value.second,.weekday=value.weekday};
  if(!tw_valid_time(&result))return false;
- *utc_epoch=epoch;*out=result;*fraction_ms=(uint16_t)(ns/1000000u);return true;
+ *utc_epoch=epoch;*out=value;return true;
+}
+static inline bool watch_runtime_read_projected(watch_clock_runtime*c,int64_t*utc_epoch,twatch_rtc_time_v1*out,uint16_t*fraction_ms) {
+ risc_civil_calendar_v1 value;
+ if(!watch_runtime_read_policy(c,utc_epoch,&value))return false;
+ *out=(twatch_rtc_time_v1){.year=(uint16_t)value.year,.month=value.month,.day=value.day,
+  .hour=value.hour,.minute=value.minute,.second=value.second,.weekday=value.weekday};
+ *fraction_ms=(uint16_t)(value.nanoseconds/1000000u);return true;
 }
 #endif
 /* Existing Watch RTC ownership is explicitly fixed UTC+08. The UTC native

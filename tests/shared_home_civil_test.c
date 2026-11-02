@@ -10,7 +10,7 @@ static int64_t seeded;
 static int32_t civil_read(void*p,risc_civil_time_v1*out){(void)p;(void)out;return -1;}
 static int32_t civil_project(void*p,int64_t epoch,uint32_t ns,risc_civil_calendar_v1*out) {
  (void)p;assert(epoch==(wide?INT64_C(4102444799):INT64_C(1704067237)));++civil_calls;if(civil_rc)return civil_rc;
- *out=(risc_civil_calendar_v1){.struct_size=sizeof(*out),.year=wide?2099:2024,.month=wide?12:1,.day=wide?31:1,.hour=12,.minute=17,.second=37,.nanoseconds=ns,.reserved=malformed};
+ *out=(risc_civil_calendar_v1){.struct_size=sizeof(*out),.year=wide?2099:2024,.month=wide?12:1,.day=wide?31:1,.hour=12,.minute=17,.second=37,.nanoseconds=ns,.reserved=malformed,.zone="UTC"};
  return 0;
 }
 static int32_t civil_interpret(void*p,const risc_civil_calendar_v1*raw,int64_t*out){
@@ -81,6 +81,7 @@ int main(void){
  assert(watch_runtime_seed(&c,&rtc_api)&&seeded==1704067237);
  assert(watch_runtime_read_projected(&c,&utc,&date,&fraction)&&utc==1704067237&&date.hour==12&&date.minute==17&&fraction==123);
  malformed=true;assert(!watch_runtime_read_projected(&c,&utc,&date,&fraction));malformed=false;
+ risc_civil_calendar_v1 policy;assert(watch_runtime_read_policy(&c,&utc,&policy)&&!strcmp(policy.zone,"UTC")&&policy.nanoseconds==123000000);
  assert(watch_runtime_close(&c)&&releases==3);
  for(unsigned i=0;i<2;i++){reset();civil_absent=i==0;civil_short=i==1;assert(watch_runtime_open(&c,&runtime,true));assert(!watch_runtime_bind_civil(&c));assert(!watch_runtime_seed(&c,&rtc_api));assert(watch_runtime_close(&c));}
  civil_absent=civil_short=false;reset();wide=true;seeded=0;
