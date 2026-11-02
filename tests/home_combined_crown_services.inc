@@ -136,7 +136,7 @@ static void hc_shared_run(void){
   if(!strcmp(canvas_case,"nav-radio-both"))assert(hc_live_peak==16&&!hc_battery_detached);
   if(!strcmp(canvas_case,"nav-radio-rebind-refused"))assert(hc_rebind_refused==1&&hc_battery_detached&&!battery_api);
  }
- if(!strcmp(canvas_case,"zero-crash-namespace"))assert(first_seen&&ready&&confirmations&&hc_zero_namespace_warnings==1&&!hc_evidence_calls&&!clock_crash_namespace_ready);
+ if(!strcmp(canvas_case,"zero-crash-namespace"))assert(first_seen&&ready&&confirmations&&hc_zero_namespace_warnings==1&&!hc_evidence_calls&&!clock_crash_namespace_ready&&hc_crash_inject&&launches==1);
  if(!hc_brightness_supported){
   assert(!hc_brightness_calls&&hardware_brightness==40&&quick_saved[0]&&quick_values[0]==60&&canvas_submits);
   if(!strcmp(canvas_case,"brightness-absent-save")){
@@ -145,6 +145,11 @@ static void hc_shared_run(void){
    assert(!face_writes&&!clock_quick.ui.brightness_valid&&!clock_quick.ui.torch_valid&&!pqa_visible(&clock_quick.ui));
   }else if(hc_dnd_save_case()){
    assert(!quick_writes&&hc_dnd_writes==1&&hc_dnd_value==1&&quick_values[1]==70&&quick_values[2]==33);
+   uint8_t copied[64];memset(copied,0xa5,sizeof(copied));uint32_t copied_size=99;
+   assert(face_get(NULL,PQA_DND_KEY,copied,sizeof(copied),&copied_size)==RISC_KEY_VALUE_OK&&copied_size==1&&copied[0]==1);
+   for(unsigned i=1;i<sizeof(copied);i++)assert(copied[i]==0xa5);
+   assert(face_get(NULL,PQA_DND_KEY,NULL,0,&copied_size)==RISC_KEY_VALUE_BUFFER_SMALL&&copied_size==1);
+   assert(face_get(NULL,PQA_DND_KEY,NULL,1,&copied_size)==RISC_KEY_VALUE_INVALID&&copied_size==0);
    assert(atomic_count==1&&!strcmp(atomic_keys[0],PQA_DND_KEY)&&atomic_sizes[0]==1&&atomic_values[0][0]==1);
    assert(!face_writes&&!clock_quick.ui.brightness_valid&&!clock_quick.ui.torch_valid&&!pqa_visible(&clock_quick.ui));
   }else{assert(!quick_writes&&canvas_controls_emitted&&pqa_visible(&clock_quick.ui));}
@@ -156,6 +161,11 @@ static void hc_shared_run(void){
 }
 
 static bool hc_crash_navigation(risc_input_navigation_frame_v1*out){
+ /* Finish through the real settled navigation/handoff path. Diagnostic
+  * observation must not revoke health before the following provider step. */
+ if(!strcmp(canvas_case,"zero-crash-namespace")&&hc_zero_namespace_warnings&&!hc_crash_inject){
+  hc_crash_inject=true;out->buttons=out->pressed=RISC_NAV_HOME;return true;
+ }
  if(strncmp(canvas_case,"crash-",6)||!clock_crash_modal)return false;
  if(hc_crash_inject){hc_crash_inject=false;out->buttons=out->pressed=RISC_NAV_CONFIRM;return true;}
  if(clock_ms-hc_crash_started<300){out->buttons=RISC_NAV_CONFIRM;return true;}
@@ -171,7 +181,7 @@ static void hc_shared_diagnostic(const char*s){
  if(!strncmp(canvas_case,"brightness-absent-save",22)&&strstr(s,"stage=services-ready"))ended=false;
  if(!strcmp(canvas_case,"zero-crash-namespace")){
   if(strstr(s,"stage=services-ready"))ended=false;
-  if(!strcmp(s,"HOME crash namespace unavailable")){++hc_zero_namespace_warnings;ended=true;}
+  if(!strcmp(s,"HOME crash namespace unavailable"))++hc_zero_namespace_warnings;
  }
  if((!strncmp(canvas_case,"output-",7)||hc_dnd_save_case())&&strstr(s,"stage=services-ready")){
   bool audible=clock_alarm.api&&(alarm_api.output_modes&ALARM_MODE_SOUND);assert(clock_quick.ui.volume_valid==audible);

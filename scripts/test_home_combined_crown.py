@@ -29,7 +29,7 @@ changes=tagged_changes+changes
 def replace_once(value,before,after):
  assert value.count(before)==1,(before,value.count(before))
  changes.append((before,after));return value.replace(before,after)
-quick_text=replace_once(quick_text,'static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){(void)c;*z=0;','static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){(void)c;*z=0;if(hc_dnd_save_case()&&!strcmp(k,PQA_DND_KEY)){assert(n==1);*(uint8_t*)b=hc_dnd_value;*z=1;return RISC_KEY_VALUE_OK;}')
+quick_text=replace_once(quick_text,'static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){(void)c;*z=0;','static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){(void)c;*z=0;if(hc_dnd_save_case()&&!strcmp(k,PQA_DND_KEY)){if(!b&&n)return RISC_KEY_VALUE_INVALID;*z=1;if(n<1)return RISC_KEY_VALUE_BUFFER_SMALL;*(uint8_t*)b=hc_dnd_value;return RISC_KEY_VALUE_OK;}')
 quick_text=replace_once(quick_text,'static bool battery(void*c,risc_battery_sample_v1*s){(void)c;','static bool battery(void*c,risc_battery_sample_v1*s){(void)c;assert(!hc_battery_detached);')
 quick_text=replace_once(quick_text,'assert(atomic_publishing);','assert(atomic_publishing);if(hc_dnd_save_case()&&!strcmp(k,PQA_DND_KEY)){assert(n==1);hc_dnd_value=*(const uint8_t*)b;++hc_dnd_writes;return RISC_KEY_VALUE_OK;}')
 text=replace_once(text,'#include "quick_clock_test.c"','#include "derived_quick.c"')
