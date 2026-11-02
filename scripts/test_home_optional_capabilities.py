@@ -18,6 +18,7 @@ changes=[
  ('static const risc_runtime_api_v1 fast_runtime=','static risc_runtime_api_v1 fast_runtime='),
  ('int main(void){','int inherited_fast_main(void){'),
  (' if(fail_capability&&!strcmp(n,fail_capability))return false;',''),
+ ('assert(points_loads==1&&face.points==&clock_points_view', 'assert(points_loads==(fail_capability&&!strcmp(fail_capability,RISC_KEY_VALUE_CAPABILITY)?0u:1u)&&face.points==&clock_points_view'),
  (' const void*p=NULL;',' if(fail_capability&&!strcmp(n,fail_capability))return false;\n const void*p=NULL;'),
 ]
 for before,after in changes:
@@ -29,7 +30,7 @@ tree=ast.parse((ROOT/'scripts/build.py').read_text())
 node=next(n.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FLAGS' for t in n.targets))
 selected=eval(compile(ast.Expression(node),'<build FLAGS>','eval'))
 defined=set(re.findall(r'^#define ([A-Z_]+)',fixture_source.read_text(),re.M))
-caps=['board.battery','rtc.clock','runtime.retained-wake','alarm.service','net.wifi','bluetooth.hci','telemetry.broadcast','contexts.service','power.sleep','input.power-key','display.power','storage.preferences','storage.files','motion.accel','software.installed-apps']
+caps=['storage.key-value','board.battery','rtc.clock','runtime.retained-wake','alarm.service','net.wifi','bluetooth.hci','telemetry.broadcast','contexts.service','power.sleep','input.power-key','display.power','storage.preferences','storage.files','motion.accel','software.installed-apps']
 required=['display.output','input.touch.raw','runtime.realtime-control','runtime.provider-promotion']
 commands=[];runs=[]
 with tempfile.TemporaryDirectory(prefix='home-optional-') as tmp:
