@@ -68,7 +68,7 @@ if a.shared_view_output:
   shutil.copyfile(ROOT/'apps/runtime_features/sdk'/name,includes[0]/name)
  sources += [shared/'lib/PortableApps/src/PortableTimeZone.c',shared/'lib/PortableApps/src/PortableTimeZoneCatalog.c']
  flags=[f for f in FLAGS if not f.startswith('-DWATCH_CRASH_REPORT_NAMESPACE=') and f!='-DPORTABLE_RTC_UTC8_DENVER']
- flags+=['-DWATCH_SHARED_HOME_BOOT','-DWATCH_SHARED_HOME_CIVIL','-DWATCH_HOME_CANVAS_INPUT',
+ flags+=['-DALARM_SERVICE_TAGGED_V2','-DWATCH_SHARED_HOME_BOOT','-DWATCH_SHARED_HOME_CIVIL','-DWATCH_HOME_CANVAS_INPUT',
   '-DWATCH_SHARED_HOME_RETAINED','-DPORTABLE_DESK_POINTS_SNAPSHOT',
   '-include',str(includes[0]/'PortableHomeBindings.h'),
   '-DWATCH_CRASH_REPORT_NAMESPACE=portable_home_crash_namespace()']

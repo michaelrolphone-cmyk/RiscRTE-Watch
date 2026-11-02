@@ -116,7 +116,7 @@ static bool clock_resident_actions(uint32_t events) {
     if(!clock_resident_alive())return false;
 #endif
 #ifdef WATCH_CLOCK_ALARMS
-    if(changed&&clock_alarm.api){(void)clock_alarm.api->refresh(clock_alarm.api->context);if(!clock_resident_alive())return false;}
+    if(changed&&clock_alarm.api){if(!clock_alarm_refresh_checked()||!clock_resident_alive())return false;}
 #endif
     if(!clock_quick.ui.radio_controls&&(actions&PQA_WIFI)) {
         memcpy(clock_resident_next,"wifi_settings.elf",sizeof("wifi_settings.elf"));

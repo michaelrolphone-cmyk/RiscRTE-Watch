@@ -14,7 +14,11 @@ static unsigned clock_contexts_power_modes(void) {
 }
 static unsigned clock_contexts_output_modes(void) {
 #ifdef WATCH_CLOCK_ALARMS
+ #ifdef ALARM_SERVICE_TAGGED_V2
+    return portable_alarm_output_modes(&clock_alarm);
+ #else
     return alarm_service_output_modes(clock_alarm.api);
+ #endif
 #else
     return 0;
 #endif

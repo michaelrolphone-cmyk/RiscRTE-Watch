@@ -1600,7 +1600,7 @@ __attribute__((visibility("default"))) void app_main(void) {
 #endif
 #endif
 #ifdef WATCH_CLOCK_ALARMS
-        if(volume_changed && clock_alarm.api)(void)clock_alarm.api->refresh(clock_alarm.api->context);
+        if(volume_changed && clock_alarm.api&&!clock_alarm_refresh_checked())break;
 #endif
         if(!clock_quick.ui.radio_controls && (quick_actions&PQA_WIFI)) {
             pqa_cancel(&clock_quick.ui);
@@ -1824,6 +1824,7 @@ done:
 #endif
 #ifdef WATCH_CLOCK_ALARMS
     clock_alarm_finish();
+    if(!clock_canvas_live())return;
 #endif
 #ifdef WATCH_CLOCK_LAUNCHER
     nova_watch_picker_cache_destroy(picker_scratch);picker_scratch=NULL;

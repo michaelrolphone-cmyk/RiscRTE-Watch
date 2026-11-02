@@ -109,6 +109,13 @@
       "path": "lib/PortableApps/include/PortableTimeZone.h",
       "git_blob": "5269c41f7cbea400c32f7f856fb486652fb45810",
       "sha256": "a683bbbda0805a13bc11d42e59b29f0a6ec4941eb3c58934e521c79ec1fd2cd7"
+    },
+    "sdk/app/AlarmServiceV2.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
+      "commit": "5ecf5fe5fe442b91d8fa66d895012f43ea581aa8",
+      "path": "lib/Alarm/include/AlarmServiceV2.h",
+      "git_blob": "76f25ce14030fd81dd190e7d51f3482e6394c5e7",
+      "sha256": "d7e750a8093e1b5e698483254edc38533b7242a3446d0bca5866c9dfd6ad07a1"
     }
   },
   "shared_source_overlays": {

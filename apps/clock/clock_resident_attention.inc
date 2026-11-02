@@ -5,6 +5,9 @@ static bool clock_attention_enabled,clock_attention_observing,clock_attention_al
 static bool clock_attention_sampled;
 #ifdef WATCH_CLOCK_ALARMS
 static uint32_t clock_attention_at,clock_attention_seconds;
+#ifdef ALARM_SERVICE_TAGGED_V2
+static uint32_t clock_attention_remaining;
+#endif
 #endif
 static uint32_t clock_attention_deadline;
 #ifdef WATCH_CLOCK_ALARMS
@@ -91,6 +94,20 @@ static bool clock_attention_prime(void) {
     * changes the copied snapshot/state and will request reconciliation. */
    clock_attention_seconds=clock_alarm.status.rtc_seconds;
   } else return false;
+#ifdef ALARM_SERVICE_TAGGED_V2
+  /* Service deadlines may be native UTC or provider RTC-domain. Observe the
+   * copied relative interval against a paired raw RTC anchor, never compare
+   * absolute values from different authorities or acquire civil/KV in capture. */
+  clock_attention_remaining=clock_attention_deadline>clock_attention_seconds?
+      clock_attention_deadline-clock_attention_seconds:0;
+  twatch_rtc_time_v1 sampled={0};uint32_t raw_seconds=0;
+  bool read=clock_attention_rtc->read(clock_attention_rtc->context,&sampled);
+  if(!clock_resident_alive())return false;
+  if(!read||sampled.weekday>6||!alarm_calendar_seconds(sampled.year,sampled.month,sampled.day,
+      sampled.hour,sampled.minute,sampled.second,&raw_seconds))return false;
+  clock_attention_seconds=raw_seconds;
+  if(clock_attention_deadline&&!clock_attention_remaining)clock_attention_alarm=true;
+#endif
   uint32_t anchor;if(!alive(&anchor)||!clock_resident_alive())return false;
   clock_attention_at=anchor;clock_attention_sampled=true;
   if(!clock_resident_background_pause()||!launcher_touch_close(&touch)||!clock_resident_alive())return false;
@@ -125,7 +142,15 @@ static int32_t clock_attention_observe(void *context,uint32_t now,risc_resident_
      uint64_t delta=seconds>=clock_attention_seconds?(uint64_t)seconds-clock_attention_seconds:UINT64_MAX;
      if(delta==UINT64_MAX||(delta>elapsed?delta-elapsed:elapsed-delta)>2u)clock_attention_alarm=true;
     }
+#ifdef ALARM_SERVICE_TAGGED_V2
+    if(clock_attention_deadline){
+     uint64_t elapsed=seconds>=clock_attention_seconds?(uint64_t)seconds-clock_attention_seconds:UINT64_MAX;
+     if(elapsed>=clock_attention_remaining)clock_attention_alarm=true;
+     else clock_attention_remaining-=(uint32_t)elapsed;
+    }
+#else
     if(clock_attention_deadline&&seconds>=clock_attention_deadline)clock_attention_alarm=true;
+#endif
     clock_attention_seconds=seconds;
    }
    clock_attention_at=now;clock_attention_sampled=true;
