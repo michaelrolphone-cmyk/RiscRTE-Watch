@@ -15,6 +15,8 @@ typedef struct {
  uint8_t tag;
  bool subscribed,gap;
  risc_input_navigation_frame_v1 navigation;
+ risc_canvas_event_v1 navigation_events[HOME_CANVAS_TOUCH_QUEUE];
+ unsigned navigation_head,navigation_count;
  bool controls;
 } home_canvas_touch;
 static inline int home_canvas_touch_find(const home_canvas_touch*t,uint64_t identity){
@@ -96,7 +98,7 @@ static uint64_t home_canvas_touch_subscribe(void*context){
  t->head=t->count=0;
  t->gap=false;
  t->navigation=(risc_input_navigation_frame_v1){0};
- t->controls=false;
+ t->controls=false;t->navigation_head=t->navigation_count=0;
  if(!home_canvas_touch_sync(t))return 0;
  t->subscribed=true;
  return 1;
@@ -106,6 +108,7 @@ static bool home_canvas_touch_unsubscribe(void*context,uint64_t id){
  if(t->surface->retained||id!=1||!t->subscribed)return false;
  t->subscribed=false;
  t->head=t->count=0;
+ t->navigation_head=t->navigation_count=0;
  return true;
 }
 static bool home_canvas_touch_poll(void*context,size_t budget){
@@ -113,7 +116,7 @@ static bool home_canvas_touch_poll(void*context,size_t budget){
  home_canvas_surface*s=t->surface;(void)budget;
  if(s->retained||!t->subscribed||!home_canvas_resume(s))return false;
  for(unsigned n=0;
- n<HOME_CANVAS_TOUCH_QUEUE&&t->count<HOME_CANVAS_TOUCH_QUEUE;
+ n<HOME_CANVAS_TOUCH_QUEUE&&t->count<HOME_CANVAS_TOUCH_QUEUE&&t->navigation_count<HOME_CANVAS_TOUCH_QUEUE;
  n++){
   risc_canvas_event_v1 e={.struct_size=sizeof(e)};
   int32_t rc=s->canvas->next(s->canvas->context,s->session,&e);
@@ -122,22 +125,20 @@ static bool home_canvas_touch_poll(void*context,size_t budget){
  return false;}
   if(e.struct_size<sizeof(e)||e.kind<RISC_CANVAS_CONTACT||e.kind>RISC_CANVAS_CONTROLS_REQUEST){home_canvas_retain(s);
  return false;}
-  if(e.kind==RISC_CANVAS_NAVIGATION){
-   t->navigation.buttons=e.navigation.buttons;
- t->navigation.pressed|=e.navigation.pressed;
-   t->navigation.released|=e.navigation.released;
- continue;
+  if(e.kind==RISC_CANVAS_NAVIGATION||e.kind==RISC_CANVAS_CONTROLS_REQUEST){
+   t->navigation_events[(t->navigation_head+t->navigation_count++)%HOME_CANVAS_TOUCH_QUEUE]=e;
+   continue;
   }
-  if(e.kind==RISC_CANVAS_CONTROLS_REQUEST){t->controls=true;
- continue;}
   if(e.kind==RISC_CANVAS_INPUT_GAP||e.kind==RISC_CANVAS_GEOMETRY_CHANGED||e.phase==RISC_CANVAS_CANCEL){
    t->head=t->count=0;
+ t->navigation_head=t->navigation_count=0;
  t->gap=true;
  return home_canvas_touch_sync(t);
   }
   if(e.geometry_revision!=s->geometry.revision||e.x<0||e.y<0||
      (uint32_t)e.x>=s->geometry.width||(uint32_t)e.y>=s->geometry.height){
    t->head=t->count=0;
+ t->navigation_head=t->navigation_count=0;
  t->gap=true;
  return home_canvas_touch_sync(t);
   }
@@ -145,6 +146,7 @@ static bool home_canvas_touch_poll(void*context,size_t budget){
  uint8_t tag=0;
   if(e.phase==RISC_CANVAS_DOWN){
    if(at>=0||t->snapshot.contact_count==RISC_TOUCH_MAX_CONTACTS){t->head=t->count=0;
+ t->navigation_head=t->navigation_count=0;
  t->gap=true;
  return home_canvas_touch_sync(t);}
    tag=home_canvas_touch_tag(t);
@@ -156,6 +158,7 @@ static bool home_canvas_touch_poll(void*context,size_t budget){
  t->snapshot.contacts[at].x=(uint16_t)e.x;
  t->snapshot.contacts[at].y=(uint16_t)e.y;
   }else {t->head=t->count=0;
+ t->navigation_head=t->navigation_count=0;
  t->gap=true;
  return home_canvas_touch_sync(t);}
   if(t->snapshot.sequence==UINT64_MAX){home_canvas_retain(s);
@@ -196,9 +199,17 @@ static inline void home_canvas_touch_init(home_canvas_touch*t,home_canvas_surfac
  home_canvas_touch_unsubscribe,home_canvas_touch_poll,home_canvas_touch_next,home_canvas_touch_snapshot};
 }
 static inline risc_input_navigation_frame_v1 home_canvas_touch_navigation(home_canvas_touch*t,bool*controls){
- risc_input_navigation_frame_v1 n=t->navigation;
- *controls=t->controls;
- t->navigation.pressed=t->navigation.released=0;
- t->controls=false;
+ *controls=false;
+ risc_input_navigation_frame_v1 n={.buttons=t->navigation.buttons};
+ if(t->navigation_count){
+  const risc_canvas_event_v1*event=&t->navigation_events[t->navigation_head];
+  if(event->kind==RISC_CANVAS_CONTROLS_REQUEST)*controls=true;
+  else {n=event->navigation;t->navigation.buttons=n.buttons;}
+  t->navigation_head=(t->navigation_head+1)%HOME_CANVAS_TOUCH_QUEUE;--t->navigation_count;
+ }
  return n;
+}
+static inline void home_canvas_touch_discard_navigation(home_canvas_touch*t){
+ t->navigation_head=t->navigation_count=0;
+ t->navigation.pressed=t->navigation.released=0;t->controls=false;
 }

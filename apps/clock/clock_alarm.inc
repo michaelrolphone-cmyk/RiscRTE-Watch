@@ -103,7 +103,7 @@ static bool clock_alarm_foreground(void) {
        clock_alarm_seen_error==clock_alarm.status.error && clock_alarm_seen_snapshot==clock_alarm.status.snapshot)))return true;
     clock_alarm_cancel_input();clock_alarm_modal=true;
 #ifdef WATCH_HOME_CANVAS
-    if(clock_canvas_selected){bool controls=false;(void)home_canvas_touch_navigation(&clock_canvas_touch,&controls);}
+    if(clock_canvas_selected)home_canvas_touch_discard_navigation(&clock_canvas_touch);
 #endif
     portable_touch alert_touch={.api=touch.api,.subscription=touch.subscription};
     uint32_t discarded;
