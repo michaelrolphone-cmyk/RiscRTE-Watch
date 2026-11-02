@@ -42,3 +42,7 @@ static bool hc_brightness(void*,uint16_t,uint16_t);
 static unsigned hc_expected_brightness(void);
 
 static unsigned hc_evidence_calls,hc_zero_namespace_warnings;
+static bool hc_save_navigation(risc_input_navigation_frame_v1*);
+static uint8_t hc_dnd_value;
+static unsigned hc_dnd_writes;
+static bool hc_dnd_save_case(void);

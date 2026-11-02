@@ -46,6 +46,7 @@ static int hc_shared_acquire(const char*name,uint32_t version,uint64_t instance,
  }
  if(!strcmp(name,RISC_KEY_VALUE_CAPABILITY)&&instance==1)hc_view_seen=true;
 
+ if(!strcmp(name,ALARM_SERVICE_FACADE_CAPABILITY)&&!strcmp(canvas_case,"brightness-absent-save-dnd-absent"))return 0;
  if(!strcmp(name,RISC_KEY_VALUE_CAPABILITY)&&instance==5){
   assert(version==1&&hc_expected_points_loads());++grants;++points_loads;g->api=&hc_points_kv;return 1;
  }
@@ -76,11 +77,14 @@ static int hc_shared_acquire(const char*name,uint32_t version,uint64_t instance,
  return -1;
 }
 static void hc_shared_start(void){
+ hc_dnd_value=0;hc_dnd_writes=0;
+ if(hc_dnd_save_case()&&strcmp(canvas_case+27,"absent"))alarm_api.output_modes=(unsigned)strtoul(canvas_case+27,NULL,10);
  hc_brightness_supported=strncmp(canvas_case,"brightness-absent-",18)!=0;hc_brightness_calls=0;
  da.base.get_info=hc_display_info;da.base.set_brightness=hc_brightness;
  if(!strcmp(canvas_case,"brightness-absent-null")||!strcmp(canvas_case,"brightness-null-advertised"))da.base.set_brightness=NULL;
  fixture_physical.set_brightness=da.base.set_brightness;
  if(!hc_brightness_supported){quick_saved[0]=true;quick_values[0]=60;}
+ if(!strncmp(canvas_case,"brightness-absent-save",22)){quick_saved[1]=quick_saved[2]=true;quick_values[1]=70;quick_values[2]=33;}
  if(!strncmp(canvas_case,"output-",7))alarm_api.output_modes=(unsigned)strtoul(canvas_case+7,NULL,10);
  if(!strncmp(canvas_case,"alarm-ack-",10)){alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;}
  hc_wifi=qa_wifi;hc_wifi.disconnect_checked=hc_wifi_off;hc_query_pure=false;hc_query_dispatches=hc_wifi_disconnects=0;
@@ -123,7 +127,18 @@ static void hc_shared_run(void){
  fprintf(stderr,"Home actual acquisition boundary peak=%u overflows=%u live=%u\n",hc_live_peak,hc_capacity_refusals,grants-ungrants);
  assert(!hc_capacity_refusals);
  if(!strcmp(canvas_case,"zero-crash-namespace"))assert(first_seen&&ready&&confirmations&&hc_zero_namespace_warnings==1&&!hc_evidence_calls&&!clock_crash_namespace_ready);
- if(!hc_brightness_supported){assert(!hc_brightness_calls&&hardware_brightness==40&&quick_saved[0]&&quick_values[0]==60&&!quick_writes);assert(canvas_controls_emitted&&pqa_visible(&clock_quick.ui)&&canvas_submits);}
+ if(!hc_brightness_supported){
+  assert(!hc_brightness_calls&&hardware_brightness==40&&quick_saved[0]&&quick_values[0]==60&&canvas_submits);
+  if(!strcmp(canvas_case,"brightness-absent-save")){
+   assert(quick_writes==1&&quick_saved[1]&&quick_values[1]==60&&quick_saved[2]&&quick_values[2]==33);
+   assert(atomic_count==1&&!strcmp(atomic_keys[0],"alarm_volume")&&atomic_sizes[0]==1&&atomic_values[0][0]==60);
+   assert(!face_writes&&!clock_quick.ui.brightness_valid&&!clock_quick.ui.torch_valid&&!pqa_visible(&clock_quick.ui));
+  }else if(hc_dnd_save_case()){
+   assert(!quick_writes&&hc_dnd_writes==1&&hc_dnd_value==1&&quick_values[1]==70&&quick_values[2]==33);
+   assert(atomic_count==1&&!strcmp(atomic_keys[0],PQA_DND_KEY)&&atomic_sizes[0]==1&&atomic_values[0][0]==1);
+   assert(!face_writes&&!clock_quick.ui.brightness_valid&&!clock_quick.ui.torch_valid&&!pqa_visible(&clock_quick.ui));
+  }else{assert(!quick_writes&&canvas_controls_emitted&&pqa_visible(&clock_quick.ui));}
+ }
  if(!strncmp(canvas_case,"provision",9))assert(fixture_provision_scans==5&&fixture_volume_acquires==1&&stage_calls==2);
 
  if(!retained_fence){if(first_seen)assert(hc_points_reads==(hc_expected_points_loads()?(WATCH_POINTS_EXTENDED?2u:1u):0u));hc_entry_fini();if(hc_shared_input_started){assert(hc_input_driver->quiesce());hc_input_driver->stop();}
@@ -142,9 +157,13 @@ static bool hc_crash_navigation(risc_input_navigation_frame_v1*out){
  out->buttons=out->pressed=RISC_NAV_CONFIRM;return true;
 }
 static void hc_shared_diagnostic(const char*s){
+ if(!strncmp(canvas_case,"brightness-absent-save",22)&&strstr(s,"stage=services-ready"))ended=false;
  if(!strcmp(canvas_case,"zero-crash-namespace")){
   if(strstr(s,"stage=services-ready"))ended=false;
   if(!strcmp(s,"HOME crash namespace unavailable")){++hc_zero_namespace_warnings;ended=true;}
+ }
+ if((!strncmp(canvas_case,"output-",7)||hc_dnd_save_case())&&strstr(s,"stage=services-ready")){
+  bool audible=clock_alarm.api&&(alarm_api.output_modes&ALARM_MODE_SOUND);assert(clock_quick.ui.volume_valid==audible);
  }
  if(!hc_brightness_supported&&strstr(s,"stage=services-ready")){
   assert(!clock_quick.ui.brightness_valid&&!clock_quick.ui.torch_valid&&!hc_brightness_calls&&hardware_brightness==40);
@@ -250,3 +269,22 @@ static bool hc_brightness(void*c,uint16_t value,uint16_t maximum){
  return fast_brightness(c,value,maximum);
 }
 static unsigned hc_expected_brightness(void){return hc_brightness_supported?clock_quick.brightness:40u;}
+
+static bool hc_dnd_save_case(void){return !strncmp(canvas_case,"brightness-absent-save-dnd-",27);}
+static bool hc_save_navigation(risc_input_navigation_frame_v1*out){
+ if(strncmp(canvas_case,"brightness-absent-save",22))return false;
+ if(!first_seen)return true;
+ if(navigation_release){navigation_release=false;return true;}
+ if(clock_ms-navigation_at<300)return true;
+ const uint32_t volume[]={RISC_NAV_UP,RISC_NAV_RIGHT,RISC_NAV_DOWN,RISC_NAV_LEFT,RISC_NAV_BACK};
+ const uint32_t dnd_unavailable[]={RISC_NAV_UP,RISC_NAV_RIGHT,RISC_NAV_DOWN,RISC_NAV_RIGHT,RISC_NAV_DOWN,RISC_NAV_CONFIRM,RISC_NAV_DOWN,RISC_NAV_CONFIRM,RISC_NAV_BACK};
+ const uint32_t dnd_audible[]={RISC_NAV_UP,RISC_NAV_RIGHT,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_CONFIRM,RISC_NAV_BACK};
+ bool dnd=hc_dnd_save_case(),audible=clock_alarm.api&&(alarm_api.output_modes&ALARM_MODE_SOUND);
+ const uint32_t*keys=!dnd?volume:audible?dnd_audible:dnd_unavailable;
+ unsigned count=!dnd?5u:audible?7u:9u;
+ if(navigation_phase>=count){
+  if((dnd?hc_dnd_writes==1:quick_writes==1)&&!clock_quick_scope&&!quick_atomic_running&&!pqa_visible(&clock_quick.ui))ended=true;
+  return true;
+ }
+ out->buttons=out->pressed=keys[navigation_phase++];navigation_at=clock_ms;navigation_release=true;return true;
+}

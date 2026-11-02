@@ -16,6 +16,7 @@ p.add_argument('--sanitized',action='store_true');a=p.parse_args();a.output.mkdi
 actual=subprocess.check_output(['git','-C',str(a.canvas_source),'rev-parse','HEAD'],text=True).strip()
 assert actual==CANVAS_COMMIT,(actual,CANVAS_COMMIT)
 fixture_source=ROOT/'tests/fast_wake_clock_test.c';quick_source=ROOT/'tests/quick_clock_test.c'
+quick_text=quick_source.read_text()
 text,tagged_changes=tagged_alarm(fixture_source.read_text())
 changes = [
  ('static bool fast_diagnostic(const char*s){','static bool fast_diagnostic(const char*s){fprintf(stderr,"%s\\n",s);'),
@@ -28,6 +29,9 @@ changes=tagged_changes+changes
 def replace_once(value,before,after):
  assert value.count(before)==1,(before,value.count(before))
  changes.append((before,after));return value.replace(before,after)
+quick_text=replace_once(quick_text,'static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){(void)c;*z=0;','static int32_t face_get(void*c,const char*k,void*b,uint32_t n,uint32_t*z){(void)c;*z=0;if(hc_dnd_save_case()&&!strcmp(k,PQA_DND_KEY)){assert(n==1);*(uint8_t*)b=hc_dnd_value;*z=1;return RISC_KEY_VALUE_OK;}')
+quick_text=replace_once(quick_text,'assert(atomic_publishing);','assert(atomic_publishing);if(hc_dnd_save_case()&&!strcmp(k,PQA_DND_KEY)){assert(n==1);hc_dnd_value=*(const uint8_t*)b;++hc_dnd_writes;return RISC_KEY_VALUE_OK;}')
+text=replace_once(text,'#include "quick_clock_test.c"','#include "derived_quick.c"')
 before='if(face.time_valid){twatch_rtc_time_v1 raw={0},expected={0};assert(watch_runtime_calendar(native_time.epoch_seconds,&raw));assert(watch_display_time(&raw,&expected));assert(!memcmp(&face.time,&expected,sizeof(expected)));}'
 text=replace_once(text,before,'if(face.time_valid)hc_shared_expected();')
 text=replace_once(text,'static void check_io(void){assert(!retained_fence);}','static void check_io(void){assert(!retained_fence&&!hc_query_pure);}')
@@ -47,7 +51,7 @@ controls=replace_once(controls,'canvas_provider_init(&fixture_canvas,&fixture_ph
 controls=replace_once(controls,' fixture_canvas.navigation=&hc_navigation;','')
 controls=replace_once(controls,'if(!strncmp(canvas_case,"alarm-",6)){alarm_touch_test=true;','if(!strcmp(canvas_case,"alarm-above")||!strcmp(canvas_case,"alarm-retry")){alarm_touch_test=true;')
 controls=replace_once(controls,'if(!strncmp(canvas_case,"alarm-",6))assert(alarm_touch_phase','if(!strcmp(canvas_case,"alarm-above")||!strcmp(canvas_case,"alarm-retry"))assert(alarm_touch_phase')
-controls=replace_once(controls,'if(!strcmp(canvas_case,"controls-button")&&first_seen','if((!strcmp(canvas_case,"controls-button")||!strncmp(canvas_case,"brightness-absent-",18))&&first_seen')
+controls=replace_once(controls,'if(!strcmp(canvas_case,"controls-button")&&first_seen','if((!strcmp(canvas_case,"controls-button")||(!strncmp(canvas_case,"brightness-absent-",18)&&strncmp(canvas_case,"brightness-absent-save",22)))&&first_seen')
 controls=replace_once(controls,'  check_clean();','  check_clean();if(!strcmp(canvas_case,"brightness-refuse")||!strcmp(canvas_case,"brightness-null-advertised")){assert(!first_seen&&!confirmations);free(physical_pixels);puts("Advertised malformed/refused brightness safely refuses startup PASS");return 0;}')
 controls=replace_once(controls,'.supported_formats=RISC_DISPLAY_FORMAT_BIT(physical_format)};return true;','.supported_formats=RISC_DISPLAY_FORMAT_BIT(physical_format),.flags=hc_brightness_supported?RISC_DISPLAY_INFO_BRIGHTNESS:0};return true;')
 controls=replace_once(controls,' hc_reset(format,rotation);',' hc_reset(format,rotation);hc_shared_start();')
@@ -58,7 +62,7 @@ controls=replace_once(controls,'confirmations==1+wake_count','confirmations==1+w
 controls=replace_once(controls,'if(!strcmp(canvas_case,"malformed-api")){assert(!first_seen&&!canvas_submits&&!confirmations);',
  'if(!strcmp(canvas_case,"malformed-api")||!strcmp(canvas_case,"absent")||!strcmp(canvas_case,"companion-absent")||!strcmp(canvas_case,"companion-malformed")||!strcmp(canvas_case,"policy-absent")||!strcmp(canvas_case,"policy-null")||!strcmp(canvas_case,"boot-null")){assert(!first_seen&&!canvas_submits&&!confirmations);')
 
-controls=replace_once(controls,'if(strncmp(canvas_case,"nav-",4)||!first_seen)return true;','if(hc_crash_navigation(out))return true;\n if(strncmp(canvas_case,"nav-",4)||!first_seen)return true;')
+controls=replace_once(controls,'if(strncmp(canvas_case,"nav-",4)||!first_seen)return true;','if(hc_save_navigation(out)||hc_crash_navigation(out))return true;\n if(strncmp(canvas_case,"nav-",4)||!first_seen)return true;')
 controls=replace_once(controls,'++canvas_submits;return canvas_provider_submit(c,s,lease,out);','++canvas_submits;if(clock_crash_modal)++hc_crash_frames;return canvas_provider_submit(c,s,lease,out);')
 controls=replace_once(controls,'static int32_t hc_next(void*c,uint64_t s,risc_canvas_event_v1*out){','static int32_t hc_next(void*c,uint64_t s,risc_canvas_event_v1*out){\n if(!strcmp(canvas_case,"crash-retained")&&clock_crash_modal&&hc_crash_frames){check_io();canvas_faulted=true;return RISC_CANVAS_RETAINED;}')
 controls=replace_once(controls,'ended=false;return ok;}','ended=false;hc_shared_diagnostic(s);return ok;}')
@@ -66,6 +70,7 @@ controls=replace_once(controls,'ended=false;return ok;}','ended=false;hc_shared_
 text=(ROOT/'tests/home_combined_crown_prefix.inc').read_text()+'\n'+text+'\n'+controls+'\n'+(ROOT/'tests/home_combined_crown_services.inc').read_text()
 
 (a.output/'generated_fixture.c').write_text(text)
+(a.output/'derived_quick.c').write_text(quick_text)
 tree=ast.parse((ROOT/'scripts/build.py').read_text())
 node=next(n.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FLAGS' for t in n.targets))
 selected=eval(compile(ast.Expression(node),'<build FLAGS>','eval'))
@@ -90,7 +95,7 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
    exec(compile(ast.Module(body=[statement],type_ignores=[]),'<production shared flags>','exec'),env)
  selected=env['flags']
  assert all('-D'+name in selected for name in ('WATCH_SHARED_HOME_BOOT','WATCH_SHARED_HOME_CIVIL','WATCH_HOME_CANVAS_INPUT','WATCH_SHARED_HOME_RETAINED'))
- fixture=w/'fixture.c';fixture.write_text(text)
+ fixture=w/'fixture.c';fixture.write_text(text);(w/'derived_quick.c').write_text(quick_text)
  flags=['-O1','-g1','-Wall','-Wextra','-Werror','-Wno-unused-function',
   '-include',str(sdk/'PortableHomeBindings.h'),'-DPORTABLE_LOW_BATTERY',f'-DTEST_WIDTH={a.width}u',f'-DTEST_HEIGHT={a.height}u',
   *[v for v in selected if v.startswith('-D') and v[2:].split('=')[0] not in defined],
@@ -118,7 +123,7 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
  cases+=[(mode,5,0) for mode in ('absent','malformed-api','open-retained','open-unknown','geometry-retained',
   'begin-retained','begin-unknown','malformed-frame','submit-retained','poll-retained','poll-unknown',
   'input-retained','quiesce-retained','close-retained','physical-retained',
-  'companion-absent','companion-malformed','companion-retained','companion-close-retained','civil-absent','civil-malformed','civil-retained','zero-crash-namespace','brightness-absent-refuse','brightness-absent-null','brightness-refuse','brightness-null-advertised','civil-lost-retained','companion-lost-retained','boot-read-lost-retained','view-read-lost-retained','alarm-status-lost-retained','alarm-step-lost-retained','alarm-refresh-lost-retained','alarm-ack-lost-retained','alarm-status-retained','alarm-status-unknown','alarm-step-retained','alarm-step-unknown','alarm-refresh-retained','alarm-refresh-unknown','alarm-ack-retained','alarm-ack-unknown','output-0','output-1','output-2','output-3','contexts-query','schema-native','schema-unspecified','schema-catalog','schema-malformed','fraction','crash-navigation','crash-retained','provision','provision-volume','boot-acquire-retained','policy-acquire-retained','view-acquire-retained',
+  'companion-absent','companion-malformed','companion-retained','companion-close-retained','civil-absent','civil-malformed','civil-retained','zero-crash-namespace','brightness-absent-save-dnd-0','brightness-absent-save-dnd-1','brightness-absent-save-dnd-2','brightness-absent-save-dnd-3','brightness-absent-save-dnd-absent','brightness-absent-save','brightness-absent-refuse','brightness-absent-null','brightness-refuse','brightness-null-advertised','civil-lost-retained','companion-lost-retained','boot-read-lost-retained','view-read-lost-retained','alarm-status-lost-retained','alarm-step-lost-retained','alarm-refresh-lost-retained','alarm-ack-lost-retained','alarm-status-retained','alarm-status-unknown','alarm-step-retained','alarm-step-unknown','alarm-refresh-retained','alarm-refresh-unknown','alarm-ack-retained','alarm-ack-unknown','output-0','output-1','output-2','output-3','contexts-query','schema-native','schema-unspecified','schema-catalog','schema-malformed','fraction','crash-navigation','crash-retained','provision','provision-volume','boot-acquire-retained','policy-acquire-retained','view-acquire-retained',
   'boot-absent','policy-absent','view-absent','boot-null','policy-null','view-null',
   'boot-null-release-retained','policy-null-release-retained','view-null-release-retained')]
  for mode,encoding,rotation in cases:
@@ -145,7 +150,7 @@ sources+=list((ROOT/'apps/clock').rglob('*.h'))+list((ROOT/'apps/clock').glob('*
 provider={str(f.relative_to(a.canvas_source)):digest(f) for f in (a.canvas_source/'Services/canvas_host').glob('*.h')}
 (a.output/'receipt.json').write_text(json.dumps(dict(schema=1,width=a.width,height=a.height,sanitized=a.sanitized,
  production_flags=True,canvas_source_commit=actual,hardware_tested=False,fixture_edits=changes,
- generated_fixture_sha256=hashlib.sha256(text.encode()).hexdigest(),commands=commands,runs=runs,
+ generated_fixture_sha256=hashlib.sha256(text.encode()).hexdigest(),generated_quick_sha256=hashlib.sha256(quick_text.encode()).hexdigest(),commands=commands,runs=runs,
  source_sha256={str(v.relative_to(ROOT)):digest(v) for v in sources},
  staged_source_header_sha256=compiled,compiled_dependency_sha256=compiled_dependencies,canvas_provider_source_sha256=provider),indent=2)+'\n')
 
