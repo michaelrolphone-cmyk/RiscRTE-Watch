@@ -35,3 +35,20 @@ static inline const risc_civil_clock_policy_v1 *risc_civil_clock_get_policy(cons
   a->policy_version==1&&a->policy_tag==RISC_CIVIL_CLOCK_POLICY_TAG&&a->project&&a->interpret_rtc?a:NULL;
 }
 /* 0=valid, -1=unavailable/invalid time, -9=retained; do no further I/O on -9. */
+
+/* Optional schedule suffix. The policy prefix above never grows. Inverse is
+ * read-only: success returns 0, 1 or 2 sorted UTC candidates for a civil time;
+ * gaps/folds are explicit and no implicit choice or normalization occurs. */
+#define RISC_CIVIL_CLOCK_SCHEDULE_TAG UINT32_C(0x43495331)
+typedef struct {uint32_t struct_size,count;int64_t epoch[2];} risc_civil_inverse_v1;
+typedef struct {
+ risc_civil_clock_policy_v1 base;
+ uint32_t schedule_version,schedule_tag;
+ int32_t (*inverse)(void *,const risc_civil_calendar_v1 *,risc_civil_inverse_v1 *);
+} risc_civil_clock_schedule_v1;
+static inline const risc_civil_clock_schedule_v1 *risc_civil_clock_get_schedule(const void *ptr,size_t bytes) {
+ const risc_civil_clock_policy_v1 *base=risc_civil_clock_get_policy(ptr,bytes);
+ if(!base||bytes<sizeof(risc_civil_clock_schedule_v1)||base->struct_size<sizeof(risc_civil_clock_schedule_v1))return NULL;
+ const risc_civil_clock_schedule_v1 *a=ptr;
+ return a->schedule_version==1&&a->schedule_tag==RISC_CIVIL_CLOCK_SCHEDULE_TAG&&a->inverse?a:NULL;
+}

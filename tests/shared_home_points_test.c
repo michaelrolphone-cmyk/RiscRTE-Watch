@@ -13,7 +13,36 @@ static int32_t interpret(void *ctx,const risc_civil_calendar_v1 *v,int64_t *out)
     if(!alarm_calendar_seconds(v->year,v->month,v->day,v->hour,v->minute,v->second,&raw))return -1;
     *out=INT64_C(946684800)+raw-28800;return 0;
 }
-static risc_civil_clock_policy_v1 policy={.interpret_rtc=interpret};
+static unsigned civil_calls,fail_at;
+static int32_t civil_failure;
+static int32_t project(void *ctx,int64_t epoch,uint32_t ns,risc_civil_calendar_v1 *out) {
+    (void)ctx;civil_calls++;
+    if(fail_at&&civil_calls>=fail_at)return civil_failure;
+    if(epoch<INT64_C(946656000)||epoch>INT64_C(4102415999))return -1;
+    twatch_rtc_time_v1 raw,local;
+    if(!points_calendar((uint32_t)(epoch-INT64_C(946684800)+28800),&raw)||!portable_time_forward(&raw,&local))return -1;
+    *out=(risc_civil_calendar_v1){.struct_size=sizeof(*out),.year=local.year,.month=local.month,.day=local.day,
+        .hour=local.hour,.minute=local.minute,.second=local.second,.weekday=local.weekday,.nanoseconds=ns,.zone="America/Denver"};
+    return 0;
+}
+static int32_t inverse(void *ctx,const risc_civil_calendar_v1 *v,risc_civil_inverse_v1 *out) {
+    (void)ctx;civil_calls++;
+    if(fail_at&&civil_calls>=fail_at)return civil_failure;
+    twatch_rtc_time_v1 local={(uint16_t)v->year,v->month,v->day,v->weekday,v->hour,v->minute,v->second};
+    portable_time_candidate candidates[2];
+    *out=(risc_civil_inverse_v1){.struct_size=sizeof(*out),.count=portable_time_inverse(&local,candidates)};
+    for(unsigned i=0;i<out->count;i++) {
+        const twatch_rtc_time_v1 *raw=&candidates[i].rtc;uint32_t at;
+        assert(alarm_calendar_seconds(raw->year,raw->month,raw->day,raw->hour,raw->minute,raw->second,&at));
+        out->epoch[i]=INT64_C(946684800)+at-28800;
+    }
+    return 0;
+}
+static risc_civil_clock_schedule_v1 schedule={
+    .base={.api_version=1,.struct_size=sizeof(schedule),.policy_version=1,.policy_tag=RISC_CIVIL_CLOCK_POLICY_TAG,
+        .project=project,.interpret_rtc=interpret},
+    .schedule_version=1,.schedule_tag=RISC_CIVIL_CLOCK_SCHEDULE_TAG,.inverse=inverse};
+#define policy schedule.base
 static void event_equal(const nova_point_event *a,const nova_point_event *b) {
     assert(a->at_rtc>=28800&&a->at_rtc-28800==b->at_rtc);
     assert(a->hour==b->hour&&a->minute==b->minute&&a->kind==b->kind);
@@ -27,7 +56,7 @@ static void differential(points_config *cfg,points_meta *meta,uint32_t raw) {
     points_config_encode(cfg,before);points_meta_encode(meta,mbefore);
     bool old=watch_points_projection(cfg,meta,raw,&a);
     bool newer=watch_points_projection_utc(cfg,meta,WATCH_POINTS_RECORD_RTC,INT64_C(946684800)+raw-28800,&civil,&policy,&b,&rc);
-    assert(old==newer&&rc==0);
+    assert(old==newer&&(rc==0||(!old&&rc==-1)));
     if(old) {
         assert(a.status==b.status&&a.phase==b.phase&&a.next_count==b.next_count&&a.today_count==b.today_count);
         assert(a.previous_valid==b.previous_valid&&a.work_valid==b.work_valid);
@@ -78,7 +107,17 @@ int main(void) {
         assert(!watch_points_projection_utc(&cfg,&meta,WATCH_POINTS_RECORD_RTC,1793610000,&civil,&policy,&out,&rc));
         assert(rc==f&&out.status==NOVA_POINTS_ERROR&&interpret_calls==before+1);checks++;
     }
-    failure=0;cfg.created=0;unsigned before=interpret_calls;
+    failure=0;cfg.created=0;
+    /* Terminal custody lost during recurrence is sticky: no further provider
+       calls, including while the pure recurrence loops finish unwinding. */
+    fail_at=civil_calls+7;civil_failure=-9;
+    assert(!watch_points_projection_utc(&cfg,&meta,WATCH_POINTS_RECORD_RTC,1793610000,&civil,&policy,&out,&rc));
+    assert(rc==-9&&civil_calls==fail_at&&out.status==NOVA_POINTS_ERROR);checks++;
+    fail_at=0;
+    risc_civil_clock_policy_v1 prefix=policy;prefix.struct_size=sizeof(prefix);
+    assert(!watch_points_projection_utc(&cfg,&meta,WATCH_POINTS_RECORD_RTC,1793610000,&civil,&prefix,&out,&rc));
+    assert(out.status==NOVA_POINTS_UNAVAILABLE);checks++;
+    unsigned before=interpret_calls;
     assert(watch_points_projection_utc(&cfg,&meta,WATCH_POINTS_RECORD_UTC,1793610000,&civil,NULL,&out,&rc));
     assert(interpret_calls==before&&rc==0);checks++;
     assert(!watch_points_projection_utc(&cfg,&meta,WATCH_POINTS_RECORD_RTC,

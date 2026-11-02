@@ -56,10 +56,17 @@
     },
     "sdk/app/PointsUtcSchedule.h": {
       "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
-      "commit": "f034d5d8a07bbefdbf719f35f1ae7bb9608ace49",
+      "commit": "5ecf5fe5fe442b91d8fa66d895012f43ea581aa8",
       "path": "lib/Alarm/include/PointsUtcSchedule.h",
-      "git_blob": "b420cf83e5db5e15d89f7940165abbdf458524a8",
-      "sha256": "00cc2d26a55dd433d6871cb7f64042cc896759ad812a162681f434c1d44c03b9"
+      "git_blob": "fbacdc4413e1d9ee0197a3106655870c628e9181",
+      "sha256": "579b98beda7c32a2ccb83d3930b6b589bdccc86a33432b72f1afb811b59b038b"
+    },
+    "sdk/app/RiscCivilClockV1.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "198eadc44789f074072ebcb2df555bd9bf8055fd",
+      "path": "sdk/app/RiscCivilClockV1.h",
+      "git_blob": "7b0e4e58fb7fa7b6fc198a07e44647403a910b13",
+      "sha256": "6a5822bbca358138b2f63ec12431b018d6487d4ee3f88760fc184883793db588"
     }
   },
   "shared_source_overlays": {

@@ -5,7 +5,6 @@
 #ifdef WATCH_SHARED_HOME_CIVIL
 #define POINTS_UTC_PROJECTION_ONLY
 #include "PointsUtcSchedule.h"
-#include "../runtime_features/sdk/RiscCivilClockV1.h"
 #endif
 #include <string.h>
 #if WATCH_POINTS_EXTENDED
@@ -36,13 +35,14 @@ typedef struct {
 #ifdef WATCH_SHARED_HOME_CIVIL
     const portable_timezone_rule *rule;
     uint32_t maximum;
+    const points_utc_projection_clock *clock;
 #else
     unsigned unused;
 #endif
 } watch_points_time;
 static bool watch_points_day(const watch_points_time *time,uint32_t now,uint32_t *day) {
 #ifdef WATCH_SHARED_HOME_CIVIL
-    if(time->rule)return points_utc_local_day(time->rule,now,day);
+    if(time->rule)return points_utc_local_day_clock(time->rule,now,day,time->clock);
 #else
     (void)time;
 #endif
@@ -50,7 +50,7 @@ static bool watch_points_day(const watch_points_time *time,uint32_t now,uint32_t
 }
 static bool watch_points_for_day(const watch_points_time *time,const points_config *c,unsigned slot,uint32_t day,unsigned edge,points_event *e,uint32_t *flags) {
 #ifdef WATCH_SHARED_HOME_CIVIL
-    if(time->rule)return points_utc_event_for_day_bounded(time->rule,c,slot,day,edge,e,flags,time->maximum);
+    if(time->rule)return points_utc_event_for_day_clock(time->rule,c,slot,day,edge,e,flags,time->maximum,time->clock);
 #else
     (void)time;
 #endif
@@ -58,7 +58,7 @@ static bool watch_points_for_day(const watch_points_time *time,const points_conf
 }
 static bool watch_points_project(const watch_points_time *time,const points_config *c,uint32_t now,points_projection *p) {
 #ifdef WATCH_SHARED_HOME_CIVIL
-    if(time->rule)return points_utc_project_bounded(time->rule,c,now,p,time->maximum);
+    if(time->rule)return points_utc_project_clock(time->rule,c,now,p,time->maximum,time->clock);
 #else
     (void)time;
 #endif
@@ -68,7 +68,10 @@ static bool watch_points_calendar(const watch_points_time *time,uint32_t at,twat
 #ifdef WATCH_SHARED_HOME_CIVIL
     if(time->rule) {
         portable_timezone_civil v;
-        if(portable_timezone_utc_to_local(time->rule,INT64_C(946684800)+at,&v,NULL)!=PORTABLE_TIMEZONE_OK)return false;
+        bool ok=time->clock&&time->clock->project?
+            time->clock->project(time->clock->context,INT64_C(946684800)+at,&v):
+            portable_timezone_utc_to_local(time->rule,INT64_C(946684800)+at,&v,NULL)==PORTABLE_TIMEZONE_OK;
+        if(!ok)return false;
         *local=(twatch_rtc_time_v1){(uint16_t)v.year,v.month,v.day,v.weekday,v.hour,v.minute,v.second};
         return true;
     }
@@ -188,6 +191,34 @@ bool watch_points_projection(const points_config *config,const points_meta *meta
     return watch_points_projection_core(&time,config,meta,now,out);
 }
 #ifdef WATCH_SHARED_HOME_CIVIL
+typedef struct {
+    const risc_civil_clock_policy_v1 *policy;
+    const risc_civil_clock_schedule_v1 *schedule;
+    int32_t status;
+} watch_points_policy_context;
+static bool watch_points_policy_project(void *context,int64_t epoch,portable_timezone_civil *out) {
+    watch_points_policy_context *c=context;if(c->status)return false;
+    risc_civil_calendar_v1 value={.struct_size=sizeof(value)};
+    c->status=c->policy->project(c->policy->context,epoch,0,&value);
+    if(c->status)return false;
+    portable_timezone_civil civil={value.year,value.month,value.day,value.hour,value.minute,value.second,value.weekday};
+    int64_t checked;
+    if(value.struct_size<sizeof(value)||value.reserved||value.nanoseconds||value.year<2000||value.year>2099||
+       portable_timezone_civil_to_epoch(&civil,&checked)!=PORTABLE_TIMEZONE_OK){c->status=-1;return false;}
+    *out=civil;return true;
+}
+static int32_t watch_points_policy_inverse(void *context,const portable_timezone_civil *local,int64_t epoch[2],uint32_t *count) {
+    watch_points_policy_context *c=context;if(c->status)return c->status;
+    risc_civil_calendar_v1 value={.struct_size=sizeof(value),.year=local->year,.month=local->month,
+        .day=local->day,.hour=local->hour,.minute=local->minute,.second=local->second,.weekday=local->weekday};
+    risc_civil_inverse_v1 result={.struct_size=sizeof(result)};
+    c->status=c->schedule->inverse(c->policy->context,&value,&result);
+    if(c->status)return c->status;
+    if(result.struct_size<sizeof(result)||result.count>2||
+       (result.count==2&&result.epoch[0]>=result.epoch[1])){c->status=-1;return -1;}
+    *count=result.count;for(unsigned i=0;i<result.count;i++)epoch[i]=result.epoch[i];
+    return 0;
+}
 bool watch_points_projection_utc(const points_config *config,const points_meta *meta,
     watch_points_record_basis basis,int64_t epoch,const risc_civil_calendar_v1 *civil,
     const risc_civil_clock_policy_v1 *policy,nova_points_state *out,int32_t *policy_status) {
@@ -204,6 +235,11 @@ bool watch_points_projection_utc(const points_config *config,const points_meta *
        config->created>(uint32_t)(INT32_MAX-INT64_C(946684800))-ALARM_RECOVERY_SECONDS))return false;
     portable_timezone_rule rule;
     if(portable_timezone_resolve(civil->zone,sizeof(civil->zone),&rule)!=PORTABLE_TIMEZONE_OK)return false;
+    watch_points_policy_context provider={.policy=policy};
+    if(basis==WATCH_POINTS_RECORD_RTC) {
+        provider.schedule=risc_civil_clock_get_schedule(policy,policy->struct_size);
+        if(!provider.schedule){out->status=NOVA_POINTS_UNAVAILABLE;return false;}
+    }
     points_config copy=*config;
     if(basis==WATCH_POINTS_RECORD_RTC&&copy.created) {
         twatch_rtc_time_v1 raw;
@@ -229,7 +265,14 @@ bool watch_points_projection_utc(const points_config *config,const points_meta *
         if(*policy_status||upper<INT64_C(946684800)||upper>INT64_C(946684800)+ALARM_RTC_MAX)return false;
         maximum=(uint32_t)(upper-INT64_C(946684800));
     }
-    const watch_points_time time={.rule=&rule,.maximum=maximum};
-    return watch_points_projection_core(&time,&copy,meta,(uint32_t)(epoch-INT64_C(946684800)),out);
+    const points_utc_projection_clock clock={&provider,watch_points_policy_project,watch_points_policy_inverse};
+    const watch_points_time time={.rule=&rule,.maximum=maximum,
+        .clock=basis==WATCH_POINTS_RECORD_RTC?&clock:NULL};
+    bool ok=watch_points_projection_core(&time,&copy,meta,(uint32_t)(epoch-INT64_C(946684800)),out);
+    if(provider.status) {
+        *policy_status=provider.status;
+        *out=(nova_points_state){.status=NOVA_POINTS_ERROR};return false;
+    }
+    return ok;
 }
 #endif
