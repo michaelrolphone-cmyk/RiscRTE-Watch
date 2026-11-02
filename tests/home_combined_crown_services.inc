@@ -77,6 +77,7 @@ static int hc_shared_acquire(const char*name,uint32_t version,uint64_t instance,
  return -1;
 }
 static void hc_shared_start(void){
+ if(!strcmp(canvas_case,"nav-radio-both"))saved_radio(0);
  hc_dnd_value=0;hc_dnd_writes=0;
  if(hc_dnd_save_case()&&strcmp(canvas_case+27,"absent"))alarm_api.output_modes=(unsigned)strtoul(canvas_case+27,NULL,10);
  hc_brightness_supported=strncmp(canvas_case,"brightness-absent-",18)!=0;hc_brightness_calls=0;
@@ -126,6 +127,7 @@ static void hc_shared_run(void){
  assert(!hc_entry_init());hc_entry_main();
  fprintf(stderr,"Home actual acquisition boundary peak=%u overflows=%u live=%u\n",hc_live_peak,hc_capacity_refusals,grants-ungrants);
  assert(!hc_capacity_refusals);
+ if(!strcmp(canvas_case,"nav-radio-both")){assert(radio_saved&&(radio_bytes[2]&PORTABLE_RADIO_BLUETOOTH));assert(atomic_count==1&&!strcmp(atomic_keys[0],PORTABLE_RADIO_KEY));}
  if(!strcmp(canvas_case,"zero-crash-namespace"))assert(first_seen&&ready&&confirmations&&hc_zero_namespace_warnings==1&&!hc_evidence_calls&&!clock_crash_namespace_ready);
  if(!hc_brightness_supported){
   assert(!hc_brightness_calls&&hardware_brightness==40&&quick_saved[0]&&quick_values[0]==60&&canvas_submits);
@@ -201,6 +203,8 @@ static bool hc_bounded_acquire(const char*name,uint32_t version,uint64_t instanc
  bool acquired=hc_acquire(name,version,instance,g);
  if(acquired&&g->api==&qa_wifi)g->api=&hc_wifi;
  if(grants-ungrants>hc_live_peak)hc_live_peak=grants-ungrants;
+ if(!strcmp(canvas_case,"nav-radio-both"))fprintf(stderr,"Home actual app acquire name=%s api=%u instance=%llu accepted=%u live=%u peak=%u\n",name,version,(unsigned long long)instance,acquired?1u:0u,grants-ungrants,hc_live_peak);
+ fprintf(stderr,"Home actual acquisition boundary peak=%u overflows=%u live=%u\n",hc_live_peak,hc_capacity_refusals,grants-ungrants);
  if(grants-ungrants>16){++hc_capacity_refusals;fprintf(stderr,"Home would exceed Runtime live-slot bound: %s instance=%llu peak=%u\n",name,(unsigned long long)instance,hc_live_peak);}
  assert(grants-ungrants<=16);
  return acquired;
@@ -287,4 +291,11 @@ static bool hc_save_navigation(risc_input_navigation_frame_v1*out){
   return true;
  }
  out->buttons=out->pressed=keys[navigation_phase++];navigation_at=clock_ms;navigation_release=true;return true;
+}
+
+static void hc_radio_ready(void){
+ assert(stage_calls&&native_clock.time&&native_clock.wake&&native_clock.civil&&clock_canvas_selected&&clock_canvas_input_active);
+ assert(battery_api&&pmu&&device_clients.key&&panel&&rtc&&clock_alarm.api&&clock_broadcast_started&&clock_contexts_started);
+ assert(clock_quick.ui.wifi_available&&clock_quick.ui.bluetooth_available&&clock_quick.ui.wifi_valid&&clock_quick.ui.bluetooth_valid);
+ fprintf(stderr,"Home all-present radio before drawer: live=%u; time/wake/display/raster/input/battery/sleep/key/panel/RTC/civil/alarm/broadcast/Contexts available\n",grants-ungrants);
 }

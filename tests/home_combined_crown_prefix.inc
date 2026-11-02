@@ -46,3 +46,4 @@ static bool hc_save_navigation(risc_input_navigation_frame_v1*);
 static uint8_t hc_dnd_value;
 static unsigned hc_dnd_writes;
 static bool hc_dnd_save_case(void);
+static void hc_radio_ready(void);

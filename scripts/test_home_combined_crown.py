@@ -54,6 +54,9 @@ controls=replace_once(controls,'if(!strncmp(canvas_case,"alarm-",6))assert(alarm
 controls=replace_once(controls,'if(!strcmp(canvas_case,"controls-button")&&first_seen','if((!strcmp(canvas_case,"controls-button")||(!strncmp(canvas_case,"brightness-absent-",18)&&strncmp(canvas_case,"brightness-absent-save",22)))&&first_seen')
 controls=replace_once(controls,'  check_clean();','  check_clean();if(!strcmp(canvas_case,"brightness-refuse")||!strcmp(canvas_case,"brightness-null-advertised")){assert(!first_seen&&!confirmations);free(physical_pixels);puts("Advertised malformed/refused brightness safely refuses startup PASS");return 0;}')
 controls=replace_once(controls,'.supported_formats=RISC_DISPLAY_FORMAT_BIT(physical_format)};return true;','.supported_formats=RISC_DISPLAY_FORMAT_BIT(physical_format),.flags=hc_brightness_supported?RISC_DISPLAY_INFO_BRIGHTNESS:0};return true;')
+controls=replace_once(controls,'const uint32_t home[]={RISC_NAV_HOME};','if(!strcmp(canvas_case,"nav-radio-both")){if(!stage_calls)return true;if(!navigation_phase)hc_radio_ready();}\n const uint32_t radio_keys[]={RISC_NAV_UP,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_DOWN,RISC_NAV_CONFIRM,RISC_NAV_BACK};\n const uint32_t home[]={RISC_NAV_HOME};')
+controls=replace_once(controls,'const uint32_t *keys=!strcmp(canvas_case,"nav-home")?home:','const uint32_t *keys=!strcmp(canvas_case,"nav-radio-both")?radio_keys:!strcmp(canvas_case,"nav-home")?home:')
+controls=replace_once(controls,'unsigned count=!strcmp(canvas_case,"nav-home")?1:','unsigned count=!strcmp(canvas_case,"nav-radio-both")?9:!strcmp(canvas_case,"nav-home")?1:')
 controls=replace_once(controls,' hc_reset(format,rotation);',' hc_reset(format,rotation);hc_shared_start();')
 controls=replace_once(controls,' app_main();',' hc_shared_run();')
 controls=replace_once(controls,'retained_fence&&retains&&native_clock.halted','retained_fence&&(retains||hc_runtime_lost)&&(native_clock.halted||portable_home_bindings_retained())')
@@ -117,7 +120,7 @@ with tempfile.TemporaryDirectory(prefix='home-canvas-crown-') as tmp:
   obj=w/f'{i}.o';run(['cc','-std=c11',*flags,*(['-DWATCH_CONTEXTS_CLIENT'] if i else []),'-MMD','-MF',str(obj)+'.d',*source_flags(source),'-c',str(source),'-o',str(obj)]);objects.append(str(obj))
  binary=a.output/'test';run(['c++','-std=c++11',*flags,'-MMD','-MF',str(w/'boot.d'),str(ROOT/'apps/clock/effects/boot.cpp'),*objects,'-o',str(binary)])
  modes=['normal','cold','deep','sleep','saved','no-raw-touch','nav-home','nav-picker','nav-repeat','nav-quick','controls-button','multitouch','alarm-above','alarm-retry']
- cases=[(mode,encoding,rotation) for mode in modes for encoding in (5,1) for rotation in (0,1)]
+ cases=[('nav-radio-both',5,0)]+[(mode,encoding,rotation) for mode in modes for encoding in (5,1) for rotation in (0,1)]
  face_count=int(subprocess.check_output([str(binary),'face-count'],text=True))
  cases += [(f'face-{face}',encoding,0) for face in range(face_count) for encoding in (5,1)]
  cases+=[(mode,5,0) for mode in ('absent','malformed-api','open-retained','open-unknown','geometry-retained',
