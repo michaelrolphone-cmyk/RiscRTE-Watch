@@ -166,7 +166,7 @@ int main(int argc,char **argv){
   if(!strcmp(canvas_case,"malformed-api")){assert(!first_seen&&!canvas_submits&&!confirmations);free(physical_pixels);puts("Malformed optional Canvas safely refuses startup PASS");return 0;}
   assert(first_seen&&ready);
   if(!strncmp(canvas_case,"nav-",4)){assert(navigation_phase);if(!strcmp(canvas_case,"nav-home"))assert(launches==1);if(!strcmp(canvas_case,"nav-repeat"))assert(navigation_phase==3&&picker.target==2);}
-  else assert(confirmations==1);
+  else assert(confirmations==1+wake_count);
   if(!strcmp(canvas_case,"absent"))assert(!canvas_submits);
   else assert(canvas_submits&&converted_frames==canvas_submits&&!raw_touch_acquires&&!fixture_canvas.frames.session&&!fixture_canvas.frames.writable&&!fixture_canvas.frames.receipts);
   if(!strcmp(canvas_case,"cold"))assert(first_frames>10&&first_at>2000);
