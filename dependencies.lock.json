@@ -62,6 +62,13 @@
       "path": "lib/PortableApps/src/quick_native_render.inc",
       "git_blob": "8c2599145271cb02325b0cbe6894443a3bca5b1c",
       "sha256": "15d1df79a66b75d9f3fb30a7d16e94d93bb9a5704f7dfcb0145c9a9091d395f6"
+    },
+    "sdk/source/quick_render.c": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "e8ddef6af78c2e28a232a4b2aae65385b3d42c73",
+      "path": "lib/PortableApps/src/quick_render.c",
+      "git_blob": "9a8712c831cce8b0826664d9238c58e2b84d25d9",
+      "sha256": "80abc957c65737bf3340c57eff3c02396efea32af6a5830ba5fbdabe79c1de0f"
     }
   }
 }
