@@ -57,6 +57,7 @@ jobs:
           cmp sdk/app/RiscResidentAlarmV1.h .source/contracts/sdk/app/RiscResidentAlarmV1.h
           cmp sdk/app/RiscResidentIdleV1.h .source/contracts/sdk/app/RiscResidentIdleV1.h
           cmp sdk/app/RiscResidentShellV1.h .source/runtime/sdk/app/RiscResidentShellV1.h
+          python3 tests/test_shared_sdk_headers.py 2>&1 | tee dist/shared-sdk-headers.log
           python3 tests/test_build_inputs.py 2>&1 | tee dist/build-inputs.log
           for mode in normal sanitized; do
             flag=''; [ "$mode" = normal ] || flag='--sanitized'
