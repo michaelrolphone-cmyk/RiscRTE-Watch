@@ -15,6 +15,7 @@ static int32_t clock_resident_policy(risc_resident_reply_v1 *reply,uint32_t now,
 static uint32_t clock_resident_activity,clock_resident_policy_at,clock_resident_armed_at,clock_resident_keys;
 static char clock_resident_next[193];
 static bool clock_resident_alive(void) {
+    if(!clock_canvas_live())return false;
     if(clock_resident_terminal)return false;
     if(risc_runtime_get_api(1)!=rt){clock_resident_terminal=true;return false;}
 #ifdef WATCH_RUNTIME_FEATURES
@@ -60,7 +61,7 @@ static bool clock_resident_pause(void) {
     return true;
 }
 static bool clock_resident_preferences(void) {
-    if(!pqa_session_load(&clock_quick,rt)||!clock_resident_alive())return false;
+    if(!clock_quick_load()||!clock_resident_alive())return false;
 #ifdef WATCH_QUICK_RADIOS
     if(!pqa_radios_load(&clock_radios,&clock_quick.ui,rt)||!clock_resident_alive())return false;
 #endif
@@ -108,14 +109,14 @@ static bool clock_resident_actions(uint32_t events) {
 #endif
 #ifdef WATCH_QUICK_RADIOS
 #ifdef WATCH_ATOMIC_PREFERENCES
-    if(!pqa_radios_apply_user(&clock_radios,&clock_quick.ui,rt,actions,quick_atomic_save,NULL,quick_atomic_guard))return false;
+    if(!clock_radios_apply_user(actions))return false;
 #else
     if(!pqa_radios_apply(&clock_radios,&clock_quick.ui,rt,actions))return false;
 #endif
     if(!clock_resident_alive())return false;
 #endif
 #ifdef WATCH_CLOCK_ALARMS
-    if(changed&&clock_alarm.api){(void)clock_alarm.api->refresh(clock_alarm.api->context);if(!clock_resident_alive())return false;}
+    if(changed&&clock_alarm.api){if(!clock_alarm_refresh_checked()||!clock_resident_alive())return false;}
 #endif
     if(!clock_quick.ui.radio_controls&&(actions&PQA_WIFI)) {
         memcpy(clock_resident_next,"wifi_settings.elf",sizeof("wifi_settings.elf"));
@@ -253,6 +254,7 @@ static int32_t clock_resident_alarm_only(risc_resident_reply_v1 *reply) {
 #endif
 }
 #include "clock_resident_effects.inc"
+#include "clock_resident_contexts.inc"
 static int32_t clock_resident_dispatch(void *context,const risc_resident_request_v1 *request,risc_resident_reply_v1 *reply) {
     (void)context;
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
@@ -263,6 +265,9 @@ static int32_t clock_resident_dispatch(void *context,const risc_resident_request
         clock_resident_idle_result_valid=clock_resident_idle_alarm=false;
     }
     if(!clock_resident_settled())return RISC_RESIDENT_BUSY;
+#ifdef WATCH_SHARED_HOME_BOOT
+    if(clock_contexts_query_reason(request->reason))return clock_contexts_query(request);
+#endif
     if(clock_effect_reason(request->reason))return clock_effect_dispatch(request);
     if(request->reason==RISC_RESIDENT_QUERY_LAST_IDLE_ALARM) {
         if(request->flags||request->reserved)return RISC_RESIDENT_INVALID;
@@ -308,6 +313,7 @@ static int32_t clock_resident_dispatch(void *context,const risc_resident_request
         request->reason==RISC_RESIDENT_CHECKPOINT_CONTROLS?clock_resident_controls(reply):clock_resident_policy(reply,now,false);
     if(!clock_resident_alive())return RISC_RESIDENT_RETAINED;
     clock_resident_dispatching=false;
+    if(!clock_canvas_pause())return clock_resident_retain();
     if(rc==RISC_RESIDENT_OK&&!clock_attention_prime())return clock_resident_retain();
     if(idle_apply&&rc==RISC_RESIDENT_OK) {
 #ifdef WATCH_CLOCK_ALARMS

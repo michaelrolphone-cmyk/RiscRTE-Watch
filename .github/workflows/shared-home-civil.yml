@@ -1,0 +1,50 @@
+name: Shared Home civil policy consumer
+on:
+  pull_request:
+    paths: ['apps/runtime_features/**', 'tests/shared_home_civil_test.c', 'scripts/test_shared_home_civil.py', '.github/workflows/shared-home-civil.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: db53bf95040c35df459479a634a6fe1a610920ca
+          path: deps/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: 8f690e51b8c5f2a1756066879c40636469023639
+          path: deps/utilities
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Foreground policy and native checkpoint ordering
+        run: |
+          python scripts/test_shared_home_civil.py --system-apps deps/system --utilities deps/utilities --output qualification/civil
+          python scripts/test_fast_wake_clock.py --system-apps deps/system --utilities deps/utilities
+          python scripts/test_fast_wake_clock.py --system-apps deps/system --utilities deps/utilities --native
+      - name: Source receipts
+        if: always()
+        run: |
+          mkdir -p qualification/source
+          git archive HEAD | gzip -n > qualification/source/watch.tar.gz
+          git -C deps/system archive HEAD | gzip -n > qualification/source/system.tar.gz
+          git -C deps/utilities archive HEAD | gzip -n > qualification/source/utilities.tar.gz
+          for path in . deps/system deps/utilities; do git -C "$path" rev-parse HEAD; done > qualification/source/heads.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-home-civil-${{ github.event.pull_request.head.sha || github.sha }}
+          path: qualification/
+          retention-days: 30

@@ -13,8 +13,14 @@
   },
   "RiscRetainedWakeV1.h": {
     "repository": "michaelrolphone-cmyk/RiscRTE",
-    "commit": "5426ade43dbe74a45e85577d087035099a1abf1b",
+    "commit": "a91edf3fada6a559ec107186dd163d0c8da10d29",
     "path": "sdk/app/RiscRetainedWakeV1.h",
-    "sha256": "36066ff656dbdfbd6546b8ee92b62f7a74c3ba501bda34602e39811035fa7296"
+    "sha256": "7c7b6f0d56631f3aab521a43499d2ea840d075084536e4afa654a74c52e1e511"
+  },
+  "RiscCivilClockV1.h": {
+    "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+    "commit": "db53bf95040c35df459479a634a6fe1a610920ca",
+    "path": "sdk/app/RiscCivilClockV1.h",
+    "git_blob": "8bef7f0519111f2407f6f27386e9b7fe812fb0c2"
   }
 }

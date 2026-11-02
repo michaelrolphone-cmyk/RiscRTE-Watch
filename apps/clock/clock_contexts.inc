@@ -1,4 +1,36 @@
 #include "PortableContextActions.h"
+
+#ifdef ALARM_SERVICE_TAGGED_V2
+/* Reuse the original countdown writer/schema. Only service observations are
+ * wrapped so a retained refresh cannot be followed by workflow reporting. */
+static int32_t clock_context_timer_status(void*context,alarm_status_v1*out) {
+    (void)context;
+    if(!clock_alarm_custody_live())return ALARM_RETAINED;
+    int32_t rc=clock_alarm.api->status(clock_alarm.api->context,out);
+    if(!clock_canvas_live())return ALARM_RETAINED;
+    if(!portable_alarm_result(&clock_alarm,rc)||!clock_alarm_custody_live())return ALARM_RETAINED;
+    if(rc==ALARM_OK&&(!portable_alarm_result(&clock_alarm,out->error)||out->output_uncertain||
+       out->api_version!=1||out->struct_size<sizeof(*out)||out->state>ALARM_STATE_CUE)){
+        clock_alarm.retained=true;(void)clock_alarm_custody_live();return ALARM_RETAINED;
+    }
+    return rc;
+}
+static int32_t clock_context_timer_refresh(void*context) {
+    (void)context;return clock_alarm_refresh_checked()?ALARM_OK:ALARM_RETAINED;
+}
+static bool clock_context_timer(uint32_t duration,risc_runtime_capability_v1*grant) {
+    if(!clock_alarm.api||!clock_alarm_custody_live())return false;
+    alarm_service_v1 observed=*clock_alarm.api;
+    observed.status=clock_context_timer_status;observed.refresh=clock_context_timer_refresh;
+    bool ok=portable_context_timer(rt,&observed,duration,grant);
+    return clock_alarm_custody_live()&&ok;
+}
+#else
+static bool clock_context_timer(uint32_t duration,risc_runtime_capability_v1*grant) {
+    return portable_context_timer(rt,clock_alarm.api,duration,grant);
+}
+#endif
+
 static uint32_t clock_context_checked;
 static bool clock_context_rules(void){
  const contexts_fingerprint_service_v1*fp=contexts_fingerprint_api(clock_contexts.api);if(!fp)return true;
@@ -22,10 +54,10 @@ static bool clock_context_rules(void){
   if(g.api&&!rt->release(&g))return false;
 #endif
   for(unsigned i=0;i<CR_RULES;i++){bool changed=false,complete=true;for(unsigned f=0;f<CR_SETTINGS;f++)if(q.result.winners[f]==(int)i&&(q.result.changed&(1u<<f))){changed=true;complete&=!!(success&(1u<<f));}if(changed){contexts_workflow_v1 report={.struct_size=sizeof(report),.rule=i,.result=complete?CR_APPLIED:CR_PARTIAL};if(!fp->fingerprint(fp->base.context,CONTEXTS_FP_WORKFLOW,&report))return false;}}
-  if(opened){if(!pqa_session_load(&clock_quick,rt)||!pqa_session_restore(&clock_quick,display)||!pqa_radios_resume(&clock_radios,&clock_quick.ui,rt))return false;
+  if(opened){if(!clock_quick_load()||!pqa_session_restore(&clock_quick,display)||!pqa_radios_resume(&clock_radios,&clock_quick.ui,rt))return false;
    g=(risc_runtime_capability_v1){.struct_size=sizeof(g)};if(!rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,1,&g))return false;unsigned selected=picker.selected;(void)portable_sleep_load(g.api,&sleep_mode);if(watch_face_load(g.api,&selected)==RISC_KEY_VALUE_OK)picker.selected=(uint8_t)selected;if(!rt->release(&g))return false;
   }
-  if(clock_alarm.api)(void)clock_alarm.api->refresh(clock_alarm.api->context);
+  if(clock_alarm.api&&!clock_alarm_refresh_checked())return false;
  }
  if(clock_context_message[0])return true;
  /* This ABI cannot peek at a workflow before claiming it. Defer only claim,
@@ -37,7 +69,7 @@ static bool clock_context_rules(void){
   if(!clock_background_pause())return false;
   bool ok=false;
   if(action.step.kind==CR_MESSAGE){memcpy(clock_context_message,action.step.text,33);ok=true;}
-  else if(action.step.kind==CR_TIMER){risc_runtime_capability_v1 g={0};ok=portable_context_timer(rt,clock_alarm.api,action.step.value,&g);if(g.api)return false;}
+  else if(action.step.kind==CR_TIMER){risc_runtime_capability_v1 g={0};ok=clock_context_timer(action.step.value,&g);if(!clock_alarm_custody_live()||g.api)return false;}
   else if(action.step.kind==CR_LAUNCH){ok=clock_launch_request(action.step.text);if(!clock_launch_live())return false;if(ok&&!clock_launch_returned())clock_contexts_handoff=true;}
   action.claim=false;action.result=ok?CR_RAN:CR_FAILED;if(!fp->fingerprint(fp->base.context,CONTEXTS_FP_WORKFLOW,&action))return false;
  }
@@ -124,9 +156,9 @@ static bool clock_contexts_tick(void) {
     if(!portable_contexts_apply_room(&clock_contexts,&applied,watch_face_save))return clock_contexts_failure();
 #endif
     if(applied) {
-        if(!pqa_session_load(&clock_quick,rt)||!pqa_session_restore(&clock_quick,display))return false;
-        if(applied&(PORTABLE_CONTEXT_VOLUME|PORTABLE_CONTEXT_DND|PORTABLE_CONTEXT_ALERT))
-            (void)clock_alarm.api->refresh(clock_alarm.api->context);
+        if(!clock_quick_load()||!pqa_session_restore(&clock_quick,display))return false;
+        if(clock_alarm.api && (applied&(PORTABLE_CONTEXT_VOLUME|PORTABLE_CONTEXT_DND|PORTABLE_CONTEXT_ALERT)))
+            if(!clock_alarm_refresh_checked())return false;
         if(applied&(PORTABLE_CONTEXT_SLEEP|PORTABLE_CONTEXT_FACE)) {
             risc_runtime_capability_v1 g={.struct_size=sizeof(g)};
             if(!rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,1,&g))return false;

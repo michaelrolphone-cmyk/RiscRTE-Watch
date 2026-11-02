@@ -25,6 +25,134 @@
       "path": "lib/PortableApps/include/PortableResidentSettingsEffects.h",
       "git_blob": "97d27ceb16aecb5746050488ea0c8ad2d244b0b6",
       "sha256": "617544d7260d73841fbf76b129371cf647cc40577f015ee73f72b47917e2dee5"
+    },
+    "sdk/app/PortableQuickRadios.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "00854ed279886f068c745323fcf13bc6c7142824",
+      "path": "lib/PortableApps/include/PortableQuickRadios.h",
+      "git_blob": "8b30cb7e0e95f46307c06d43bc84a2682e0f4e98",
+      "sha256": "92f72a10457d8a9d08555fec5a34e5d4190cb28ca3b77291d3f910de9b7e1ceb"
+    },
+    "sdk/app/PortableQuickActions.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "path": "lib/PortableApps/include/PortableQuickActions.h",
+      "git_blob": "07be991d5fffb7860e353796f774dbf67a265655",
+      "sha256": "41eb378e88c2ff0d1475b6742d07a9c892606dd785d72b18f90abb0eb1e2c0ab"
+    },
+    "sdk/app/PortableQuickLayout.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "5f2eaebc8a77318e41998dbf308093b5081436e2",
+      "path": "lib/PortableApps/include/PortableQuickLayout.h",
+      "git_blob": "32e794a778ed0a7f03bd17c5487eca5a3abf3353",
+      "sha256": "8b6757fcae081554eb3333ea475a83c74506f64c42e86e791d42663da55aa654"
+    },
+    "sdk/app/RiscCanvasV1.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "a0046cd0777f21cf4e128a6d7a4d55e009a12fba",
+      "path": "sdk/app/RiscCanvasV1.h",
+      "git_blob": "7009dd08059669accc2fdfe6cc70d3350be3bbd9",
+      "sha256": "7ebaa25f43bb37a07326db82228dab5adeb3a54e176fde5e47e17d9ceb3c1b91"
+    },
+    "sdk/app/PointsUtcSchedule.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
+      "commit": "5ecf5fe5fe442b91d8fa66d895012f43ea581aa8",
+      "path": "lib/Alarm/include/PointsUtcSchedule.h",
+      "git_blob": "fbacdc4413e1d9ee0197a3106655870c628e9181",
+      "sha256": "579b98beda7c32a2ccb83d3930b6b589bdccc86a33432b72f1afb811b59b038b"
+    },
+    "sdk/app/RiscCivilClockV1.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "0b74e200514fe8783c0b78841045611b91ef7358",
+      "path": "sdk/app/RiscCivilClockV1.h",
+      "git_blob": "93e808bd78d8fe1398e830fae7d08693f85d58cd",
+      "sha256": "4b36631945b52dfe7a7ab8283cd538cab8aa31709fb652b0508a131dc4899047"
+    },
+    "sdk/app/RiscCanvasInputV1.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "a0046cd0777f21cf4e128a6d7a4d55e009a12fba",
+      "path": "sdk/app/RiscCanvasInputV1.h",
+      "git_blob": "e27e362f646c38dfcd0fbf15f9ca5bea569a3cdf",
+      "sha256": "c58364e7b467724a02369e4113375785690ca9d721eda79620ea08f6b8371d43"
+    },
+    "sdk/app/RiscHomePresentationV1.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "cf483dfb592269aa232d7ba95d4f7459d644f9fe",
+      "path": "sdk/app/RiscHomePresentationV1.h",
+      "git_blob": "dbe45e48134397c3465fdf0992a60ecc961531df",
+      "sha256": "6632467d1f38a4abd92b2c21c6a1a9a4b7f5025ff10fd871264c3e2b22020d45"
+    },
+    "sdk/app/RiscResidentContextsV1.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "a0046cd0777f21cf4e128a6d7a4d55e009a12fba",
+      "path": "sdk/app/RiscResidentContextsV1.h",
+      "git_blob": "364896c9ce14059550815537d499b26fb33ec2d9",
+      "sha256": "647514b994841e88f0693449062fb83b07e520f0f77e8197935fc3b99ee7634b"
+    },
+    "sdk/app/PortableHomeBindings.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "f965f1eb974c8e637f222bfc1ac57fc19402b6cf",
+      "path": "lib/PortableApps/include/PortableHomeBindings.h",
+      "git_blob": "e8b3921852f4a2719b829e572d6b2a26ab996941",
+      "sha256": "0b19db276dc687ccd9aa0b11b44f2d2c0466948d1c21774546ee68f3632d1f40"
+    },
+    "sdk/app/PortableHomePower.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "f965f1eb974c8e637f222bfc1ac57fc19402b6cf",
+      "path": "lib/PortableApps/include/PortableHomePower.h",
+      "git_blob": "fc98e291e92cd1ad5c29ae0aec7791c341dc06ac",
+      "sha256": "d2fb8126f2c9215103db2b9c127516632875f535061de78dbb607ea23885ae21"
+    },
+    "sdk/app/PortableTimeZone.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "0b74e200514fe8783c0b78841045611b91ef7358",
+      "path": "lib/PortableApps/include/PortableTimeZone.h",
+      "git_blob": "5269c41f7cbea400c32f7f856fb486652fb45810",
+      "sha256": "a683bbbda0805a13bc11d42e59b29f0a6ec4941eb3c58934e521c79ec1fd2cd7"
+    },
+    "sdk/app/AlarmServiceV2.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
+      "commit": "5ecf5fe5fe442b91d8fa66d895012f43ea581aa8",
+      "path": "lib/Alarm/include/AlarmServiceV2.h",
+      "git_blob": "76f25ce14030fd81dd190e7d51f3482e6394c5e7",
+      "sha256": "d7e750a8093e1b5e698483254edc38533b7242a3446d0bca5866c9dfd6ad07a1"
+    },
+    "sdk/app/AlarmServiceFacadeV2.h": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-Utilities",
+      "commit": "474ab9d9cae1bea25d315f76fbe8eec61f9dba7b",
+      "path": "lib/Alarm/include/AlarmServiceFacadeV2.h",
+      "git_blob": "c022b6494b26b14fb6fa8750b39f7ab188823da7",
+      "sha256": "f6613e184fe9df1b8063798c260c5420320c7da909d425b70a9749186c3cd8ad"
+    }
+  },
+  "shared_source_overlays": {
+    "sdk/source/quick_actions.c": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "e0badab4eaf97f2054475fbba1b7fa1fda4811c4",
+      "path": "lib/PortableApps/src/quick_actions.c",
+      "git_blob": "b0a3061fab97dadc6506834f4ee84349d8f3ecfa",
+      "sha256": "23c5aef0371300a86688b023a02bb08a44889dc53a1b4b5fa98f734eee15b33e"
+    },
+    "sdk/source/quick_native_render.inc": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "e0badab4eaf97f2054475fbba1b7fa1fda4811c4",
+      "path": "lib/PortableApps/src/quick_native_render.inc",
+      "git_blob": "8c2599145271cb02325b0cbe6894443a3bca5b1c",
+      "sha256": "15d1df79a66b75d9f3fb30a7d16e94d93bb9a5704f7dfcb0145c9a9091d395f6"
+    },
+    "sdk/source/quick_render.c": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "e8ddef6af78c2e28a232a4b2aae65385b3d42c73",
+      "path": "lib/PortableApps/src/quick_render.c",
+      "git_blob": "9a8712c831cce8b0826664d9238c58e2b84d25d9",
+      "sha256": "80abc957c65737bf3340c57eff3c02396efea32af6a5830ba5fbdabe79c1de0f"
+    },
+    "sdk/source/PortableTimeZone.c": {
+      "repository": "michaelrolphone-cmyk/RiscRTE-System-Apps",
+      "commit": "0b74e200514fe8783c0b78841045611b91ef7358",
+      "path": "lib/PortableApps/src/PortableTimeZone.c",
+      "git_blob": "0aceddf52d034ad271e008e5fe689dc1f2f062f1",
+      "sha256": "25fcf6fa870638dc117f6f72b0336ed372b723bd79a7e15ff294d9ecab88b97f"
     }
   }
 }

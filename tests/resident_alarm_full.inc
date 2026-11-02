@@ -181,6 +181,10 @@ int main(int argc,char **argv){
  fast_runtime.health=alarm_only_health;fast_runtime.diagnostic=att_diagnostic;
  fast_runtime.acquire=att_acquire;fast_runtime.sleep_prepare=att_sleep_begin;fast_runtime.sleep_resume=att_sleep_end;
  app_main();
+#ifdef WATCH_HOME_CANVAS
+ assert(attention_canvas_absent==1&&!clock_canvas_selected&&!clock_canvas.session);
+#endif
+
  if(alarm_only_is("health-failure")||alarm_only_is("outcome-prime-failure")){
   assert(attention_runs==1&&clock_resident_terminal&&retains&&retained_fence&&!sleeps&&!attention_exits);
  }else assert(attention_runs==1&&!retains&&!retained_fence&&!owned&&!pending&&!held&&!touch.subscription&&grants==ungrants&&subscribed==unsubscribed&&!allocations);

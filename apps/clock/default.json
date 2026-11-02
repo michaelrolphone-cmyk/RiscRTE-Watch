@@ -11,6 +11,16 @@
       "api": 1
     },
     {
+      "capability": "runtime.realtime-control",
+      "api": 1
+    },
+    {
+      "capability": "runtime.provider-promotion",
+      "api": 1
+    }
+  ],
+  "optional": [
+    {
       "capability": "board.battery",
       "api": 1
     },
@@ -19,23 +29,11 @@
       "api": 2
     },
     {
-      "capability": "input.touch.raw",
-      "api": 1
-    },
-    {
       "capability": "storage.key-value",
       "api": 1
     },
     {
-      "capability": "runtime.realtime-control",
-      "api": 1
-    },
-    {
       "capability": "runtime.retained-wake",
-      "api": 1
-    },
-    {
-      "capability": "runtime.provider-promotion",
       "api": 1
     },
     {
@@ -81,11 +79,17 @@
     {
       "capability": "storage.app-data",
       "api": 1
-    }
-  ],
-  "optional": [
+    },
     {
       "capability": "storage.files",
+      "api": 1
+    },
+    {
+      "capability": "input.touch.raw",
+      "api": 1
+    },
+    {
+      "capability": "ui.canvas",
       "api": 1
     }
   ]

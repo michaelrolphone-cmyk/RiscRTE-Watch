@@ -1,3 +1,6 @@
+#ifdef WATCH_HOME_CANVAS
+static unsigned full_canvas_absent;
+#endif
 static risc_resident_callbacks_v1 full_callbacks;
 static bool full_controls,full_triggered,full_short;
 static unsigned full_key_event,full_deadlines;
@@ -20,7 +23,16 @@ static int32_t full_status(void*c,alarm_status_v1*out){
 #endif
  return alarm_status(c,out);
 }
-static bool full_acquire(const char*n,uint32_t v,uint64_t i,risc_runtime_capability_v1*g){bool ok=fast_acquire(n,v,i,g);if(ok&&g->api==&alarm_api)g->api=&full_alarm;return ok;}
+static bool full_acquire(const char*n,uint32_t v,uint64_t i,risc_runtime_capability_v1*g){
+#ifdef WATCH_HOME_CANVAS
+ /* Preserve this raw-provider fixture: only the exact clean optional probe is absent. */
+ if(!strcmp(n,RISC_CANVAS_CAPABILITY)){
+  assert(v==1&&!i&&g&&g->struct_size==sizeof(*g)&&!g->api&&!g->slot&&!g->generation);
+  assert(!full_runs&&!owned&&!pending&&++full_canvas_absent==1);
+  return false;
+ }
+#endif
+bool ok=fast_acquire(n,v,i,g);if(ok&&g->api==&alarm_api)g->api=&full_alarm;return ok;}
 static int32_t full_run(uint64_t token,const char*path,risc_resident_result_v1*out){
  assert(token==9&&!path&&!owned&&!pending&&!touch.subscription);full_runs++;
  /* This is the continuation before any normal Home frame/input turn. */
@@ -60,6 +72,10 @@ int main(int argc,char**argv){
  if(!full_controls&&!full_short){alarm_view.state=ALARM_STATE_ALERT;alarm_view.occurrence.generation=1;}
  fast_runtime.struct_size=sizeof(fast_runtime);fast_runtime.resident_shell=full_get;fast_runtime.health=full_health;fast_runtime.diagnostic=full_diagnostic;fast_runtime.acquire=full_acquire;fast_runtime.sleep_prepare=full_prepare_sleep;fast_runtime.sleep_resume=full_resume_sleep;
  app_main();
+#ifdef WATCH_HOME_CANVAS
+ assert(full_canvas_absent==1&&!clock_canvas_selected&&!clock_canvas.session);
+#endif
+
  assert(full_runs==1&&!retains&&!retained_fence&&!owned&&!pending&&!held&&!touch.subscription);
  assert(grants==ungrants&&subscribed==unsubscribed&&!allocations);
  if(full_short)puts("FAST_WAKE/ALARMS resident short-key: fresh alarm deadline, motion Light sleep/resume, paused background and clean teardown PASS");

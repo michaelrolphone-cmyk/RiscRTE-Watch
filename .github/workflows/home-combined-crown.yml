@@ -1,0 +1,62 @@
+name: Combined Home native controller integration
+on:
+  pull_request:
+concurrency:
+  group: home-combined-crown-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        dimensions: ['240 240', '410 502', '480 800']
+        sanitized: [false, true]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - id: pins
+        run: |
+          python3 - <<'PY'
+          import json,os
+          pins=json.load(open('dependencies.lock.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:
+              for name in ('system','utilities'):print(name+'='+pins[name]['commit'],file=out)
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: ${{ steps.pins.outputs.system }}
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: ${{ steps.pins.outputs.utilities }}
+          path: .source/utilities
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: cf483dfb592269aa232d7ba95d4f7459d644f9fe
+          path: .source/canvas
+          persist-credentials: false
+      - name: Real production Home and Canvas provider
+        env:
+          DIMENSIONS: ${{ matrix.dimensions }}
+          SANITIZED: ${{ matrix.sanitized }}
+        run: |
+          read -r width height <<< "$DIMENSIONS"
+          flag=""
+          if [ "$SANITIZED" = true ]; then flag=--sanitized; fi
+          python3 scripts/test_home_combined_crown.py --system .source/system --utilities .source/utilities --canvas-source .source/canvas --output dist/home-combined-crown --width "$width" --height "$height" $flag
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: home-combined-crown-${{ matrix.dimensions }}-${{ matrix.sanitized }}
+          path: dist/home-combined-crown
+          if-no-files-found: error

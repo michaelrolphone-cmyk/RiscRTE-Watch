@@ -18,14 +18,7 @@ class Inputs(unittest.TestCase):
                   and any(ast.unparse(target)=="manifest['version']" for target in node.targets)]
         self.assertEqual(len(versions),1)
         version=versions[0]
-        self.assertIsInstance(version,ast.IfExp)
-        self.assertEqual(ast.unparse(version.test),'a.serial_transfer_mode')
-        self.assertEqual(ast.literal_eval(version.body),'0.26.2')
-        version=version.orelse
-        self.assertIsInstance(version,ast.IfExp)
-        self.assertEqual(ast.unparse(version.test),'a.automatic_provision')
-        self.assertEqual(ast.literal_eval(version.body),'0.26.1')
-        self.assertEqual(ast.literal_eval(version.orelse),'0.26.0')
+        self.assertEqual(ast.literal_eval(version),'0.27.0')
         self.assertEqual(json.loads((ROOT/'apps/clock/default.json').read_text())['version'],'0.21.0')
         self.assertEqual(json.loads((ROOT/'apps/clock/clock.json').read_text())['version'],'0.15.0')
         self.assertEqual(json.loads((ROOT/'apps/clock/manifest.json').read_text())['version'],'0.8.0')

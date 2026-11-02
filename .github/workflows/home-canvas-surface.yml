@@ -1,0 +1,34 @@
+name: Home Canvas surface
+on:
+  pull_request:
+    paths: ['include/HomeCanvasSurface.h', 'tests/test_home_canvas_surface.c', 'scripts/test_home_canvas_surface.py', '.github/workflows/home-canvas-surface.yml']
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: 38b9ba8b7f5306a7b6a59c943033cbcddc2ecbed
+          path: .source/canvas
+          persist-credentials: false
+      - run: python3 scripts/test_home_canvas_surface.py --system .source/canvas --output out/home-canvas-evidence
+      - name: Preserve exact source
+        if: always()
+        run: |
+          mkdir -p source
+          git archive HEAD | gzip -n > source/watch.tar.gz
+          git rev-parse HEAD > source/watch.head
+          git -C .source/canvas rev-parse HEAD > source/canvas.head
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: home-canvas-surface-${{ github.event.pull_request.head.sha }}
+          path: |
+            out/home-canvas-evidence/
+            source/

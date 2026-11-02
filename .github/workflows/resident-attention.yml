@@ -40,6 +40,8 @@ jobs:
           python3 scripts/test_resident_attention_unit.py --system .source/system --utilities .source/utilities --output dist/unit-sanitized --sanitize
           python3 scripts/test_resident_attention.py --system .source/system --utilities .source/utilities --output dist/full-normal --production-flags
           python3 scripts/test_resident_attention.py --system .source/system --utilities .source/utilities --output dist/full-sanitized --production-flags --sanitized
+          python3 scripts/test_resident_attention.py --system .source/system --utilities .source/utilities --output dist/tagged-normal --production-flags --tagged-v2
+          python3 scripts/test_resident_attention.py --system .source/system --utilities .source/utilities --output dist/tagged-sanitized --production-flags --tagged-v2 --sanitized
       - name: Pinned target compiler
         run: |
           mkdir -p .source/toolchain
