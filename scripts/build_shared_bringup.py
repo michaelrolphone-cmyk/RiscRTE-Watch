@@ -23,6 +23,8 @@ cmd=[cc,'-std=c11','-Os','-fPIC','-mtext-section-literals','-mlongcalls',
  *['-I'+str(x) for x in includes],str(ROOT/'apps/bringup/main.c'),str(ROOT/'apps/clock/viewport.c'),
  '-lgcc','-o',str(elf)]
 subprocess.run(cmd,check=True)
+# Retain dynamic loader symbols/relocations; discard only non-runtime symbol metadata.
+subprocess.run([cc.removesuffix('gcc')+'strip','--strip-unneeded',str(elf)],check=True)
 symbols=subprocess.check_output([cc.removesuffix('gcc')+'nm','-D',str(elf)],text=True)
 imp={r.split()[-1] for r in symbols.splitlines() if ' U ' in ' '+r}
 exp={r.split()[-1] for r in symbols.splitlines() if len(r.split())>=3 and r.split()[-2] in ('T','D','B','R')}
