@@ -83,7 +83,7 @@ static bool watch_points_calendar(const watch_points_time *time,uint32_t at,twat
 }
 
 static bool watch_points_event(const watch_points_time *time,const points_event *e,const points_meta *meta,uint32_t today,nova_point_event *out) {
-    twatch_rtc_time_v1 local;uint32_t day;
+    twatch_rtc_time_v1 local={0};uint32_t day=0;
     if(!watch_points_calendar(time,e->deadline,&local)||
        !watch_points_day(time,e->deadline,&day))return false;
     *out=(nova_point_event){.at_rtc=e->deadline,.hour=local.hour,.minute=local.minute,.kind=e->kind,
