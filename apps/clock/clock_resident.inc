@@ -61,7 +61,7 @@ static bool clock_resident_pause(void) {
     return true;
 }
 static bool clock_resident_preferences(void) {
-    if(!pqa_session_load(&clock_quick,rt)||!clock_resident_alive())return false;
+    if(!clock_quick_load()||!clock_resident_alive())return false;
 #ifdef WATCH_QUICK_RADIOS
     if(!pqa_radios_load(&clock_radios,&clock_quick.ui,rt)||!clock_resident_alive())return false;
 #endif

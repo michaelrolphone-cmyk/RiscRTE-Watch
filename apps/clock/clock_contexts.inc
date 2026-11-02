@@ -54,7 +54,7 @@ static bool clock_context_rules(void){
   if(g.api&&!rt->release(&g))return false;
 #endif
   for(unsigned i=0;i<CR_RULES;i++){bool changed=false,complete=true;for(unsigned f=0;f<CR_SETTINGS;f++)if(q.result.winners[f]==(int)i&&(q.result.changed&(1u<<f))){changed=true;complete&=!!(success&(1u<<f));}if(changed){contexts_workflow_v1 report={.struct_size=sizeof(report),.rule=i,.result=complete?CR_APPLIED:CR_PARTIAL};if(!fp->fingerprint(fp->base.context,CONTEXTS_FP_WORKFLOW,&report))return false;}}
-  if(opened){if(!pqa_session_load(&clock_quick,rt)||!pqa_session_restore(&clock_quick,display)||!pqa_radios_resume(&clock_radios,&clock_quick.ui,rt))return false;
+  if(opened){if(!clock_quick_load()||!pqa_session_restore(&clock_quick,display)||!pqa_radios_resume(&clock_radios,&clock_quick.ui,rt))return false;
    g=(risc_runtime_capability_v1){.struct_size=sizeof(g)};if(!rt->acquire(RISC_KEY_VALUE_CAPABILITY,1,1,&g))return false;unsigned selected=picker.selected;(void)portable_sleep_load(g.api,&sleep_mode);if(watch_face_load(g.api,&selected)==RISC_KEY_VALUE_OK)picker.selected=(uint8_t)selected;if(!rt->release(&g))return false;
   }
   if(clock_alarm.api&&!clock_alarm_refresh_checked())return false;
@@ -156,7 +156,7 @@ static bool clock_contexts_tick(void) {
     if(!portable_contexts_apply_room(&clock_contexts,&applied,watch_face_save))return clock_contexts_failure();
 #endif
     if(applied) {
-        if(!pqa_session_load(&clock_quick,rt)||!pqa_session_restore(&clock_quick,display))return false;
+        if(!clock_quick_load()||!pqa_session_restore(&clock_quick,display))return false;
         if(clock_alarm.api && (applied&(PORTABLE_CONTEXT_VOLUME|PORTABLE_CONTEXT_DND|PORTABLE_CONTEXT_ALERT)))
             if(!clock_alarm_refresh_checked())return false;
         if(applied&(PORTABLE_CONTEXT_SLEEP|PORTABLE_CONTEXT_FACE)) {

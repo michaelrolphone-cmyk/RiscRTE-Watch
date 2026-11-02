@@ -177,6 +177,17 @@ static bool clock_alarm_failure(void);
 #include "PortableQuickSession.h"
 #include "PortableQuickRender.h"
 static pqa_session clock_quick;
+static bool clock_quick_load(void){
+ bool loaded=pqa_session_load(&clock_quick,rt);
+ if(!clock_canvas_live()||!loaded)return false;
+#ifdef WATCH_SHARED_HOME_BOOT
+ if(!clock_canvas_brightness_supported()){
+  clock_quick.ui.brightness_valid=false;clock_quick.ui.torch_valid=false;
+  clock_quick.ui.torch=false;
+ }
+#endif
+ return true;
+}
 #ifdef WATCH_QUICK_RADIOS
 #include "PortableQuickRadios.h"
 static pqa_radios clock_radios;
@@ -738,12 +749,12 @@ static bool clock_low_battery_poll(uint32_t now) {
     if(!(result&PORTABLE_LOW_BATTERY_ENTERED))return true;
     pqa_cancel(&clock_quick.ui);(void)pqa_take_action(&clock_quick.ui);
 #ifdef WATCH_FAST_WAKE
-    if(!pqa_session_load(&clock_quick,rt)||!pqa_session_restore(&clock_quick,display))return false;
+    if(!clock_quick_load()||!pqa_session_restore(&clock_quick,display))return false;
     clock_deferred_phase=0;clock_confirm_waiting=clock_confirm_deadline_reported=false;clock_confirm_wait_started=0;clock_radios_pending=true;
     clock_broadcast_started=clock_contexts_started=false;
     clock_radios.valid=clock_radios.available=clock_quick.ui.radios_valid=false;
 #else
-    if(!pqa_session_load(&clock_quick,rt)||!pqa_radios_load(&clock_radios,&clock_quick.ui,rt)||
+    if(!clock_quick_load()||!pqa_radios_load(&clock_radios,&clock_quick.ui,rt)||
        !pqa_session_restore(&clock_quick,display))return false;
 #endif
     rt->diagnostic(result&PORTABLE_LOW_BATTERY_ERROR?"LOW_BATTERY crossing=partial-once":"LOW_BATTERY crossing=applied-once");return true;
@@ -1249,7 +1260,11 @@ __attribute__((visibility("default"))) void app_main(void) {
     display=dg.api;
     if (!display || display->api_version!=1 || display->struct_size<sizeof(*display) ||
         !display->get_info || !display->acquire || !display->release || !display->submit ||
-        !display->present_status || !display->set_brightness) {clock_exit_checkpoint(__LINE__);goto done;}
+        !display->present_status
+#ifndef WATCH_SHARED_HOME_BOOT
+        || !display->set_brightness
+#endif
+        ) {clock_exit_checkpoint(__LINE__);goto done;}
 #ifdef WATCH_HOME_CANVAS
     if(!clock_canvas_open(display)){clock_exit_checkpoint(__LINE__);goto done;}
     if(clock_canvas_selected)display=&clock_canvas.display;
@@ -1344,7 +1359,7 @@ __attribute__((visibility("default"))) void app_main(void) {
     }
 #endif
 #ifdef WATCH_QUICK_ACTIONS
-    if(!pqa_session_load(&clock_quick,rt)){clock_exit_checkpoint(__LINE__);goto done;}
+    if(!clock_quick_load()){clock_exit_checkpoint(__LINE__);goto done;}
 #if defined(WATCH_QUICK_RADIOS) && !defined(WATCH_FAST_WAKE)
     if(!pqa_radios_load(&clock_radios,&clock_quick.ui,rt)){clock_exit_checkpoint(__LINE__);goto done;}
 #endif

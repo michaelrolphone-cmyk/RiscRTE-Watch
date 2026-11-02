@@ -50,7 +50,7 @@ static bool clock_contexts_field(unsigned field) {
     case RISC_CONTEXTS_WIFI:return clock_quick.ui.wifi_available&&clock_quick.ui.wifi_valid;
     case RISC_CONTEXTS_BLUETOOTH:return clock_quick.ui.bluetooth_available&&clock_quick.ui.bluetooth_valid;
 #endif
-    case RISC_CONTEXTS_BRIGHTNESS:return display&&display->set_brightness&&clock_quick.ui.brightness_valid;
+    case RISC_CONTEXTS_BRIGHTNESS:return clock_canvas_brightness_supported()&&clock_quick.ui.brightness_valid;
     case RISC_CONTEXTS_VOLUME:return clock_quick.ui.volume_valid&&(clock_contexts_output_modes()&ALARM_MODE_SOUND);
     case RISC_CONTEXTS_NOTIFY:case RISC_CONTEXTS_DND:return clock_contexts_notifications();
     default:return false;
@@ -62,7 +62,7 @@ static bool clock_contexts_query_reason(uint32_t reason) {
 static int32_t clock_contexts_query(const risc_resident_request_v1*q) {
     if(q->flags||q->reserved)return RISC_RESIDENT_INVALID;
     if(q->reason==RISC_CONTEXTS_SETTINGS_PREPARE){
-        if(!pqa_session_load(&clock_quick,rt)||!clock_resident_alive())return clock_resident_retain();
+        if(!clock_quick_load()||!clock_resident_alive())return clock_resident_retain();
 #ifdef WATCH_QUICK_RADIOS
         if(!pqa_radios_inspect(&clock_radios,&clock_quick.ui,rt,clock_effect_alive,NULL))
             return clock_resident_retain();

@@ -8,6 +8,8 @@ enum { RISC_HOME_POINTS_UNSPECIFIED=0,RISC_HOME_POINTS_LEGACY_RTC=1,RISC_HOME_PO
 /* Immutable deployment presentation/default-data bindings. No device identity,
  * display dimensions, pixel format, hardware callback or app controller crosses
  * this interface. A confirmed user Home-view preference overrides default_view.
+ * Zero crash_namespace explicitly disables crash-report storage; never acquire
+ * storage.app-data instance zero as its fallback.
  * Zero catalog_volume means the invocation's unique permitted storage volume. */
 typedef struct {
  uint32_t api_version,struct_size,tag,default_view;
@@ -20,7 +22,7 @@ static inline const risc_home_presentation_v1*risc_home_presentation_get_v1(cons
  const risc_home_presentation_v1*a=p;
  return a->api_version==1&&a->struct_size>=prefix&&a->struct_size<=bytes&&
   a->tag==RISC_HOME_PRESENTATION_TAG&&a->default_view>=RISC_HOME_VIEW_FACES&&
-  a->default_view<=RISC_HOME_VIEW_OVERVIEW&&a->crash_namespace?a:NULL;
+  a->default_view<=RISC_HOME_VIEW_OVERVIEW?a:NULL;
 }
 
 static inline unsigned risc_home_points_schema(const risc_home_presentation_v1*p){
