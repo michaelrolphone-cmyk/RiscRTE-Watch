@@ -6,7 +6,7 @@ from compact_current_elf import compact
 from normalize_xtensa_relocations import normalize
 from build_inputs import file_manifest, verify_dependency
 ROOT=Path(__file__).resolve().parents[1]
-FLAGS=['-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DCRASH_REPORT_SESSION_FILES=1','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_PREFERENCE_STORE','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
+FLAGS=['-DWATCH_HOME_CANVAS','-DPORTABLE_QUICK_RADIO_AVAILABILITY','-DWATCH_AUTOMATIC_PROVISION','-DWATCH_RESIDENT_HOST','-DWATCH_COMPACT_NOVA_ASSETS','-DWATCH_CRASH_REPORT','-DCRASH_REPORT_SESSION_FILES=1','-DWATCH_CRASH_REPORT_NAMESPACE=61','-DWATCH_SHARED_PREFERENCE_HEADERS','-DPORTABLE_PREFERENCE_STORE','-DWATCH_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_ATOMIC_PREFERENCES','-DPORTABLE_QUICK_RADIOS','-DWATCH_COMPRESSED_CALENDAR_ALPHA','-DWATCH_COMPRESSED_FACE_ALPHA','-DWATCH_FAST_WAKE','-DWATCH_COLD_BOOT_ANIMATION','-DPORTABLE_WATCH_NATIVE_HEIGHT','-DPORTABLE_LOW_BATTERY','-DWATCH_RUNTIME_FEATURES','-DWATCH_BLE_BROADCAST',
  '-DWATCH_CLOCK_LAUNCHER','-DWATCH_CLOCK_ALARMS','-DWATCH_CLOCK_POINTS',
  '-DPORTABLE_RTC_UTC8_DENVER','-DWATCH_PAIRED_BOOT_CONFIRM','-DWATCH_QUICK_ACTIONS',
  '-DWATCH_QUICK_RADIOS','-DWATCH_MOTION_WAKE','-DWATCH_ALARM_SLEEP_RESUME','-DWATCH_CONTEXTS_CLIENT',
@@ -15,9 +15,11 @@ p=argparse.ArgumentParser(description=__doc__)
 for name in ('system','utilities'):p.add_argument('--'+name,type=Path,required=True)
 p.add_argument('--output',type=Path,default=ROOT/'dist')
 p.add_argument('--cc',default=os.environ.get('WATCH_APP_CC') or shutil.which('xtensa-esp32s3-elf-gcc'))
+p.add_argument('--shared-view-output',type=Path,help='Emit complete native-faces relocatable view for one shared Home ELF')
+p.add_argument('--shared-system',type=Path,help='Exact owning shared Home integration source')
 p.add_argument('--role',choices=['default','clock','both'],default='both')
-p.add_argument('--automatic-provision',action='store_true',help='Explicit generic foreground core-profile reconciliation')
-p.add_argument('--serial-transfer-mode',action='store_true',help='Opt-in cooperative Home exit for a dedicated-transfer Runtime product')
+p.add_argument('--automatic-provision',action='store_true',help='Compatibility option; generic foreground reconciliation is capability-selected')
+p.add_argument('--serial-transfer-mode',action='store_true',help='Compatibility option; cooperative exit is always Runtime-selected')
 a=p.parse_args()
 if not a.cc:p.error('Set WATCH_APP_CC or --cc to the pinned ESP32-S3 compiler')
 S=a.system.resolve();U=a.utilities.resolve();out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
@@ -27,12 +29,12 @@ utility_paths=['Apps/alarm_writer.h','lib/Alarm/include','lib/Contexts/include']
 verified_dependencies={'system':verify_dependency(S,lock['system']['commit'],system_paths),
  'utilities':verify_dependency(U,lock['utilities']['commit'],utility_paths)}
 home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py','scripts/merged_sdk.py','scripts/compact_current_elf.py',
- 'scripts/normalize_xtensa_relocations.py','sdk/app','sdk/driver','include/WatchViewport.h','include/WatchLayout.h',
- 'include/WatchHomeLayout.h','include/WatchCapabilityClients.h','include/WatchCapabilities.h',
+ 'scripts/normalize_xtensa_relocations.py','sdk/app','sdk/driver','sdk/source','include/WatchViewport.h','include/WatchLayout.h',
+ 'include/HomeCanvasSurface.h','include/HomeCanvasTouch.h','include/WatchHomeLayout.h','include/WatchCapabilityClients.h','include/WatchCapabilities.h',
  'include/WatchTapPolicy.h','include/PortableMotionTap.h','include/PortablePowerStatus.h','include/PortableTapSettings.h',
  'include/twatch_calendar.h','include/twatch_caps.h','include/twatch_power.h','include/twatch_util.h',
  'apps/runtime_features/clock_runtime.h','apps/runtime_features/sdk',
- 'apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
+ 'apps/clock/clock_resident_effects.inc','apps/clock/clock_resident_contexts.inc','apps/clock/clock_resident.inc','apps/clock/clock_resident_attention.inc','apps/clock/clock_provision.inc','apps/clock/clock_crash.inc','apps/clock/crash_text.h','apps/clock/clock_canvas.inc','apps/clock/crown.c','apps/clock/viewport.c','apps/clock/capability_clients.c','apps/clock/quick_radios.c',
  'apps/clock/points_projection.c','apps/clock/points_projection.h','apps/clock/points_compat.h',
  'apps/clock/nova','apps/clock/faces','apps/clock/transitions','apps/clock/effects/boot.cpp',
  'apps/clock/effects/effects.h','apps/clock/effects/divdi3.c','apps/clock/clock_alarm.inc',
@@ -43,23 +45,43 @@ home_paths=['dependencies.lock.json','scripts/build.py','scripts/build_inputs.py
 home_inputs=file_manifest(ROOT,home_paths)
 compiler=subprocess.check_output([a.cc,'--version'],text=True).splitlines()[0]
 if '15.2.0' not in compiler or 'esp-15.2.0_20251204' not in compiler:raise RuntimeError('Expected the pinned native ESP32-S3 GCC 15.2.0 toolchain')
-from merged_sdk import headers
-includes=[headers(out,S,U,ROOT),ROOT/'include',S/'lib/PortableApps/src']
+from merged_sdk import headers, sources as stage_sources
+staged_sources=stage_sources(out,S,ROOT)
+includes=[headers(out,S,U,ROOT),ROOT/'include',staged_sources]
 incs=['-I'+str(x) for x in includes]
 common=['-Os','-fPIC','-mtext-section-literals','-mlongcalls','-fvisibility=hidden','-ffreestanding','-fno-builtin','-Wall','-Wextra','-Werror','-ffunction-sections','-fdata-sections']
 effect=out/'boot-effect.o'
 subprocess.run([a.cc.removesuffix('gcc')+'g++','-std=c++11',*common,'-fno-exceptions','-fno-rtti','-fno-threadsafe-statics',*incs,'-c',str(ROOT/'apps/clock/effects/boot.cpp'),'-o',str(effect)],check=True)
-sources=[ROOT/'apps/clock/crown.c',ROOT/'apps/clock/viewport.c',ROOT/'apps/clock/capability_clients.c',ROOT/'apps/clock/quick_radios.c',ROOT/'apps/clock/nova/nova.c',ROOT/'apps/clock/points_projection.c',ROOT/'apps/clock/effects/divdi3.c',*[S/'lib/PortableApps/src'/n for n in ('quick_actions.c','quick_render.c','quick_session.c')],effect]
-if a.automatic_provision:sources += [S/'lib/PortableApps/src/PortableAutomaticProvision.c',S/'lib/PortableApps/src/PortableNetworkSession.c']
+sources=[ROOT/'apps/clock/crown.c',ROOT/'apps/clock/viewport.c',ROOT/'apps/clock/capability_clients.c',ROOT/'apps/clock/quick_radios.c',ROOT/'apps/clock/nova/nova.c',ROOT/'apps/clock/points_projection.c',ROOT/'apps/clock/effects/divdi3.c',*[staged_sources/n for n in ('quick_actions.c','quick_render.c','quick_session.c')],effect]
+sources += [S/'lib/PortableApps/src/PortableAutomaticProvision.c',S/'lib/PortableApps/src/PortableNetworkSession.c']
+if a.shared_view_output:
+ if not a.shared_system:p.error('--shared-view-output requires --shared-system')
+ import sys
+ shared=a.shared_system.resolve();sys.path.insert(0,str(shared/'scripts'))
+ from shared_home_objects import emit_view
+ # Single canonical SDK directory; do not mix pragma-once copies by search order.
+ for name in ('PortableHomeBoot.h','PortableHomeBindings.h','PortableDeskClock.h','PortableTimeZone.h'):
+  shutil.copyfile(shared/'lib/PortableApps/include'/name,includes[0]/name)
+ for name in ('RiscCanvasV1.h','RiscCanvasInputV1.h','RiscCivilClockV1.h','RiscHomePresentationV1.h','RiscResidentContextsV1.h'):
+  shutil.copyfile(shared/'sdk/app'/name,includes[0]/name)
+ for name in ('RiscRetainedWakeV1.h','RiscRealtimeV1.h','RiscProviderPromotionV1.h'):
+  shutil.copyfile(ROOT/'apps/runtime_features/sdk'/name,includes[0]/name)
+ sources += [shared/'lib/PortableApps/src/PortableTimeZone.c',shared/'lib/PortableApps/src/PortableTimeZoneCatalog.c']
+ flags=[f for f in FLAGS if not f.startswith('-DWATCH_CRASH_REPORT_NAMESPACE=') and f!='-DPORTABLE_RTC_UTC8_DENVER']
+ flags+=['-DALARM_SERVICE_TAGGED_V2','-DWATCH_SHARED_HOME_BOOT','-DWATCH_SHARED_HOME_CIVIL','-DWATCH_HOME_CANVAS_INPUT',
+  '-DWATCH_SHARED_HOME_RETAINED','-DPORTABLE_DESK_POINTS_SNAPSHOT',
+  '-include',str(includes[0]/'PortableHomeBindings.h'),
+  '-DWATCH_CRASH_REPORT_NAMESPACE=portable_home_crash_namespace()']
+ emit_view(a.cc,a.shared_view_output,'home_faces_',flags,includes,sources)
+ raise SystemExit(0)
+
 validator=out/'validate-elf'
 subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Wextra','-Werror','-I'+str(S/'test/native_apps/stubs'),'-I'+str(S/'lib/elf_loader/include'),str(S/'lib/elf_loader/src/esp_elf_validate.c'),str(S/'test/native_apps/validate_test.c'),'-o',str(validator)],check=True)
-records={'automatic_provision':a.automatic_provision,'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':'runtime-provider','hardware_profile_inputs':False,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
-if a.serial_transfer_mode:records['serial_transfer_mode']=True
+records={'automatic_provision':True,'schema':1,'compiler':compiler,'dependency_lock':lock,'verified_dependencies':verified_dependencies,'home_files_sha256':home_inputs,'build_variant':'shared-no-board-defines','preferences':'runtime-provider','hardware_profile_inputs':False,'hardware_verified':False,'compiler_sha256':hashlib.sha256(Path(a.cc).read_bytes()).hexdigest(),'artifacts':{}}
+records['serial_transfer_mode']='runtime-optional'
 for role in ['default','clock'] if a.role=='both' else [a.role]:
- target=out/(role+'.elf');mapping=out/(role+'.map');mapping.write_text('{ global: app_main; local: *; };\n')
+ target=out/(role+'.elf');mapping=out/(role+'.map');exports_expected={'app_main','risc_resident_app_descriptor_v1'} if role=='default' else {'app_main'};mapping.write_text('{ global: '+ '; '.join(sorted(exports_expected))+'; local: *; };\n')
  flags=list(FLAGS) if role=='default' else []
- if role=='default' and a.automatic_provision:flags.append('-DWATCH_AUTOMATIC_PROVISION')
- if role=='default' and a.serial_transfer_mode:flags.append('-DWATCH_SERIAL_TRANSFER_MODE')
  role_sources=sources if role=='default' else [ROOT/'apps/clock/return_to_default.c']
  command=[a.cc,'-std=c11',*common,'-nostdlib','-nostartfiles','-shared','-Wl,--gc-sections','-Wl,--no-relax','-Wl,--hash-style=sysv','-Wl,--version-script='+str(mapping),*flags,*incs,*map(str,role_sources),'-lgcc','-o',str(target)]
  subprocess.run(command,check=True);normalize(target)
@@ -69,16 +91,15 @@ for role in ['default','clock'] if a.role=='both' else [a.role]:
  imports={r.split()[-1] for r in symbols.splitlines() if ' U ' in ' '+r}
  exports={r.split()[-1] for r in symbols.splitlines() if len(r.split())>=3 and r.split()[-2] in ('T','D','B','R')}
  allowed={'risc_runtime_get_api','memcpy','memset','memcmp','memmove','strcmp','strncmp','strlen','snprintf','malloc','calloc','free','strcpy','memchr','strrchr'}
- if not imports<=allowed or exports!={'app_main'}:raise RuntimeError(f'Unexpected application ABI: {imports=}, {exports=}')
+ if not imports<=allowed or exports!=exports_expected:raise RuntimeError(f'Unexpected application ABI: {imports=}, {exports=}')
  raw=target.read_bytes()
  if raw[:7]!=b'\x7fELF\x01\x01\x01' or raw[16:20]!=b'\x03\x00\x5e\x00':raise RuntimeError('Not an ESP32-S3 shared ELF')
  if role=='clock' and (imports or len(raw)>4096):raise RuntimeError('Return module unexpectedly contains services or Home assets')
  manifest=json.loads((ROOT/'apps/clock'/(role+'.json')).read_text())
  if role=='default':
-  manifest['version']='0.20.4' if a.serial_transfer_mode else ('0.20.3' if a.automatic_provision else '0.19.3')
-  if a.automatic_provision:
-   manifest['requires'].append({'capability':'software.installed-apps','api':1})
-   manifest['optional'].append({'capability':'storage.volume','api':1})
+  manifest['version']='0.27.0'
+  manifest['optional'].append({'capability':'software.installed-apps','api':1})
+  manifest['optional'].append({'capability':'storage.volume','api':1})
  (out/(role+'.json')).write_text(json.dumps(manifest,indent=2)+'\n')
  records['artifacts'][role]={'role':'home' if role=='default' else 'return-to-default','file_name':target.name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'imports':sorted(imports),'exports':sorted(exports),'compaction':proof,'defines':flags}
  print(role+': target build and Runtime ELF validation PASS',flush=True)

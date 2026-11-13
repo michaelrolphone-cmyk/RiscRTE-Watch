@@ -114,6 +114,11 @@ jobs:
           python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --automatic-provision --output dist/provisioning
           python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --automatic-provision --output dist/provisioning-replay --role default
           python3 scripts/verify_shared_default.py --first dist/provisioning --second dist/provisioning-replay --receipt dist/provisioning/shared-default-proof.json
+          cmp dist/default.elf dist/provisioning/default.elf
+          cmp dist/default.json dist/provisioning/default.json
+          python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --serial-transfer-mode --output dist/legacy-transfer
+          cmp dist/default.elf dist/legacy-transfer/default.elf
+          cmp dist/default.json dist/legacy-transfer/default.json
           python3 .source/drivers/scripts/build_legacy_power_bridge.py --watch-sdk "$PWD" --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --validator dist/validate-elf --output dist/generic-power
           git rev-parse HEAD > dist/COMMIT.txt
           git archive HEAD | gzip > dist/source.tar.gz

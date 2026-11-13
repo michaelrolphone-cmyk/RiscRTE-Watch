@@ -2,22 +2,78 @@
  * settled frame helpers; contains no schedule/RTC/output policy. */
 #include "PortableAlarmClient.h"
 #include "PortableTouch.h"
+#ifdef ALARM_SERVICE_TAGGED_V2
+#include "AlarmServiceFacadeV2.h"
+#define WATCH_ALARM_CALL_SAFE() clock_canvas_live()
+#endif
 #include "watch_alarm_sleep.h"
 static portable_alarm_client clock_alarm;
+#if defined(WATCH_SHARED_HOME_BOOT)&&defined(WATCH_QUICK_ACTIONS)
+static void clock_quick_alarm_availability(void){
+    /* Storage validity and hardware applicability are independent. Never
+     * overwrite saved volume/restore merely because sound is unavailable. */
+#ifdef ALARM_SERVICE_TAGGED_V2
+    unsigned modes=portable_alarm_output_modes(&clock_alarm);
+#else
+    unsigned modes=clock_alarm.api?ALARM_MODE_BOTH:0;
+#endif
+    clock_quick.ui.volume_valid=clock_quick_volume_preference_valid&&clock_alarm.api&&
+        (modes&ALARM_MODE_SOUND)!=0;
+}
+#endif
+static bool clock_alarm_custody_live(void) {
+    if(!clock_canvas_live())return false;
+#ifdef ALARM_SERVICE_TAGGED_V2
+    if(clock_alarm.retained){
+#ifdef WATCH_RUNTIME_FEATURES
+        if(!native_clock.halted)watch_runtime_halt(&native_clock);
+#endif
+        return false;
+    }
+#endif
+    return clock_canvas_live();
+}
+static bool clock_alarm_refresh_checked(void) {
+    if(!clock_alarm_custody_live())return false;
+#ifdef ALARM_SERVICE_TAGGED_V2
+    bool ok=portable_alarm_refresh(&clock_alarm);
+    return clock_alarm_custody_live()&&ok;
+#else
+    (void)clock_alarm.api->refresh(clock_alarm.api->context);return clock_alarm_custody_live();
+#endif
+}
+
 /* An offline bring-up profile can omit alarm.service. Do not turn the missing
  * optional function into a default-app exit or retry it on every frame. An
  * acquired malformed interface is still an error and retains normal cleanup. */
 static bool clock_alarm_open_optional(void) {
     clock_alarm_attempted=true;
-    if(portable_alarm_open(&clock_alarm,rt))return true;
-    if(clock_alarm.grant.api)return false;
+#ifdef ALARM_SERVICE_TAGGED_V2
+    memset(&clock_alarm,0,sizeof(clock_alarm));clock_alarm.grant.struct_size=sizeof(clock_alarm.grant);
+    bool acquired=rt->acquire(ALARM_SERVICE_FACADE_CAPABILITY,ALARM_SERVICE_FACADE_API,0,&clock_alarm.grant);
+    if(!clock_canvas_live())return false;
+    bool opened=acquired&&alarm_service_descriptor(clock_alarm.grant.api)!=NULL;
+    if(opened)clock_alarm.api=clock_alarm.grant.api;
+#else
+    bool opened=portable_alarm_open(&clock_alarm,rt);
+#endif
+    if(!clock_alarm_custody_live())return false;
+#if defined(WATCH_SHARED_HOME_BOOT)&&defined(WATCH_QUICK_ACTIONS)
+    clock_quick_alarm_availability();
+#endif
+    if(opened)return true;
+    if(clock_alarm.grant.api||clock_alarm.grant.slot||clock_alarm.grant.generation)return false;
     rt->diagnostic("WATCH_CLOCK alarm-service=unavailable alarms=disabled");
     return true;
 }
 static bool clock_alarm_failed_cleaned,clock_alarm_error_seen;
 static int32_t clock_alarm_seen_error;
 static uint32_t clock_alarm_seen_snapshot;
+/* Monotonic modulo counter of actual alarm input cancellations, independent
+ * of FAST_WAKE's consumed flag. Used only for copied resident outcomes. */
+static uint32_t clock_alarm_input_revision;
 static void clock_alarm_cancel_input(void) {
+    ++clock_alarm_input_revision;
 #ifdef WATCH_FAST_WAKE
     /* Entry can now sample input before the alarm closure has loaded. An
      * intervening due alarm must also cancel that sampled crown action. */
@@ -35,26 +91,60 @@ static void clock_alarm_cancel_input(void) {
     picker_open_pending=picker_select_pending=false;
     watch_face_reset_contact(&picker);
 }
+static bool clock_alarm_stop_checked(void) {
+#ifdef ALARM_SERVICE_TAGGED_V2
+    if(!clock_alarm_custody_live())return false;
+    if(!clock_alarm.api)return true;
+    int32_t result=ALARM_PENDING;
+    for(unsigned n=0;n<3&&result==ALARM_PENDING;n++){
+        result=clock_alarm.api->stop_only(clock_alarm.api->context);
+        if(!clock_canvas_live())return false;
+        if(!portable_alarm_result(&clock_alarm,result)||!clock_alarm_custody_live())return false;
+    }
+    return result==ALARM_OK;
+#else
+    return portable_alarm_failure_stop(&clock_alarm);
+#endif
+}
+static bool clock_alarm_step_checked(void) {
+#ifdef ALARM_SERVICE_TAGGED_V2
+    if(!clock_alarm_custody_live()||!portable_alarm_callable(&clock_alarm))return false;
+    int32_t result=clock_alarm.api->step(clock_alarm.api->context);
+    if(!clock_canvas_live())return false;
+    if(!portable_alarm_result(&clock_alarm,result)||!clock_alarm_custody_live())return false;
+    bool copied=portable_alarm_status(&clock_alarm);
+    return clock_alarm_custody_live()&&copied;
+#else
+    return portable_alarm_pump(&clock_alarm);
+#endif
+}
 static bool clock_alarm_failure(void) {
+    if(!clock_alarm_custody_live())return false;
     if(clock_alarm_failed_cleaned)return false;
 #ifdef WATCH_CONTEXTS_CLIENT
     if(!clock_contexts_pause())return false;
 #endif
     clock_alarm_failed_cleaned=true;
-    if(!portable_alarm_failure_stop(&clock_alarm)) {
+    if(!clock_alarm_stop_checked()) {
+#ifdef ALARM_SERVICE_TAGGED_V2
+        clock_alarm.retained=true;(void)clock_alarm_custody_live();return false;
+#else
         rt->diagnostic("ALARM clock-failed output-stop-unconfirmed; invocation retained");
         for(;;)rt->yield_ms(50);
+#endif
     }
     return false;
 }
 #ifdef WATCH_CONTEXTS_CLIENT
 static bool clock_alarm_pump_checked(void) {
 #ifdef WATCH_CONTEXTS_CLIENT
-    if(!portable_alarm_status(&clock_alarm))return false;
+    bool status_ok=portable_alarm_status(&clock_alarm);
+    if(!clock_alarm_custody_live()||!status_ok)return false;
     if((portable_alarm_owned(&clock_alarm)||clock_alarm.status.state==ALARM_STATE_BLOCKED)&&
        !clock_contexts_pause())return false;
 #endif
-    if(!portable_alarm_pump(&clock_alarm))return false;
+    bool pumped=clock_alarm_step_checked();
+    if(!clock_alarm_custody_live()||!pumped)return false;
 #ifdef WATCH_CONTEXTS_CLIENT
     if((portable_alarm_owned(&clock_alarm)||clock_alarm.status.state==ALARM_STATE_BLOCKED)&&
        !clock_contexts_pause())return false;
@@ -62,9 +152,10 @@ static bool clock_alarm_pump_checked(void) {
     return true;
 }
 #else
-#define clock_alarm_pump_checked() portable_alarm_pump(&clock_alarm)
+#define clock_alarm_pump_checked() clock_alarm_step_checked()
 #endif
 static bool clock_alarm_foreground(void) {
+    if(!clock_canvas_live())return false;
     if(!clock_alarm.api)return true;
     (void)portable_touch_open;(void)portable_touch_close;
     if(!clock_display_settled || held)return clock_alarm_failure();
@@ -96,6 +187,9 @@ static bool clock_alarm_foreground(void) {
     if(!portable_alarm_owned(&clock_alarm) && (!error || (clock_alarm_error_seen &&
        clock_alarm_seen_error==clock_alarm.status.error && clock_alarm_seen_snapshot==clock_alarm.status.snapshot)))return true;
     clock_alarm_cancel_input();clock_alarm_modal=true;
+#ifdef WATCH_HOME_CANVAS
+    if(clock_canvas_selected)home_canvas_touch_discard_navigation(&clock_canvas_touch);
+#endif
     portable_touch alert_touch={.api=touch.api,.subscription=touch.subscription};
     uint32_t discarded;
     if(!clock_key_read(&discarded,"WATCH_KEY stage=alarm-entry-discard"))return clock_alarm_failure();
@@ -119,15 +213,32 @@ static bool clock_alarm_foreground(void) {
         rt->yield_ms(20);
         if(!clock_key_read(&events,"WATCH_KEY stage=alarm-modal"))return clock_alarm_failure();
         portable_touch_sample sample;portable_touch_read(&alert_touch,&sample);
+        if(!clock_canvas_live())return false;
         bool tap=sample.valid && sample.released && sample.tap_eligible && !sample.cancelled && !sample.moved;
         bool retry=tap && sample.y>=watch_home_alarm_retry_at(clock_viewport.width,clock_viewport.height);
         bool dismiss=(events&3u) || (tap && sample.y>=watch_home_alarm_dismiss_at(clock_viewport.width,clock_viewport.height) && sample.y<watch_home_alarm_retry_at(clock_viewport.width,clock_viewport.height));
+#ifdef WATCH_HOME_CANVAS
+        if(clock_canvas_selected){
+            bool controls=false;
+            risc_input_navigation_frame_v1 nav=home_canvas_touch_navigation(&clock_canvas_touch,&controls);
+            /* Modal actions are explicit logical button intents, never a
+             * synthesized touch at a device-specific coordinate. */
+            retry|=controls||!!(nav.pressed&(RISC_NAV_UP|RISC_NAV_PAGE_BACK));
+            dismiss|=!!(nav.pressed&(RISC_NAV_CONFIRM|RISC_NAV_BACK|RISC_NAV_HOME));
+        }
+#endif
         if(clock_alarm.status.state==ALARM_STATE_BLOCKED && retry) {
-            (void)clock_alarm.api->refresh(clock_alarm.api->context);alert_touch.neutral=alert_touch.down=false;redraw=true;
+            if(!clock_alarm_refresh_checked())return clock_alarm_failure();
+            alert_touch.neutral=alert_touch.down=false;redraw=true;
         } else if(dismiss) {
             if(clock_alarm.status.occurrence.generation) {
                 alarm_token_v1 token=clock_alarm.status.occurrence;
+#ifdef ALARM_SERVICE_TAGGED_V2
+                bool acknowledged=portable_alarm_acknowledge(&clock_alarm,&token);
+                if(!clock_alarm_custody_live()||!acknowledged)return clock_alarm_failure();
+#else
                 (void)clock_alarm.api->acknowledge(clock_alarm.api->context,&token);
+#endif
                 alert_touch.neutral=alert_touch.down=false;redraw=true;
             } else if(clock_alarm.status.state==ALARM_STATE_BLOCKED && !clock_alarm.status.output_uncertain) {
                 clock_alarm_error_seen=true;clock_alarm_seen_error=clock_alarm.status.error;
@@ -150,8 +261,22 @@ static bool clock_alarm_foreground(void) {
     return true;
 }
 static void clock_alarm_finish(void) {
+    if(!clock_alarm_custody_live())return;
     if(clock_alarm.api && !clock_alarm_failed_cleaned &&
        (!clock_display_settled || !portable_alarm_status(&clock_alarm) || portable_alarm_owned(&clock_alarm)))
         (void)clock_alarm_failure();
+    if(!clock_alarm_custody_live())return;
+#ifdef ALARM_SERVICE_TAGGED_V2
+    /* A successful grant with a malformed null API still owns its token. */
+    if(!clock_alarm.grant.api&&(clock_alarm.grant.slot||clock_alarm.grant.generation)){
+        if(!rt->release(&clock_alarm.grant)||!clock_canvas_live()){
+            clock_alarm.retained=true;(void)clock_alarm_custody_live();return;
+        }
+    }
+    if(!portable_alarm_close(&clock_alarm,rt)){
+        clock_alarm.retained=true;(void)clock_alarm_custody_live();return;
+    }
+#else
     if(!portable_alarm_close(&clock_alarm,rt))rt->diagnostic("ALARM clock-release-failed");
+#endif
 }
