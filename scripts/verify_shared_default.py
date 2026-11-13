@@ -38,8 +38,14 @@ def check_build(path):
     require(not any('WATCH_CRASH_REPORT_VOLUME' in flag for flag in flags), 'Physical storage identity in build')
     required = {(x['capability'], x['api']) for x in app['requires']}
     optional = {(x['capability'], x['api']) for x in app.get('optional', [])}
-    require(('storage.preferences', 1) in required and ('storage.files', 1) in optional,
-            'Generic storage declarations missing')
+    require(required == {('display.output', 1),
+                         ('runtime.realtime-control', 1), ('runtime.provider-promotion', 1)},
+            'Required Home contracts differ from actual startup requirements')
+    require(not required & optional, 'Capability declared both required and optional')
+    require(('storage.preferences', 1) in optional and ('storage.files', 1) in optional,
+            'Optional generic storage declarations missing')
+    require(('input.touch.raw', 1) in optional and ('ui.canvas', 1) in optional,
+            'Alternative logical Canvas/raw input contracts missing')
     automatic = record.get('automatic_provision', False)
     require(('storage.volume', 1) not in required, 'Removable volume must stay optional')
     require((('storage.volume', 1) in optional) == automatic,

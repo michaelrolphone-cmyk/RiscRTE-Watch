@@ -1,0 +1,47 @@
+name: Shared Home tagged alarm sleep
+on:
+  pull_request:
+    paths: ['apps/clock/watch_alarm_sleep.h', 'tests/shared_home_alarm_sleep_test.c', 'scripts/test_shared_home_alarm_sleep.py', '.github/workflows/shared-home-alarm-sleep.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: db53bf95040c35df459479a634a6fe1a610920ca
+          path: deps/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: 5ecf5fe5fe442b91d8fa66d895012f43ea581aa8
+          path: deps/utilities
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact tagged descriptor and custody
+        run: python scripts/test_shared_home_alarm_sleep.py --system deps/system --utilities deps/utilities --output qualification/alarm-sleep
+      - name: Source receipts
+        if: always()
+        run: |
+          mkdir -p qualification/source
+          git archive HEAD | gzip -n > qualification/source/watch.tar.gz
+          git -C deps/system archive HEAD | gzip -n > qualification/source/system.tar.gz
+          git -C deps/utilities archive HEAD | gzip -n > qualification/source/utilities.tar.gz
+          for path in . deps/system deps/utilities; do git -C "$path" rev-parse HEAD; done > qualification/source/heads.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-home-alarm-sleep-${{ github.event.pull_request.head.sha || github.sha }}
+          path: qualification/
+          retention-days: 30

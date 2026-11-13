@@ -23,7 +23,13 @@ static bool clock_provision_utc(void*p,uint64_t*out){(void)p;risc_realtime_snaps
 static void clock_provision_retain(void*p){(void)p;watch_runtime_halt(&native_clock);}
 static void clock_provision_init(void){
  portable_automatic_hooks hooks={.runtime=rt,.network_allowed=clock_provision_network,.safe=clock_provision_safe,.prepare=clock_provision_prepare,
- .utc=clock_provision_utc,.retain=clock_provision_retain,.profile="core",.wifi_instance=15,.settings_namespace=6};
+ .utc=clock_provision_utc,.retain=clock_provision_retain,.profile="core",.wifi_instance=
+#ifdef WATCH_SHARED_HOME_BOOT
+ 0,
+#else
+ 15,
+#endif
+.settings_namespace=6};
 /* Resolve the one optional volume authorized by this app's boot policy.
   * No board instance is compiled into the shared Home binary. */
  hooks.sd_enabled=true;hooks.volume_instance=0;

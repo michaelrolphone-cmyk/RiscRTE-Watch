@@ -1,0 +1,111 @@
+name: Key-independent resident alarm and idle
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: bb0cadf3cec3445a64e11513b47b2676f3fdd92d
+          path: .source/system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: 4fdcad2495c33fe63f5f6faca9b11ced3c739a5b
+          path: .source/utilities
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: 96be42d15b8edfaaafadb90304ab7da540351636
+          path: .source/test-system
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-Utilities
+          ref: bf1117910f6d0f0e9fd48bc2a28bc03b1f8ad61e
+          path: .source/test-utilities
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE-System-Apps
+          ref: eb4dd5306906d57e65f24f911d325bc87370666b
+          path: .source/contracts
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: michaelrolphone-cmyk/RiscRTE
+          ref: 0052d1fc42e9cfc82d626c5a247d460919c87935
+          path: .source/runtime
+          persist-credentials: false
+      - name: Exact contract and Home controller qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cmp sdk/app/RiscResidentAlarmV1.h .source/contracts/sdk/app/RiscResidentAlarmV1.h
+          cmp sdk/app/RiscResidentIdleV1.h .source/contracts/sdk/app/RiscResidentIdleV1.h
+          cmp sdk/app/RiscResidentShellV1.h .source/runtime/sdk/app/RiscResidentShellV1.h
+          python3 tests/test_shared_sdk_headers.py 2>&1 | tee dist/shared-sdk-headers.log
+          python3 tests/test_build_inputs.py 2>&1 | tee dist/build-inputs.log
+          for mode in normal sanitized; do
+            flag=''; [ "$mode" = normal ] || flag='--sanitized'
+            python3 scripts/test_resident_idle.py --system .source/test-system --utilities .source/test-utilities --output "dist/home-$mode" $flag 2>&1 | tee "dist/home-$mode.log"
+            python3 scripts/test_resident_idle_full.py --system .source/test-system --utilities .source/test-utilities --production-flags --output "dist/full-$mode" $flag 2>&1 | tee "dist/full-$mode.log"
+            python3 scripts/test_resident_alarm.py --system .source/test-system --utilities .source/test-utilities --output "dist/alarm-minimal-$mode" $flag 2>&1 | tee "dist/alarm-minimal-$mode.log"
+            python3 scripts/test_resident_alarm_full.py --system .source/test-system --utilities .source/test-utilities --production-flags --output "dist/alarm-full-$mode" $flag 2>&1 | tee "dist/alarm-full-$mode.log"
+            flag=''; [ "$mode" = normal ] || flag='--sanitize'
+            python3 scripts/test_resident_idle_runtime.py --runtime .source/runtime --output "dist/runtime-$mode" $flag 2>&1 | tee "dist/runtime-$mode.log"
+            python3 scripts/test_resident_alarm_runtime.py --runtime .source/runtime --output "dist/alarm-runtime-$mode" $flag 2>&1 | tee "dist/alarm-runtime-$mode.log"
+          done
+      - name: Pinned target compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .source/toolchain
+          curl --fail --location --retry 2 --max-time 180 https://github.com/espressif/crosstool-NG/releases/download/esp-15.2.0_20251204/xtensa-esp-elf-15.2.0_20251204-x86_64-linux-gnu.tar.xz -o "$RUNNER_TEMP/toolchain.tar.xz"
+          echo "3d50f5cd5f173acfd524e07c1cd69bc99585731a415ca2e5bce879997fe602b8  $RUNNER_TEMP/toolchain.tar.xz" | sha256sum --check
+          tar -xJf "$RUNNER_TEMP/toolchain.tar.xz" -C .source/toolchain
+          python3 -m pip install -r scripts/requirements.txt
+      - name: Repeat-qualified automatic and joint Home targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variant in watch wave; do
+            extra=''; [ "$variant" = watch ] || extra='--serial-transfer-mode'
+            for copy in first repeat; do
+              python3 scripts/build.py --system .source/system --utilities .source/utilities --cc "$PWD/.source/toolchain/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc" --automatic-provision --role default --output "dist/$variant-$copy" $extra 2>&1 | tee "dist/$variant-$copy.log"
+            done
+            python3 scripts/verify_shared_default.py --first "dist/$variant-first" --second "dist/$variant-repeat" --receipt "dist/$variant-first/shared-default-proof.json"
+          done
+      - name: Preserve exact source inputs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/sources
+          git rev-parse HEAD > dist/COMMIT.txt
+          git archive HEAD | gzip -n > dist/sources/home.tar.gz
+          for role in system utilities test-system test-utilities contracts runtime; do
+            git -C ".source/$role" rev-parse HEAD > "dist/sources/$role.commit"
+            git -C ".source/$role" archive HEAD | gzip -n > "dist/sources/$role.tar.gz"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: home-resident-alarm-${{ github.sha }}
+          path: dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
